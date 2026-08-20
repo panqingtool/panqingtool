@@ -1028,42 +1028,25 @@ AppTools['web-search'] = {
             '</a>';
         }).join('');
       }
-      async function wikiFallback(kw){
-        // 无 Functions 后端时，用维基百科公共 API（支持 CORS）兜底，保证"联网搜索"始终可用
-        const api = 'https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
-          encodeURIComponent(kw) + '&format=json&origin=*&srlimit=10';
-        const r = await fetch(api);
-        if(!r.ok) throw new Error('HTTP ' + r.status);
-        const j = await r.json();
-        const arr = (j && j.query && j.query.search) || [];
-        if(!arr.length) throw new Error('empty');
-        return arr.map(function(it){
-          return {
-            title: it.title,
-            url: 'https://zh.wikipedia.org/wiki/' + encodeURIComponent(it.title.replace(/ /g,'_')),
-            snippet: (it.snippet || '').replace(/<[^>]+>/g, '')
-          };
-        });
-      }
       try{
         const r = await fetch('/search?q=' + encodeURIComponent(kw));
         if(r.ok){
           const list = await r.json();
-          if(Array.isArray(list) && list.length){ render(list); return; }
+          if(Array.isArray(list) && list.length){ render(list); status.textContent = '共 ' + list.length + ' 条结果'; return; }
+          if(Array.isArray(list) && !list.length){ status.textContent = '未找到相关结果，换个关键词试试。'; return; }
         }
-      }catch(e){ /* 后端不可用，转兜底 */ }
-      // 后端不可用或为空 → 维基百科兜底（拖拽上传 / 未配置 Functions 时仍可用）
+      }catch(e){ /* Functions 不可用，转同源兜底 */ }
+      // Functions 不可用（如纯拖拽部署无后端）→ 仍尝试同源 wikipedia provider（由 CF 边缘节点发请求，不受本地网络限制）
       try{
-        status.innerHTML = '<span class="loading"><span class="spinner"></span>正在联网搜索（维基百科兜底）…</span>';
-        const list = await wikiFallback(kw);
-        render(list);
-        status.textContent = '共 ' + list.length + ' 条结果（维基百科兜底；部署 Functions 后端可获得通用网页搜索）';
-        return;
-      }catch(e){
-        status.innerHTML = '⚠️ 搜索失败，请检查网络后重试。';
-      }finally{
-        btn.disabled = false;
-      }
+        status.innerHTML = '<span class="loading"><span class="spinner"></span>正在联网搜索…</span>';
+        const r2 = await fetch('/search?q=' + encodeURIComponent(kw) + '&provider=wikipedia');
+        if(r2.ok){
+          const list = await r2.json();
+          if(Array.isArray(list) && list.length){ render(list); status.textContent = '共 ' + list.length + ' 条结果（维基百科）'; return; }
+        }
+      }catch(_){}
+      status.innerHTML = '⚠️ 搜索后端暂不可用。若以拖拽方式上传部署，请改用 Cloudflare Git 部署以启用 Functions；或在 Pages 环境变量配置 Brave / Google 搜索。';
+      btn.disabled = false;
     }
     btn.onclick = run;
     q.addEventListener('keydown', function(e){ if(e.key === 'Enter') run(); });
