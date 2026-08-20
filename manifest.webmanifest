@@ -30,5 +30,35 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "文字转语音",
+      "short_name": "TTS",
+      "description": "调用本机语音朗读，支持语速/音调调节",
+      "url": "./?open=tts",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "二维码生成",
+      "short_name": "二维码",
+      "description": "把文本/网址生成二维码图片",
+      "url": "./?open=qrcode",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "图片压缩",
+      "short_name": "压缩",
+      "description": "本地压缩 JPEG / PNG 图片大小",
+      "url": "./?open=img-compress",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "联网搜索",
+      "short_name": "搜索",
+      "description": "由 Cloudflare Functions 提供联网搜索",
+      "url": "./?open=web-search",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
   ]
 }

@@ -131,6 +131,10 @@ img{max-width:100%;}
 .nav-logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:18px;color:var(--title);white-space:nowrap;}
 .nav-logo .logo-img{height:40px;width:40px;object-fit:contain;display:block;border-radius:8px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.06);}
 .nav-logo .logo-emoji{font-size:24px;}
+.card-popover{position:fixed;z-index:9999;max-width:min(82vw,360px);background:var(--card);color:var(--text);border:1px solid var(--primary);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:12px 14px;font-size:14px;line-height:1.5;animation:cp-in .15s ease-out;pointer-events:auto;}
+.card-popover .cp-title{font-weight:700;font-size:15px;color:var(--primary);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.card-popover .cp-desc{color:var(--text-2);white-space:normal;word-break:break-word;}
+@keyframes cp-in{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
 .nav-links{display:flex;gap:4px;align-items:center;}
 .nav-links a{
   color:var(--text);padding:8px 14px;border-radius:8px;font-size:15px;
@@ -4559,7 +4563,39 @@ AppTools['tts'] = {
         <button class="btn" id="tt-play">朗读</button>
         <button class="btn ghost" id="tt-stop">停止</button>
       </div>
-      <div class="hint">本机语音合成（Web Speech API），离线可用；受浏览器限制暂不支持下载音频。</div>`;
+      <div class="hint">本机语音合成（Web Speech API），离线可用；受浏览器限制暂不支持下载音频。</div>
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;font-weight:600;color:var(--primary)">🔬 高级：云端 TTS（可克隆自己的声音，需自备 API Key）</summary>
+        <div style="margin-top:8px;padding:10px;background:var(--bg);border-radius:8px">
+          <div class="hint mb">浏览器内置 SpeechSynthesis 无法真正克隆声音。云端 TTS 可调用各家 AI（含自定义声音/克隆）实现真实克隆，但需自备 API Key；本工具仅做调用桥，密钥仅在本机使用，不会保存上传。</div>
+          <div class="mb"><label class="field-label">服务商</label>
+            <select class="sel" id="tt-provider">
+              <option value="azure">Azure Speech（推荐，支持 Custom Voice 自定义声音 / 神经声）</option>
+              <option value="elevenlabs">ElevenLabs（Voice Design / Voice Cloning）</option>
+              <option value="volc">字节火山（国内，含语音克隆，需 AK/SK）</option>
+            </select>
+          </div>
+          <div id="tt-azure-fields">
+            <div class="mb"><label class="field-label">Subscription Key</label><input class="inp" id="tt-azure-key" type="password" placeholder="Azure Speech 订阅密钥"></div>
+            <div class="mb"><label class="field-label">Region</label><input class="inp" id="tt-azure-region" value="eastasia" placeholder="如 eastasia / eastus"></div>
+            <div class="mb"><label class="field-label">Voice Name</label><input class="inp" id="tt-azure-voice" value="zh-CN-XiaoxiaoNeural" placeholder="如 zh-CN-XiaoxiaoNeural，或已训练的自定义声音部署名"></div>
+          </div>
+          <div id="tt-eleven-fields" style="display:none">
+            <div class="mb"><label class="field-label">API Key（xi-api-key）</label><input class="inp" id="tt-eleven-key" type="password"></div>
+            <div class="mb"><label class="field-label">Voice ID（ElevenLabs 控制台 Voices 页面复制）</label><input class="inp" id="tt-eleven-voice" placeholder="如 pNInz6obpgDQGcFmaJgB"></div>
+          </div>
+          <div id="tt-volc-fields" style="display:none">
+            <div class="mb"><label class="field-label">APP ID / Access Key 或 Bearer Token</label><input class="inp" id="tt-volc-key" type="password" placeholder="Bearer token 或完整鉴权串"></div>
+            <div class="mb"><label class="field-label">Voice Type（如 BV001_streaming / BV002_streaming）</label><input class="inp" id="tt-volc-voice" value="BV001_streaming"></div>
+            <div class="mb"><label class="field-label">Cluster（火山默认 volcano_tts）</label><input class="inp" id="tt-volc-cluster" value="volcano_tts"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="tt-cloud">🌐 云端朗读</button>
+            <button class="btn ghost" id="tt-cloud-dl" disabled>⤓ 下载 MP3</button>
+          </div>
+          <div id="tt-cloud-status" class="hint mt"></div>
+        </div>
+      </details>`;
     const vs = $('#tt-voice', body);
     function loadVoices(){
       const v = speechSynthesis.getVoices();
@@ -4602,6 +4638,83 @@ AppTools['tts'] = {
     };
     $('#tt-recplay', body).onclick = () => { if(recUrl){ const a=new Audio(recUrl); a.play(); } };
     $('#tt-recdown', body).onclick = () => { if(recUrl) downloadURL(recUrl, '我的声音样本.webm'); };
+
+  // ========== 云端 TTS（克隆声音）============
+  function showCloudProvider(){
+    const p = $('#tt-provider', body).value;
+    $('#tt-azure-fields', body).style.display = p==='azure' ? 'block' : 'none';
+    $('#tt-eleven-fields', body).style.display = p==='elevenlabs' ? 'block' : 'none';
+    $('#tt-volc-fields', body).style.display = p==='volc' ? 'block' : 'none';
+  }
+  $('#tt-provider', body).onchange = showCloudProvider;
+  let lastCloudBlob = null, lastCloudUrl = null;
+  $('#tt-cloud', body).onclick = async () => {
+    const text = $('#tt-text', body).value.trim();
+    if(!text){ toast('请输入文字','err'); return; }
+    const provider = $('#tt-provider', body).value;
+    const status = $('#tt-cloud-status', body);
+    status.textContent = '请求中…';
+    try {
+      let url, headers, body;
+      if(provider === 'azure'){
+        const key = $('#tt-azure-key', body).value.trim();
+        const region = $('#tt-azure-region', body).value.trim();
+        const voice = $('#tt-azure-voice', body).value.trim();
+        if(!key || !region || !voice) throw new Error('请填写 Azure Subscription Key / Region / Voice');
+        url = 'https://' + region + '.tts.speech.microsoft.com/cognitiveservices/v1';
+        headers = {
+          'Ocp-Apim-Subscription-Key': key,
+          'Content-Type': 'application/ssml+xml',
+          'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3'
+        };
+        body = '<speak version="1.0" xml:lang="zh-CN"><voice name="' + voice + '">' + escapeHtml(text) + '</voice></speak>';
+      } else if(provider === 'elevenlabs'){
+        const key = $('#tt-eleven-key', body).value.trim();
+        const voiceId = $('#tt-eleven-voice', body).value.trim();
+        if(!key || !voiceId) throw new Error('请填写 ElevenLabs API Key / Voice ID');
+        url = 'https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(voiceId);
+        headers = {
+          'xi-api-key': key,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg'
+        };
+        body = JSON.stringify({ text: text, model_id: 'eleven_multilingual_v2' });
+      } else if(provider === 'volc'){
+        const tok = $('#tt-volc-key', body).value.trim();
+        const voice = $('#tt-volc-voice', body).value.trim();
+        const cluster = $('#tt-volc-cluster', body).value.trim();
+        if(!tok || !voice || !cluster) throw new Error('请填写火山 Key / Voice Type / Cluster');
+        url = 'https://openspeech.bytedance.com/api/v1/tts';
+        headers = {
+          'Authorization': 'Bearer; ' + tok,
+          'Content-Type': 'application/json'
+        };
+        body = JSON.stringify({
+          app: { cluster: cluster, voice_type: voice, appid: '', token: tok },
+          user: { uid: 'pqt' },
+          audio: { voice_type: voice, encoding: 'mp3', speed_ratio: 1, volume_ratio: 1, pitch_ratio: 1 },
+          request: { reqid: Math.random().toString(36).slice(2), text: text, text_type: 'plain', operation: 'query', with_frontend: 1, frontend_type: 'unitTts' }
+        });
+      }
+      const r = await fetch(url, { method: 'POST', headers: headers, body: body });
+      if(!r.ok){
+        let msg = 'HTTP ' + r.status;
+        try{ const t = await r.text(); msg += ' ' + t.slice(0,200); }catch(_){}
+        throw new Error(msg);
+      }
+      const blob = await r.blob();
+      lastCloudBlob = blob;
+      if(lastCloudUrl) URL.revokeObjectURL(lastCloudUrl);
+      lastCloudUrl = URL.createObjectURL(blob);
+      const a = new Audio(lastCloudUrl); a.play().catch(()=>{});
+      $('#tt-cloud-dl', body).disabled = false;
+      status.innerHTML = '✅ 朗读完成（' + Math.round(blob.size/1024) + ' KB），可下载 MP3';
+    } catch(err){
+      status.innerHTML = '❌ ' + escapeHtml(err.message || '请求失败') + '<br><span style="font-size:12px">常见原因：CORS / Key 无效 / 区域不对 / 网络问题</span>';
+    }
+  };
+  $('#tt-cloud-dl', body).onclick = () => { if(lastCloudBlob) downloadBlob(lastCloudBlob, 'cloud_tts.mp3'); };
+  showCloudProvider();
   }
 };
 
@@ -8607,6 +8720,29 @@ AppTools['ar-area'] = { build(body){
     </div>`;
   const canvas=$('#aa-canvas',body), wrap=$('#aa-wrap',body), stepEl=$('#aa-step',body), out=$('#aa-out',body), info=$('#aa-info',body);
   let img=null, pts=[], calib=[], lasso=[], mode='lasso', drawing=false; const MAXW=700;
+  // 平滑曲线绘制：用 quadraticCurveTo + 中点控制，让套索看起来像真正的曲线/圆圈，而不是折线锯齿
+  function drawSmoothPath(cx, path, close){
+    if(path.length<2) return;
+    cx.beginPath();
+    cx.moveTo(path[0].x, path[0].y);
+    if(path.length===2){ cx.lineTo(path[1].x, path[1].y); }
+    else {
+      for(let i=0;i<path.length-1;i++){
+        const cur=path[i], nxt=path[i+1];
+        const mid={x:(cur.x+nxt.x)/2, y:(cur.y+nxt.y)/2};
+        cx.quadraticCurveTo(cur.x, cur.y, mid.x, mid.y);
+      }
+      if(close){
+        const last=path[path.length-1], first=path[0];
+        const mid={x:(last.x+first.x)/2, y:(last.y+first.y)/2};
+        cx.quadraticCurveTo(last.x, last.y, mid.x, mid.y);
+        cx.quadraticCurveTo(mid.x, mid.y, first.x, first.y);
+        cx.closePath();
+      } else {
+        cx.lineTo(path[path.length-1].x, path[path.length-1].y);
+      }
+    }
+  }
   function setMode(m){ mode=m; pts=[]; calib=[]; lasso=[]; drawing=false; stepEl.textContent = m==='lasso' ? '套索模式：先点两点作为<b>已知边长</b>端点（绿色「标1/标2」），再按住拖动圈出要测的区域。' : '多边形模式：点击依次添加顶点（至少 3 个），再点「计算面积」。'; if(img) draw(); }
   function draw(){
     if(!img) return;
@@ -8620,7 +8756,11 @@ AppTools['ar-area'] = { build(body){
     }
     if(mode==='lasso'){
       if(calib.length){ cx.strokeStyle='#52c41a'; cx.lineWidth=2; cx.beginPath(); cx.moveTo(calib[0].x,calib[0].y); calib.slice(1).forEach(p=>cx.lineTo(p.x,p.y)); cx.stroke(); calib.forEach((p,i)=>{ cx.beginPath(); cx.arc(p.x,p.y,6,0,7); cx.fillStyle='#52c41a'; cx.fill(); cx.fillStyle='#fff'; cx.font='11px sans-serif'; cx.textAlign='center'; cx.fillText('标'+(i+1),p.x,p.y-11); }); }
-      if(lasso.length){ cx.beginPath(); cx.moveTo(lasso[0].x,lasso[0].y); lasso.slice(1).forEach(p=>cx.lineTo(p.x,p.y)); if(!drawing) cx.closePath(); cx.fillStyle='rgba(24,144,255,.18)'; cx.strokeStyle='#1890ff'; cx.lineWidth=2; cx.fill(); cx.stroke(); }
+      if(lasso.length){
+        cx.fillStyle='rgba(24,144,255,.18)'; cx.strokeStyle='#1890ff'; cx.lineWidth=2;
+        if(!drawing && lasso.length>=3){ drawSmoothPath(cx, lasso, true); cx.fill(); cx.stroke(); }
+        else if(lasso.length>=2){ drawSmoothPath(cx, lasso, false); cx.stroke(); }
+      }
     }
   }
   function toCanvas(ev){ const r=canvas.getBoundingClientRect(); return { x:(ev.clientX-r.left)*(canvas.width/r.width), y:(ev.clientY-r.top)*(canvas.height/r.height) }; }
@@ -8734,6 +8874,27 @@ renderTools();
   }
   window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred=e; showInstall(); });
   window.addEventListener('appinstalled', function(){ var b=document.getElementById('installBtn'); if(b) b.remove(); toast('已安装，感谢使用本工具箱！'); });
+})();
+
+// 支持 ?open=xxx URL 参数（PWA shortcuts 长按/主屏快捷方式直接打开工具）
+(function(){
+  try{
+    var m = location.search.match(/[?&]open=([^&]+)/);
+    if(m){
+      var id = decodeURIComponent(m[1]);
+      // 等待 AppTools 注册完成
+      var tries = 0;
+      var wait = setInterval(function(){
+        tries++;
+        if(typeof AppTools !== 'undefined' && AppTools[id]){
+          clearInterval(wait);
+          // 滚到顶部后打开
+          try{ window.scrollTo(0,0); }catch(_){}
+          setTimeout(function(){ try{ openToolModal(id); }catch(e){ console.warn('shortcut open failed:', e); } }, 80);
+        } else if(tries > 60){ clearInterval(wait); }
+      }, 50);
+    }
+  }catch(e){ console.warn('?open parse failed:', e); }
 })();
 </script>
 </body>

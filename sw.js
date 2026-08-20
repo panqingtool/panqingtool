@@ -7,7 +7,7 @@
  *  - /search 等 Functions 接口：直接走网络，不缓存
  *  - skipWaiting + clients.claim：新版本发布后下一次访问即生效，并提示用户刷新
  */
-const VERSION = 'v6';
+const VERSION = 'v7';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const CDN_CACHE = 'cdn-' + VERSION;
