@@ -6124,6 +6124,7 @@ const CHANGELOG = [
     '【五修 · 指南针基准】指南针读数明确基准：设备顶部（听筒 / 摄像头一侧）所指方向，底部指向其反方向（±180°），结果区显示顶部 / 底部朝向',
     '【五修 · Cloudflare 源码包】整理出 cloudflare-source/ 完整可部署包（index.html + manifest + sw.js + icons + functions/search.js + wrangler.toml + 部署指南），可直接上 Cloudflare Pages',
     '【部署准备 · 联网搜索兜底】联网搜索新增维基百科客户端兜底：未启用 Functions 后端（如拖拽上传）时自动走维基百科公共接口，三种部署方式均可用；sw.js 升 v6',
+    '【联网搜索修复】后端搜索默认改为服务端维基百科（由 Cloudflare 节点发请求，不受本地网络 / GFW 影响），DuckDuckGo 失效不再导致搜索失败；前端兜底改为同源 /search?provider=wikipedia，移除浏览器直连被墙接口的逻辑',
   ]},
   { date:'2026-08-19', items:[
     '【分类精简】七大分类改为六大：移除「联网工具」板块，联网搜索并入开发工具；关联应用相邻排列（加水印 ↔ 去水印、二维码生成 ↔ 解析、JSON 格式化 ↔ 互转等）',
