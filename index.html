@@ -194,6 +194,16 @@ img{max-width:100%;}
 /* ============ 安装到主屏幕浮动按钮 ============ */
 .install-fab{position:fixed;left:16px;bottom:16px;z-index:70;background:#1890ff;color:#fff;border:none;border-radius:24px;padding:10px 16px;font-size:13px;font-weight:600;box-shadow:0 6px 18px rgba(24,144,255,.4);cursor:pointer;}
 .install-fab:active{transform:scale(.96);}
+.install-nav-btn{display:inline-flex;align-items:center;gap:4px;background:#1890ff;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;margin-right:6px;transition:background .2s}
+.install-nav-btn:hover{background:#0e6fd6}
+.install-nav-btn:active{transform:scale(.96)}
+@media(max-width:680px){.install-nav-btn span{display:none}}
+.install-guide-card{background:var(--card);border:1px solid var(--primary);border-radius:14px;padding:18px 20px;line-height:1.7;font-size:14px;max-width:520px;margin:0 auto;text-align:left}
+.install-guide-card h3{margin:0 0 10px;font-size:18px;color:var(--primary)}
+.install-guide-card ol{margin:6px 0 0 20px;padding:0}
+.install-guide-card ol li{margin:4px 0}
+.install-guide-card .ig-platform{margin:14px 0 0;padding:12px;background:var(--bg-2,#f5f7fa);border-radius:10px}
+.install-guide-card .ig-platform b{color:var(--primary);font-size:15px;display:block;margin-bottom:6px}
 
 /* ============ 指南针 ============ */
 .center-col{display:flex;flex-direction:column;align-items:center;}
@@ -655,6 +665,7 @@ th{background:var(--bg);}
   </div>
   <div class="nav-right">
     <button class="theme-toggle" id="themeToggle" aria-label="切换暗色模式" title="切换暗色/亮色">🌙</button>
+    <button class="install-nav-btn" id="openInstallGuide" aria-label="安装到主屏幕" title="把工具箱装到手机主屏幕 / 电脑桌面">📱 安装</button>
     <button class="hamburger" id="hamburger" aria-label="展开菜单">☰</button>
   </div>
 </nav>
@@ -758,6 +769,52 @@ th{background:var(--bg);}
       <button class="modal-close" id="clogClose" aria-label="关闭">&times;</button>
     </div>
     <div class="clog-body" id="clogBody"><!-- 由 JS 注入 --></div>
+  </div>
+</div>
+
+<!-- ============ 安装到主屏幕引导 ============ -->
+<div class="clog-overlay" id="installOverlay" aria-hidden="true">
+  <div class="clog" role="dialog" aria-modal="true" aria-labelledby="installTitle">
+    <div class="clog-header">
+      <h3 id="installTitle">📱 把工具箱装到主屏幕</h3>
+      <button class="modal-close" id="installClose" aria-label="关闭">&times;</button>
+    </div>
+    <div class="clog-body">
+      <div class="install-guide-card" id="installGuideContent">
+        <h3>📲 一键安装，离线可用</h3>
+        <p style="color:var(--text-2);margin:6px 0 14px">安装后像 App 一样全屏打开，免浏览器地址栏，秒开即用（数据本地处理，不上传）。</p>
+        <div class="ig-platform">
+          <b>📱 iPhone / iPad（Safari）</b>
+          <ol>
+            <li>点击底部的 <b>「分享」按钮 <span style="display:inline-block;width:18px;height:18px;background:#1890ff;color:#fff;border-radius:4px;text-align:center;line-height:18px;font-size:12px;vertical-align:middle">↑</span></b></li>
+            <li>在弹出菜单里选 <b>「添加到主屏幕」</b></li>
+            <li>名称可改，点右上角 <b>「添加」</b> 完成</li>
+            <li>返回桌面就能看到「万能免费在线工具箱」图标</li>
+          </ol>
+        </div>
+        <div class="ig-platform">
+          <b>🤖 安卓手机（Chrome / 华为 / 小米浏览器）</b>
+          <ol>
+            <li>点击右上角 <b>「⋮」菜单</b>（或浏览器地址栏右侧的「安装」）</li>
+            <li>选择 <b>「安装应用 / 添加到主屏幕」</b></li>
+            <li>在弹窗里点 <b>「安装」</b> 即可</li>
+            <li>如果没看到菜单项，先 <b>刷新一下页面</b>，浏览器才会识别这是 PWA</li>
+          </ol>
+        </div>
+        <div class="ig-platform">
+          <b>💻 电脑（Chrome / Edge）</b>
+          <ol>
+            <li>浏览器地址栏右侧会出现 <b>「安装」图标 ⊕</b>，点击即可</li>
+            <li>或点浏览器右上角 <b>「⋮」→「将此应用作为应用安装」</b></li>
+            <li>安装后桌面会有图标，独立窗口运行，不受标签页影响</li>
+          </ol>
+        </div>
+        <div id="installNativeBtn" style="margin-top:14px;text-align:center;display:none">
+          <button class="btn" id="installNativeClick" style="font-size:15px;padding:10px 24px">⚡ 一键安装到本机</button>
+          <div style="color:var(--text-2);font-size:12px;margin-top:6px">（浏览器会弹出确认框）</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2007,24 +2064,61 @@ AppTools['img-matting'] = {
       t.classList.add('tab-act');
     });
 
-    // 背景自定义颜色显示/隐藏 + 修改颜色后实时刷新结果
-    [['#mt-bg', '#mt-custom'], ['#mm-bg', '#mm-bgc']].forEach(([sel, c]) => {
+    // ===== 手动框选背景颜色：color picker ↔ hex 双向同步 + 切到 custom 即时显示并刷新 =====
+    function syncManualBgUI(){
+      const selEl = $('#mm-bg', body);
+      const bgC = $('#mm-bgc', body);
+      const bgH = $('#mm-bgc-hex', body);
+      if(!selEl) return;
+      const showCustom = selEl.value === 'custom';
+      if(bgC) bgC.style.display = showCustom ? 'inline-block' : 'none';
+      if(bgH) bgH.style.display = showCustom ? 'inline-block' : 'none';
+    }
+    function refreshManualResult(){
+      // 已闭合选区且有图才重渲染；否则只更新 UI 状态
+      if(typeof img !== 'undefined' && img && typeof shape !== 'undefined' && shape && shape.closed){
+        try{ renderManualResult(); }catch(_){}
+      }
+    }
+    // 选择背景模式变化：显示/隐藏自定义输入 + 即时重渲染
+    ['#mt-bg', '#mm-bg'].forEach(sel => {
       const selEl = $(sel, body); if(!selEl) return;
       selEl.onchange = () => {
-        const cEl = $(c, body); if(cEl) cEl.style.display = selEl.value === 'custom' ? 'block' : 'none';
-        const hexEl = $('#mm-bgc-hex', body); if(hexEl && sel==='#mm-bg') hexEl.style.display = selEl.value === 'custom' ? 'block' : 'none';
-        if(sel==='#mm-bg') renderManualResult();
+        if(sel === '#mm-bg'){ syncManualBgUI(); refreshManualResult(); }
+        if(sel === '#mt-bg'){
+          const cEl = $('#mt-custom', body); if(cEl) cEl.style.display = selEl.value === 'custom' ? 'inline-block' : 'none';
+        }
       };
     });
-    // 手动框选自定义背景色：颜色选择器 ↔ 十六进制输入框 双向同步，任一变化都实时重渲染（确保"真正自定义"可用）
+    syncManualBgUI();
+    // 手动框选：颜色选择器 + hex 输入双向同步，颜色变化即时刷新结果（"真正自定义"，不再锁死黄色）
     const mmBgColorEl = $('#mm-bgc', body), mmBgHexEl = $('#mm-bgc-hex', body);
+    function normalizeHex(v){
+      v = (v||'').trim();
+      if(/^#[0-9a-fA-F]{6}$/.test(v)) return v.toLowerCase();
+      if(/^[0-9a-fA-F]{6}$/.test(v)) return '#' + v.toLowerCase();
+      return null;
+    }
     if(mmBgColorEl){
-      mmBgColorEl.oninput = () => { if(mmBgHexEl) mmBgHexEl.value = mmBgColorEl.value; renderManualResult(); };
-      mmBgColorEl.onchange = () => { if(mmBgHexEl) mmBgHexEl.value = mmBgColorEl.value; renderManualResult(); };
+      const onPick = () => {
+        const v = mmBgColorEl.value || '#000000';
+        if(mmBgHexEl) mmBgHexEl.value = v;
+        refreshManualResult();
+      };
+      mmBgColorEl.addEventListener('input', onPick);
+      mmBgColorEl.addEventListener('change', onPick);
     }
     if(mmBgHexEl){
-      mmBgHexEl.oninput = () => { let v=(mmBgHexEl.value||'').trim(); if(/^#?[0-9a-fA-F]{6}$/.test(v)){ if(v[0]!=='#') v='#'+v; if(mmBgColorEl) mmBgColorEl.value=v; renderManualResult(); } };
-      mmBgHexEl.onchange = () => { let v=(mmBgHexEl.value||'').trim(); if(/^#?[0-9a-fA-F]{6}$/.test(v)){ if(v[0]!=='#') v='#'+v; mmBgHexEl.value=v; if(mmBgColorEl) mmBgColorEl.value=v; } renderManualResult(); };
+      const onHex = () => {
+        const v = normalizeHex(mmBgHexEl.value);
+        if(v){
+          if(mmBgColorEl) mmBgColorEl.value = v;
+          mmBgHexEl.value = v;
+          refreshManualResult();
+        }
+      };
+      mmBgHexEl.addEventListener('input', onHex);
+      mmBgHexEl.addEventListener('change', onHex);
     }
     $('#mt-feather', body).oninput = () => $('#mt-feathv', body).textContent = $('#mt-feather', body).value;
 
@@ -6567,6 +6661,10 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-21', items:[
+    '【AI 抠图 · 缺块补齐】Failed to fetch /onnxruntime-web/ort-wasm-simd.wasm with size 4194304 but got 715569 根因：模型分块文件在 /imgly-data/1.5.5/dist/ 下少了 2 个分块（e9445ca5... 与 b5322978...）。修复：从 staticimgly.com 重新下载并校验 SHA256，全部 51 个默认分块完整；同时补齐 isnet_fp16 / isnet 模型分块（共 92 个分块 / ~280MB），现在 small / medium 都能稳定加载',
+    '【手动框选抠图 · 自定义背景色真正生效】之前只有默认黄色能用，是 color picker ↔ hex 输入 ↔ renderManualResult 联动时序不稳定。修复：用 addEventListener 重新绑定 input/change 双事件、抽 syncManualBgUI / refreshManualResult 单独函数，色彩改动即时重渲染（不再锁死黄色）',
+    '【手机端 · 安装引导升级】新增头部「📱 安装」按钮（电脑+手机通用入口），点击打开全平台安装说明面板：iOS Safari「分享 → 添加到主屏幕」分步图示、 Android Chrome/华为/小米「⋮菜单 → 安装」步骤、 电脑 Chrome/Edge「地址栏 ⊕ / ⋮菜单」；支持 beforeinstallprompt 时显示「⚡ 一键安装到本机」按钮，浏览器弹原生确认框；已安装（standalone）自动隐藏',
+    '【PWA · 图标已就位】网站名称 logo（nav-logo.png）+ 快捷方式图标（icons/icon-192/512/maskable-512/apple-touch-icon）已替换为红色圆角版（用户提供下载.png，去白底透明、居中缩放 15% 边距，maskable 留 40% 安全区）；背景水印（bg-watermark，黑字）按要求不动',
     '【联网工具】新增「联网工具」分类与 3 个联网工具：天气查询（实时 + 未来 7 天预报，Open-Meteo 数据，CF Functions 代理国内免墙）、IP 归属、手机号归属（淘宝公开接口，CF Functions 代理）',
     '【联网工具 · 搜索升级】联网搜索后端默认走 brave → google → 维基百科 → 百度/Bing 链式兜底，失败仍给出明确提示，不再静默无响应',
     '【PWA · 跨浏览器安装】全浏览器覆盖：Android Chrome / Edge 用原生 beforeinstallprompt 按钮；iOS Safari 显示「分享 → 添加到主屏幕」步骤卡；其它浏览器显示轻量提示卡；离线/已安装状态自动隐藏',
@@ -9397,6 +9495,36 @@ renderTools();
     if(isIOS && !dismissed) showIOSGuide();
     else if(!isIOS) showGenericInstall();
   }, 2500);
+
+  // ===== 顶部「📱 安装」按钮 → 打开引导面板（手机/电脑通用入口） =====
+  var installOverlay = document.getElementById('installOverlay');
+  var installClose = document.getElementById('installClose');
+  var openInstallGuide = document.getElementById('openInstallGuide');
+  var installNativeBtn = document.getElementById('installNativeBtn');
+  var installNativeClick = document.getElementById('installNativeClick');
+  function showInstallGuide(){
+    if(!installOverlay) return;
+    installOverlay.classList.add('show');
+    installOverlay.setAttribute('aria-hidden','false');
+    // 如果浏览器可触发原生安装（Android/Edge/Chrome），显示「一键安装」按钮
+    if(deferred && installNativeBtn) installNativeBtn.style.display = 'block';
+  }
+  function hideInstallGuide(){
+    if(!installOverlay) return;
+    installOverlay.classList.remove('show');
+    installOverlay.setAttribute('aria-hidden','true');
+  }
+  if(openInstallGuide) openInstallGuide.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showInstallGuide(); });
+  if(installClose) installClose.addEventListener('click', hideInstallGuide);
+  if(installOverlay) installOverlay.addEventListener('click', function(e){ if(e.target===installOverlay) hideInstallGuide(); });
+  if(installNativeClick) installNativeClick.addEventListener('click', function(){
+    if(!deferred){ toast('当前浏览器暂不支持一键安装，请按上方说明手动添加','info'); return; }
+    deferred.prompt();
+    var uc = deferred.userChoice; deferred = null;
+    if(uc && uc.finally){ uc.finally(function(){ if(installNativeBtn) installNativeBtn.style.display='none'; }); }
+  });
+  // 桌面导航栏的「安装」按钮在已安装/已停用时隐藏
+  if(isStandalone && openInstallGuide) openInstallGuide.style.display = 'none';
 })();
 
 // 支持 ?open=xxx URL 参数（PWA shortcuts 长按/主屏快捷方式直接打开工具）
