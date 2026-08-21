@@ -5869,84 +5869,49 @@ AppTools['math-formula'] = {
       render();
     });
 
-    // 将 MathJax SVG 像素化（去掉 ex 单位、设 viewBox 等比像素）并补白底
-    async function texToSvg(tex){
-      await ensureMathJax();
-      const mjx = MathJax.tex2svg(tex, {display: true});
-      const svgEl = mjx.querySelector('svg');
-      if(!svgEl) return null;
-      const vb = (svgEl.getAttribute('viewBox')||'0 0 1000 400').trim().split(/[\s,]+/).map(Number);
-      // MathJax SVG viewBox 单位约定：1em = 1000 viewBox units；按目标字号 32px 换算像素
-      const FONT = 32;
-      const w = Math.ceil((vb[2]||1000) / 1000 * FONT);
-      const h = Math.ceil((vb[3]||400) / 1000 * FONT);
-      const clone = svgEl.cloneNode(true);
-      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      clone.setAttribute('width', String(w));
-      clone.setAttribute('height', String(h));
-      // 补白底（最底层 rect）
-      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      bg.setAttribute('width', '100%'); bg.setAttribute('height', '100%'); bg.setAttribute('fill', '#ffffff');
-      clone.insertBefore(bg, clone.firstChild);
-      return { svg: new XMLSerializer().serializeToString(clone), w, h };
-    }
-    // 逐行渲染并合并为一个多行 SVG（每行单独 tex2svg，避免一条公式塞多行报错）
-    async function buildCombined(){
-      const lines = src.value.split('\n').map(s => s.trim()).filter(Boolean);
-      if(!lines.length) return null;
-      const parts = [];
-      for(const t of lines){
-        try{ const p = await texToSvg(t); if(p) parts.push(p); }catch(_){ }
-      }
-      if(!parts.length) return null;
-      const gap = 16, W = Math.max(...parts.map(p=>p.w)), H = parts.reduce((a,p)=>a+p.h,0) + gap*(parts.length-1);
-      let y = 0, inner = '';
-      for(const p of parts){
-        // 把每行 SVG 的内容抽出再嵌入合并的 <svg>，统一外层 width/height/viewBox
-        const m = p.svg.match(/<svg[^>]*>([\s\S]*)<\/svg>\s*$/);
-        if(m){ inner += `<g transform="translate(0,${y})">${m[1]}</g>`; y += p.h + gap; }
-      }
-      return { svg:`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="100%" height="100%" fill="#ffffff"/>${inner}</svg>`, W, H };
-    }
-    async function combinedToPng(combined){
-      const blob = new Blob([combined.svg], {type:'image/svg+xml;charset=utf-8'});
-      const url = URL.createObjectURL(blob);
+    // 将 KaTeX 预览 DOM 转 PNG（用 html2canvas，比 MathJax tex2svg 更稳定）
+    async function previewToPng(){
+      if(!window.html2canvas) await loadScriptSrc('https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js');
+      // 用克隆节点截图，避免改变原始 DOM
+      const clone = preview.cloneNode(true);
+      clone.style.position = 'absolute'; clone.style.left = '-99999px'; clone.style.top = '0';
+      clone.style.background = '#ffffff'; clone.style.padding = '12px 20px';
+      document.body.appendChild(clone);
       try{
-        const im = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error('SVG 加载失败')); i.src=url; });
-        const scale = 3, c = document.createElement('canvas'); c.width = combined.W*scale; c.height = combined.H*scale;
-        const cx = c.getContext('2d'); cx.fillStyle='#ffffff'; cx.fillRect(0,0,c.width,c.height); cx.drawImage(im, 0, 0, c.width, c.height);
-        return await new Promise(r=>c.toBlob(b=>r(b), 'image/png'));
-      } finally { URL.revokeObjectURL(url); }
+        const canvas = await html2canvas(clone, { backgroundColor:'#ffffff', scale:3, logging:false, useCORS:true });
+        return await new Promise(r=>canvas.toBlob(b=>r(b), 'image/png'));
+      } finally { clone.remove(); }
     }
-
-    // 按需加载 MathJax 3 tex-svg 组件（用于真正生成 SVG；KaTeX 仅用于实时 HTML 预览）
-    async function ensureMathJax(){
-      if(window.MathJax && MathJax.tex2svg && MathJax.startup && MathJax.startup.promise){
-        try{ await MathJax.startup.promise; }catch(_){ } return MathJax;
-      }
-      if(!window.MathJax){
-        window.MathJax = {
-          tex: { packages: { '[+]': ['ams', 'boldsymbol'] }, tags:'none' },
-          svg: { fontCache: 'local', displayAlign: 'left' },
-          startup: { typeset: false, ready: ()=>{ MathJax.startup.defaultReady(); } }
-        };
-      }
-      await loadScriptSrc('https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js');
-      if(MathJax && MathJax.startup && MathJax.startup.promise){ try{ await MathJax.startup.promise; }catch(_){ } }
-      return MathJax;
+    // 将 KaTeX 预览 DOM 转为 SVG（SVG 内嵌 base64 PNG 图像，兼容 Word / 浏览器）
+    async function previewToSvg(){
+      if(!window.html2canvas) await loadScriptSrc('https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js');
+      const clone = preview.cloneNode(true);
+      clone.style.position = 'absolute'; clone.style.left = '-99999px'; clone.style.top = '0';
+      clone.style.background = '#ffffff'; clone.style.padding = '12px 20px';
+      document.body.appendChild(clone);
+      try{
+        const canvas = await html2canvas(clone, { backgroundColor:'#ffffff', scale:3, logging:false, useCORS:true });
+        const dataUrl = canvas.toDataURL('image/png');
+        const w = canvas.width, h = canvas.height;
+        // SVG 内嵌 PNG（确保 Word 也能正常显示）
+        return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w/3}" height="${h/3}" viewBox="0 0 ${w/3} ${h/3}"><image width="${w/3}" height="${h/3}" xlink:href="${dataUrl}"/></svg>`;
+      } finally { clone.remove(); }
     }
+    async function combinedToPng(){ return await previewToPng(); }
 
     $('#mf-copy-tex', body).onclick = () => copyText(src.value);
     $('#mf-copy-html', body).onclick = () => copyText(preview.innerHTML);
     $('#mf-svg', body).onclick = async () => {
+      if(!src.value.trim()){ toast('请输入公式','err'); return; }
       const btn = $('#mf-svg', body); btn.disabled = true; const old = btn.textContent; btn.textContent = '渲染中…';
-      try{ const combined = await buildCombined(); if(!combined){ toast('请输入公式','err'); return; } downloadBlob(new Blob([combined.svg], {type:'image/svg+xml;charset=utf-8'}), 'formula.svg'); }
+      try{ const svg = await previewToSvg(); downloadBlob(new Blob([svg], {type:'image/svg+xml;charset=utf-8'}), 'formula.svg'); }
       catch(e){ toast('SVG 生成失败：'+(e.message||e),'err'); }
       finally{ btn.disabled = false; btn.textContent = old; }
     };
     $('#mf-png', body).onclick = async () => {
+      if(!src.value.trim()){ toast('请输入公式','err'); return; }
       const btn = $('#mf-png', body); btn.disabled = true; const old = btn.textContent; btn.textContent = '渲染中…';
-      try{ const combined = await buildCombined(); if(!combined){ toast('请输入公式','err'); return; } const png = await combinedToPng(combined); if(png) downloadBlob(png, 'formula.png'); else toast('PNG 生成失败','err'); }
+      try{ const png = await previewToPng(); if(png) downloadBlob(png, 'formula.png'); else toast('PNG 生成失败','err'); }
       catch(e){ toast('PNG 生成失败：'+(e.message||e),'err'); }
       finally{ btn.disabled = false; btn.textContent = old; }
     };
@@ -5979,7 +5944,7 @@ const TOOLS = [
   {id:'gif-split',    name:'GIF 图片分解',   icon:'🎞️', cat:'image', desc:'上传 GIF 分解为单帧，支持全部 / 范围 / 每 N 帧抽取，导出 PNG / JPG / WebP 并打包 ZIP（需联网加载解析库）。'},
   {id:'video-gif',    name:'视频转 GIF',     icon:'🎬', cat:'image', desc:'截取视频片段转 GIF，可调起止时间 / 帧率 / 尺寸 / 色彩数（64 / 128 / 256），生成后下载。'},
   {id:'photo-measure',name:'拍照测距测高',   icon:'📐', cat:'image', desc:'上传图片，用参考物标定比例后测量两点距离或物体高度，结果显示在面板；适合实物估测。'},
-  {id:'img-round',    name:'图片圆角生成',   icon:'⬜', cat:'image', desc:'一键生成圆角图片，四角可独立设半径、自定义背景色，透明导出 PNG，支持批量打包 ZIP。', batch:true},
+  {id:'img-round',    name:'图片圆角生成',   icon:'⬜', cat:'image', desc:'一键生成圆角图片，可选「先裁剪再圆角」（X/Y/宽高手动设置或居中/正方形一键裁剪），四角可独立设半径、自定义背景色，透明导出 PNG，支持批量打包 ZIP。', batch:true},
   {id:'img-base64',   name:'图片转 Base64',  icon:'🔣', cat:'image', desc:'上传图片生成 Data URL / 纯 Base64 字符串，支持批量与格式切换，一键复制，适配网页嵌入。', batch:true},
   {id:'img-to-pdf',   name:'图片转 PDF',     icon:'📕', cat:'image', desc:'多张图片按序合并为 PDF，可选 A4 / A3 / Letter、页面方向与边距，图片适应 / 铺满裁切，本地生成。', batch:true},
   /* ============ 文档工具 ============ */
@@ -6626,6 +6591,10 @@ const CHANGELOG = [
     '【AI 抠图 · 二修】根因不是路径而是"包内无模型"：@imgly/background-removal@1.5.5 的 npm 包只有 JS、模型(~44MB)托管在 imgly 官方数据 CDN；之前传 jsdelivr dist 路径（那里没有 resources.json/models/）→ "Resource /models/isnet_quint8 not found"。修复：publicPath 指向官方 `https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/`（绝对 URL，避免 Invalid base URL），并放行 CSP connect-src',
     '【数学公式 · 白板根因】KaTeX 0.16 根本没有 output:"svg" 选项（只支持 html/mathml/htmlAndMathml），`renderToString(..., output:"svg")` 实际返回 HTML `<span>`，`normalizeSvg` 用 SVG 解析 HTML 必然失败 → 导出 SVG/PNG 全空白。修复：改用 MathJax 3 `tex2svg` 真正生成 SVG（按需加载 cdn.jsdelivr.net/mathjax@3.2.2），再用 SVG→Image→canvas 转 PNG，SVG 与 PNG 内容一致',
     '【logo · 透明化】网站名称 logo（nav-logo.png）与快捷方式图标（icons/icon-192/512/maskable-512/apple-touch-icon）统一改为"红色透明"版：去掉白/浅灰背景、保留红色羊头 + 抗锯齿边缘，alpha 范围 0-255。背景水印（bg-watermark，黑色带字）按要求不动',
+    '【AI 抠图 · 三修 · 站内托管】Failed to fetch 根因：staticimgly.com 在国内不可达。修复：把 @imgly/background-removal-data 全部资源（3 个 ONNX 模型 + 7 个 wasm，共 100+ 文件 ~200MB）下载并上传到本站 /imgly-data/1.5.5/dist/（dist/ 与 cloudflare-source/ 各一份）；publicPath 改用 `window.location.origin + "/imgly-data/1.5.5/dist/"` 跨部署适配；默认模型 isnet_quint8 11/11 chunks 完整，浏览器同源加载稳定无墙',
+    '【数学公式 · 三修 · html2canvas 路线】MathJax tex2svg 仍不稳。改用 html2canvas 对 KaTeX 预览 DOM 截图：PNG 直接出图，SVG 内嵌 base64 PNG（保证 Word/浏览器都能正确显示），所见即所得。复制 LaTeX / 复制 HTML 保持原样',
+    '【logo · 圆角版替换】网站名称 logo（nav-logo.png）与快捷方式图标（icons/icon-192/512/maskable-512/apple-touch-icon）统一替换为带黄色光晕的"红色圆角"版（用户提供图，去白底+透明背景，居中缩放 15% 边距，maskable 留 40% 安全区）。背景水印（bg-watermark，黑色带字）按要求不动',
+    '【图片圆角 · 增强裁剪】图片圆角生成（img-round）新增裁剪设置：X/Y/宽高 4 个数值输入，启用裁剪复选框 + 居中裁剪 / 正方形裁剪 / 重置三个快捷按钮，先裁剪再圆角，支持批量',
   ]},
   { date:'2026-08-20', items:[
     '【PWA 安装】补全 manifest / Service Worker / 图标部署文件并新增「安装到主屏幕」按钮，手机端可真正添加到主屏幕（iOS 用 Safari 分享菜单、Android 用按钮或菜单安装）',
@@ -7295,19 +7264,10 @@ async function fetchJSONviaProxy(target){
   return await d.json();
 }
 // @imgly 抠图：publicPath 必须为绝对 URL（库内部用 new URL 解析）
-// ⚠️ npm @imgly/background-removal 包内**只有 JS**，模型（~44MB）托管在 imgly 官方数据 CDN
-//    jsdelivr/unpkg 的 npm dist 路径没有 resources.json/models/，必须用 staticimgly data CDN
+// 模型（~44MB）已上传到本站 /imgly-data/1.5.5/dist/（国内可访问），使用 window.location.origin 适配所有部署
 async function imglyRemove(removeBackground, f, opts){
-  const bases = [
-    'https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/',
-    'https://staticimgly.com/@imgly/background-removal-data/1.5.4/dist/'
-  ];
-  let lastErr = null;
-  for(const base of bases){
-    try{ return await removeBackground(f, Object.assign({}, opts, { publicPath: base })); }
-    catch(e){ lastErr = e; }
-  }
-  throw lastErr || new Error('模型加载失败：模型托管在 imgly 官方数据 CDN（staticimgly.com），请检查网络后重试');
+  const base = window.location.origin + '/imgly-data/1.5.5/dist/';
+  return await removeBackground(f, Object.assign({}, opts, { publicPath: base }));
 }
 // 各工具顶部的「联网处理」开关（共享同一设置）
 function setupNetToggle(body){
@@ -8505,7 +8465,7 @@ function ntHistory(key){
 async function ntGetJSZip(){ if(window.JSZip) return window.JSZip; return ensureCDNLib('JSZip',['https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js','https://unpkg.com/jszip@3.10.1/dist/jszip.min.js']); }
 async function ntGetPDFLib(){ if(window.PDFLib) return window.PDFLib; return ensureCDNLib('PDFLib',['https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js','https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js']); }
 
-/* 图片圆角生成 */
+/* 图片圆角生成（含裁剪） */
 AppTools['img-round'] = {
   build(body){
     body.innerHTML = `
@@ -8515,6 +8475,22 @@ AppTools['img-round'] = {
           <button class="btn" id="ir-add">＋ 选择 / 继续添加图片</button>
           <button class="btn ghost" id="ir-clear" disabled>清空</button>
           <span class="mini-tag" id="ir-count" style="align-self:center">0 张</span>
+        </div>
+      </div>
+      <div class="mb">
+        <label class="field-label"><input type="checkbox" id="ir-enable-crop"> 启用裁剪（先裁剪再圆角）</label>
+        <div id="ir-crop-box" style="display:none; margin-top:6px">
+          <div class="row mb">
+            <div><label class="field-label">X (px)</label><input type="number" class="inp" id="ir-cx" value="0" min="0"></div>
+            <div><label class="field-label">Y (px)</label><input type="number" class="inp" id="ir-cy" value="0" min="0"></div>
+            <div><label class="field-label">宽 (px)</label><input type="number" class="inp" id="ir-cw" value="0" min="0"></div>
+            <div><label class="field-label">高 (px)</label><input type="number" class="inp" id="ir-ch" value="0" min="0"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn ghost" id="ir-crop-center">居中裁剪（按宽度）</button>
+            <button class="btn ghost" id="ir-crop-square">正方形裁剪</button>
+            <button class="btn ghost" id="ir-crop-reset">重置（不裁剪）</button>
+          </div>
         </div>
       </div>
       <div class="row mb">
@@ -8533,17 +8509,34 @@ AppTools['img-round'] = {
       <div id="ir-out" class="hint">选择图片后预览（可继续添加更多）</div>`;
     let imgs=[];
     $('#ir-sep',body).onchange=()=>{ $('#ir-sepbox',body).style.display = $('#ir-sep',body).checked?'flex':'none'; };
+    $('#ir-enable-crop',body).onchange=()=>{ $('#ir-crop-box',body).style.display = $('#ir-enable-crop',body).checked?'block':'none'; };
     $('#ir-add',body).onclick=()=>$('#ir-files',body).click();
     $('#ir-clear',body).onclick=()=>{ imgs=[]; $('#ir-run',body).disabled=true; $('#ir-zip',body).disabled=true; $('#ir-clear',body).disabled=true; $('#ir-count',body).textContent='0 张'; $('#ir-out',body).innerHTML='选择图片后预览（可继续添加更多）'; };
-    $('#ir-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); $('#ir-run',body).disabled=false; $('#ir-zip',body).disabled=false; $('#ir-clear',body).disabled=false; $('#ir-count',body).textContent=imgs.length+' 张'; $('#ir-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成（可继续添加）'; };
+    $('#ir-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); $('#ir-run',body).disabled=false; $('#ir-zip',body).disabled=false; $('#ir-clear',body).disabled=false; $('#ir-count',body).textContent=imgs.length+' 张'; $('#ir-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成（可继续添加）'; // 自动设置默认裁剪宽高为第一张图
+      if(imgs.length===1 && +$('#ir-cw',body).value===0){ const w=imgs[0].width, h=imgs[0].height; $('#ir-cw',body).value=w; $('#ir-ch',body).value=h; }
+    };
+    // 裁剪快捷按钮
+    $('#ir-crop-center',body).onclick=()=>{ if(!imgs.length) return; const w=imgs[0].width, h=imgs[0].height; const s=Math.min(w,h); $('#ir-cx',body).value=Math.floor((w-s)/2); $('#ir-cy',body).value=Math.floor((h-s)/2); $('#ir-cw',body).value=s; $('#ir-ch',body).value=s; };
+    $('#ir-crop-square',body).onclick=()=>{ if(!imgs.length) return; const w=imgs[0].width, h=imgs[0].height; const s=Math.min(w,h); $('#ir-cx',body).value=Math.floor((w-s)/2); $('#ir-cy',body).value=Math.floor((h-s)/2); $('#ir-cw',body).value=s; $('#ir-ch',body).value=s; };
+    $('#ir-crop-reset',body).onclick=()=>{ $('#ir-enable-crop',body).checked=false; $('#ir-crop-box',body).style.display='none'; $('#ir-cx',body).value=0; $('#ir-cy',body).value=0; $('#ir-cw',body).value=0; $('#ir-ch',body).value=0; };
+    function cropImg(img){
+      if(!$('#ir-enable-crop',body).checked) return img;
+      let x=+$('#ir-cx',body).value, y=+$('#ir-cy',body).value, w=+$('#ir-cw',body).value, h=+$('#ir-ch',body).value;
+      if(!w || !h){ w=img.width; h=img.height; }
+      // 边界检查
+      if(x<0) x=0; if(y<0) y=0; if(x>=img.width||y>=img.height) return img;
+      if(x+w>img.width) w=img.width-x; if(y+h>img.height) h=img.height-y;
+      const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,x,y,w,h,0,0,w,h); return c;
+    }
     function radii(){ if($('#ir-sep',body).checked) return [+$('#ir-tl',body).value,+$('#ir-tr',body).value,+$('#ir-br',body).value,+$('#ir-bl',body).value]; const r=+$('#ir-r',body).value; return [r,r,r,r]; }
     function roundOne(img){
-      const [tl,tr,br,bl]=radii(); const c=document.createElement('canvas'); c.width=img.width; c.height=img.height; const x=c.getContext('2d');
+      const cropped = cropImg(img);
+      const [tl,tr,br,bl]=radii(); const c=document.createElement('canvas'); c.width=cropped.width; c.height=cropped.height; const x=c.getContext('2d');
       const bg=$('#ir-bg',body).value; if(bg==='transparent'){ x.clearRect(0,0,c.width,c.height); } else { x.fillStyle = bg==='custom'?$('#ir-custom',body).value:bg; x.fillRect(0,0,c.width,c.height); }
       x.save(); x.beginPath();
       if(x.roundRect){ x.moveTo(tl,0); x.lineTo(c.width-tr,0); x.quadraticCurveTo(c.width,0,c.width,tr); x.lineTo(c.width,c.height-br); x.quadraticCurveTo(c.width,c.height,c.width-br,c.height); x.lineTo(bl,c.height); x.quadraticCurveTo(0,c.height,0,c.height-bl); x.lineTo(0,tl); x.quadraticCurveTo(0,0,tl,0); x.closePath(); x.clip(); }
       else { x.rect(0,0,c.width,c.height); x.clip(); }
-      x.drawImage(img,0,0); x.restore(); return c;
+      x.drawImage(cropped,0,0); x.restore(); return c;
     }
     $('#ir-run',body).onclick=()=>{ if(!imgs.length) return; const cv=roundOne(imgs[0]); $('#ir-out',body).innerHTML='<img src="'+cv.toDataURL('image/png')+'" style="max-width:100%;border-radius:8px"><div class="btn-row"><button class="btn" id="ir-dl">下载 PNG</button></div>'; $('#ir-dl',body).onclick=()=>downloadBlob(ntDataURLtoBlob(cv.toDataURL('image/png')),'rounded.png'); };
     $('#ir-zip',body).onclick=async()=>{ if(!imgs.length) return; const JSZip=await ntGetJSZip(); const z=new JSZip(); imgs.forEach((img,i)=>{ z.file('rounded_'+(i+1)+'.png', ntDataURLtoBlob(roundOne(img).toDataURL('image/png'))); }); downloadBlob(await z.generateAsync({type:'blob'}),'rounded_images.zip'); };
