@@ -16,7 +16,7 @@
 <meta name="format-detection" content="telephone=no">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- 冗余 CSP（与 _headers 保持一致；用于不支持 _headers 的部署平台） -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://api.open-meteo.com https://api.frankfurter.app https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
@@ -941,7 +941,7 @@ function renderBatchResults(container, items){
   items.forEach((it, i) => {
     html += `<div class="batch-item"><canvas id="bi-${i}"></canvas><div class="batch-name">${escapeHtml(it.name)}</div><button class="btn btn-ghost btn-sm" data-i="${i}" aria-label="下载 ${escapeHtml(it.name)}">下载</button></div>`;
   });
-  html += `</div><div class="btn-row"><button class="btn" id="batch-png">下载全部（逐个高清 PNG）</button><button class="btn btn-ghost" id="batch-zip">打包下载 ZIP（${items.length} 张）</button></div>`;
+  html += `</div><div class="btn-row"><button class="btn" id="batch-png">下载全部（逐个 JPG）</button><button class="btn btn-ghost" id="batch-zip">打包下载 ZIP（${items.length} 张）</button></div>`;
   container.innerHTML = html;
   items.forEach((it, i) => {
     const cvi = $('#bi-'+i, container);
@@ -963,8 +963,8 @@ function renderBatchResults(container, items){
   });
   const btnPng = $('#batch-png', container), btnZip = $('#batch-zip', container);
   if(btnPng) btnPng.onclick = async () => {
-    for(let i=0;i<items.length;i++){ downloadBlob(items[i].blob, items[i].name); await new Promise(r=>setTimeout(r, 350)); }
-    toast('已开始逐个下载（高清 PNG）');
+    for(let i=0;i<items.length;i++){ downloadBlob(items[i].blob, items[i].name); await new Promise(r=>setTimeout(r, 150)); }
+    toast('已开始逐个下载（高清 JPG）');
   };
   if(btnZip) btnZip.onclick = () => downloadZip(items, 'batch-images.zip');
 }
@@ -981,7 +981,7 @@ function escapeHtml(s){
 
 /* ---------- 分类与工具清单 ---------- */
 const CATEGORIES = [
-  { id:'image', name:'图片工具', icon:'🖼️', desc:'压缩 / 转换 / 裁剪 / 拼接 / 取色 / 抠图 / OCR / 水印 / 模糊 / 去水印一应俱全。' },
+  { id:'image', name:'图片工具', icon:'🖼️', desc:'压缩 / 转换 / 裁剪 / 拼接 / 取色 / 抠图 / OCR / 水印 / 模糊 一应俱全。' },
   { id:'doc',   name:'文档工具', icon:'📄', desc:'PDF 全套 + 论文排版 / 文本对比 / 表格识别导出 / Word 加水印，本地处理不外传。' },
   { id:'text',  name:'文本工具', icon:'📝', desc:'繁简转换 / 字数统计 / 加密 / 批量处理 / 去重 / 符号大全。' },
   { id:'dev',   name:'开发工具', icon:'💻', desc:'JSON / Base64 / 时间戳 / UUID / 二维码 / 加密 / 进制互转。' },
@@ -2844,21 +2844,27 @@ AppTools['pdf-toimg'] = {
         for(let p=1;p<=pdf.numPages;p++){ html += `<canvas id="pi-c${p}"></canvas>`; canvases.push(p); }
         html += '</div><div class="btn-row"><button class="btn" id="pi-zip">打包下载 ZIP（推荐）</button><button class="btn btn-ghost" id="pi-down">逐页下载 PNG</button></div>';
         $('#pi-result', body).innerHTML = html + `<div class="result-box">共 ${pdf.numPages} 页</div>`;
+        const blobs = [];
         for(const p of canvases){
           const page = await pdf.getPage(p);
           const vp = page.getViewport({scale});
           const cvi = $('#pi-c'+p, body);
           cvi.width = vp.width; cvi.height = vp.height;
           await page.render({ canvasContext: cvi.getContext('2d'), viewport: vp }).promise;
+          blobs.push(await new Promise(r => cvi.toBlob(r, 'image/png')));
         }
         const base = (file.name.replace(/\.pdf$/i,'')||'pdf');
-        $('#pi-zip', body).onclick = () => {
-          const items = canvases.map(p => ({ name: `page_${p}.png`, blob: ntDataURLtoBlob($('#pi-c'+p, body).toDataURL('image/png')) }));
-          downloadZip(items, `${base}_pages.zip`).then(()=>toast('已开始下载 ZIP')).catch(e=>toast('打包失败，请改用逐页下载：'+e.message,'err'));
+        $('#pi-zip', body).onclick = async () => {
+          const btn = $('#pi-zip', body); btn.disabled = true; btn.textContent = '打包中…';
+          try{
+            await downloadZip(blobs.map((b,i)=>({ name:`page_${i+1}.png`, blob:b })), `${base}_pages.zip`);
+            toast('已开始下载 ZIP');
+          }catch(e){ toast('打包失败，请改用逐页下载：'+e.message,'err'); }
+          btn.disabled = false; btn.textContent = '打包下载 ZIP（推荐）';
         };
         $('#pi-down', body).onclick = () => {
-          canvases.forEach(p => downloadURL($('#pi-c'+p, body).toDataURL('image/png'), `page_${p}.png`));
-          toast('已开始下载各页（若被浏览器拦截，请改用 ZIP 打包下载）');
+          blobs.forEach((b,i) => downloadBlob(b, `page_${i+1}.png`));
+          toast('已开始下载各页');
         };
       }catch(err){ $('#pi-result', body).innerHTML='<div class="result-box err">转换失败：'+escapeHtml(err.message)+'</div>'; }
       btn.disabled=false; btn.textContent='转为图片';
@@ -4305,7 +4311,8 @@ AppTools['countdown'] = {
     let timer=null;
     body.innerHTML = `
       <div class="mb"><label class="field-label">名称（如生日、元旦、考研）</label><input type="text" class="inp" id="cd-name" placeholder="未命名"></div>
-      <div class="mb"><label class="field-label">目标日期 / 时间</label><input type="datetime-local" class="inp" id="cd-time"></div>
+      <div class="mb"><label class="field-label">目标日期 <span class="hint">（必填）</span></label><input type="date" class="inp" id="cd-date"></div>
+      <div class="mb"><label class="field-label">具体时间 <span class="hint">（可选，留空视为当天 00:00）</span></label><input type="time" class="inp" id="cd-time-opt"></div>
       <div class="btn-row">
         <button class="btn" id="cd-save">保存到纪念日</button>
         <button class="btn btn-ghost" id="cd-run">开始倒计时</button>
@@ -4340,7 +4347,8 @@ AppTools['countdown'] = {
           } else {
             const it=arr2[i];
             $('#cd-name', body).value=it.name||'';
-            $('#cd-time', body).value=it.time||'';
+            $('#cd-date', body).value=(it.time||'').slice(0,10)||'';
+            $('#cd-time-opt', body).value=((it.time||'').slice(11,16))||'';
             start(it.name||'目标时间', it.time);
           }
         };
@@ -4364,14 +4372,18 @@ AppTools['countdown'] = {
     }
     $('#cd-run', body).onclick=()=>{
       const name=$('#cd-name', body).value.trim()||'目标时间';
-      const time=$('#cd-time', body).value;
-      if(!time){ toast('请选择日期时间','err'); return; }
+      const dateV=$('#cd-date', body).value;
+      if(!dateV){ toast('请选择目标日期','err'); return; }
+      const timeV=$('#cd-time-opt', body).value||'00:00';
+      const time=dateV+'T'+timeV;
       start(name, time);
     };
     $('#cd-save', body).onclick=()=>{
       const name=$('#cd-name', body).value.trim()||'未命名';
-      const time=$('#cd-time', body).value;
-      if(!time){ toast('请选择日期时间','err'); return; }
+      const dateV=$('#cd-date', body).value;
+      if(!dateV){ toast('请选择目标日期','err'); return; }
+      const timeV=$('#cd-time-opt', body).value||'00:00';
+      const time=dateV+'T'+timeV;
       const arr=load();
       arr.push({name, time, created:Date.now()});
       save(arr); render(); toast('已保存到纪念日');
@@ -4670,8 +4682,9 @@ AppTools['idphoto-bg'] = {
             cx.save(); cx.globalAlpha = 0.35; cx.filter = `blur(${feather*2}px)`; cx.drawImage(fgImg, 0, 0); cx.restore();
           }
           const base = (f.name.replace(/\.[^.]+$/, '') || 'image');
-          const blob = await new Promise(r => c.toBlob(b => r(b), 'image/png'));
-          items.push({ name: `${base}_bg.png`, blob });
+          // 背景已铺为不透明纯色，无需透明通道 → 输出 JPEG（体积约为 PNG 的 1/5~1/10，下载更快）
+          const blob = await new Promise(r => c.toBlob(b => r(b), 'image/jpeg', 0.93));
+          items.push({ name: `${base}_bg.jpg`, blob });
         };
         // 并发 2 张并行处理，显著提速（模型推理是主要耗时）
         const CONC = 2;
@@ -5171,9 +5184,8 @@ AppTools['exchange'] = {
       const end = new Date(), start = new Date(end.getTime()-6*86400000);
       const f = dt => dt.toISOString().slice(0,10);
       try{
-        const resp = await fetch(`https://api.frankfurter.app/${f(start)}..${f(end)}?from=${from}&to=${to}`);
-        if(!resp.ok) throw new Error('no');
-        const j = await resp.json();
+        const j = await fetchJSONviaProxy(`https://api.frankfurter.app/${f(start)}..${f(end)}?from=${from}&to=${to}`);
+        if(!j || !j.rates) throw new Error('no');
         const series = Object.keys(j.rates).sort().map(d => j.rates[d][to]);
         if(series.length < 2) throw new Error('few');
         drawTrend(cv, series, `${from}→${to} 近7日`);
@@ -5198,15 +5210,20 @@ AppTools['exchange'] = {
     $('#ex-refresh', body).onclick = async () => {
       const btn = $('#ex-refresh', body); btn.disabled = true; btn.textContent = '同步中…';
       try{
-        const resp = await fetch('https://open.er-api.com/v6/latest/CNY');
-        if(!resp.ok) throw new Error('HTTP ' + resp.status);
-        const j = await resp.json();
-        if(j && j.result === 'success' && j.rates && typeof j.rates === 'object'){
-          Object.keys(RATES).forEach(k => { if(k!=='CNY' && typeof j.rates[k]==='number' && j.rates[k]>0) RATES[k] = 1/j.rates[k]; });
-          liveFlag = true; liveTime = new Date().toLocaleString('zh-CN');
-          $('#ex-note', body).innerHTML = '✔ 已同步实时汇率（open.er-api.com' + (j.time_last_update_utc ? '，' + j.time_last_update_utc : '') + '）';
-          toast('汇率已更新');
-        } else throw new Error('返回格式异常');
+        // 多源容灾：open.er-api.com → frankfurter.app，任一成功即采用（均返回 1 CNY = rates[k] 直接报价）
+        const srcs = [
+          'https://open.er-api.com/v6/latest/CNY',
+          'https://api.frankfurter.app/latest?from=CNY'
+        ];
+        let j = null;
+        for(const u of srcs){
+          try{ const t = await fetchJSONviaProxy(u); if(t && t.rates && typeof t.rates==='object'){ j = t; break; } }catch(_){ }
+        }
+        if(!j) throw new Error('所有汇率源均不可用');
+        Object.keys(RATES).forEach(k => { if(k!=='CNY' && typeof j.rates[k]==='number' && j.rates[k]>0) RATES[k] = 1/j.rates[k]; });
+        liveFlag = true; liveTime = new Date().toLocaleString('zh-CN');
+        $('#ex-note', body).innerHTML = '✔ 已同步实时汇率（多源容灾：open.er-api.com → frankfurter.app，' + (j.time_last_update_utc || j.date || '') + '）';
+        toast('汇率已更新');
       }catch(err){
         $('#ex-note', body).innerHTML = '<span style="color:var(--error)">实时汇率同步失败（' + escapeHtml(err.message) + '），沿用内置参考值。请检查网络后重试。</span>';
       }
@@ -5553,7 +5570,10 @@ WANG L, LIU H. A survey on transformers[J]. Nature Machine Intelligence, 2024, 6
           <textarea class="txt" id="pf-input" placeholder="粘贴或逐行输入参考文献…" style="min-height:160px"></textarea>
         </div>
         <button class="btn" id="pf-run">格式化输出</button>
-        <div id="pf-result"></div>
+        <div id="pf-list" class="mb"></div>
+        <div id="pf-preview" class="result-box" style="max-height:380px;"></div>
+        <div class="hint" style="margin:8px 0">提示：用 ↑ / ↓ 调整每条文献的顺序；取消「编号」则该条前面不加 [n]，编号会自动顺延。</div>
+        <div class="btn-row"><button class="btn" id="pf-copy">复制</button> <button class="btn ghost" id="pf-down">下载 .txt</button></div>
       </section>
 
       <!-- 去角标 -->
@@ -5676,19 +5696,51 @@ WANG L, LIU H. A survey on transformers[J]. Nature Machine Intelligence, 2024, 6
     // 暴露给后续去角标逻辑使用
     body._GBT = GBT;
 
+    // 参考文献列表状态（顺序 + 是否编号）
+    let refs = [];      // 当前顺序的格式化字符串
+    let refsNum = [];   // 与 refs 对应的「是否编号」布尔
+    function buildOutput(){
+      let n = 0; const lines = [];
+      refs.forEach((o,i) => { if(refsNum[i]){ n++; lines.push(`[${n}] ${o}`); } else { lines.push(o); } });
+      return lines.join('\n');
+    }
+    function updatePreview(){
+      const out = buildOutput();
+      $('#pf-preview', body).innerHTML = out.split('\n').map(l => `<div style="margin:6px 0;line-height:1.7">${escapeHtml(l)}</div>`).join('');
+    }
+    function moveRef(a,b){
+      if(b<0 || b>=refs.length) return;
+      const t=refs[a]; refs[a]=refs[b]; refs[b]=t;
+      const tn=refsNum[a]; refsNum[a]=refsNum[b]; refsNum[b]=tn;
+      renderRefs(); updatePreview();
+    }
+    function renderRefs(){
+      const box = $('#pf-list', body);
+      if(!refs.length){ box.innerHTML=''; return; }
+      box.innerHTML = refs.map((o,i)=>`<div class="ref-item" data-i="${i}" style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--card)">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="btn-mini ref-up" ${i===0?'disabled':''}>↑</button>
+          <button class="btn-mini ref-down" ${i===refs.length-1?'disabled':''}>↓</button>
+        </div>
+        <label class="check" style="white-space:nowrap"><input type="checkbox" class="ref-num" ${refsNum[i]?'checked':''}> 编号</label>
+        <div class="ref-text" style="flex:1;word-break:break-all">${escapeHtml(o)}</div>
+      </div>`).join('');
+      box.querySelectorAll('.ref-up').forEach(b => b.onclick = () => { const i=+b.closest('.ref-item').dataset.i; moveRef(i, i-1); });
+      box.querySelectorAll('.ref-down').forEach(b => b.onclick = () => { const i=+b.closest('.ref-item').dataset.i; moveRef(i, i+1); });
+      box.querySelectorAll('.ref-num').forEach(c => c.onchange = () => { const i=+c.closest('.ref-item').dataset.i; refsNum[i]=c.checked; updatePreview(); });
+    }
     $('#pf-run', body).onclick = () => {
       const input = $('#pf-input', body).value.trim();
       if(!input){ toast('请输入文献','err'); return; }
       const style = $('#pf-style', body).value;
       const type = $('#pf-type', body).value;
       const lines = input.split(/\r?\n/).filter(l => l.trim());
-      const out = lines.map(l => GBT.formatOne(l, style, type)).filter(Boolean);
-      const html = out.map((o, i) => `<div style="margin:6px 0;line-height:1.7;">[${i+1}] ${escapeHtml(o)}</div>`).join('');
-      $('#pf-result', body).innerHTML = `<div class="result-box" style="max-height:380px;">${html}</div>
-        <div class="btn-row"><button class="btn" id="pf-copy">复制</button> <button class="btn ghost" id="pf-down">下载 .txt</button></div>`;
-      $('#pf-copy', body).onclick = () => copyText(out.map((o,i)=>`[${i+1}] ${o}`).join('\n'));
-      $('#pf-down', body).onclick = () => downloadBlob(new Blob([out.map((o,i)=>`[${i+1}] ${o}`).join('\n')], {type:'text/plain;charset=utf-8'}), 'refs.txt');
+      refs = lines.map(l => GBT.formatOne(l, style, type)).filter(Boolean);
+      refsNum = refs.map(() => true);
+      renderRefs(); updatePreview();
     };
+    $('#pf-copy', body).onclick = () => { if(!refs.length){ toast('请先格式化','err'); return; } copyText(buildOutput()); };
+    $('#pf-down', body).onclick = () => { if(!refs.length){ toast('请先格式化','err'); return; } downloadBlob(new Blob([buildOutput()], {type:'text/plain;charset=utf-8'}), 'refs.txt'); };
 
     /* ========== 去角标 ========== */
     $('#pf-sup-run', body).onclick = () => {
@@ -5817,46 +5869,56 @@ AppTools['math-formula'] = {
       render();
     });
 
-    // SVG → PNG（白底，兼容旧版 Word 嵌入）
-    function svgToPng(svg){
-      return new Promise((resolve, reject) => {
-        const blob = new Blob([svg], {type:'image/svg+xml'});
-        const url = URL.createObjectURL(blob);
-        const im = new Image();
-        im.onload = () => {
-          const scale = 3;
-          const c = document.createElement('canvas'); c.width = im.width * scale; c.height = im.height * scale;
-          const cx = c.getContext('2d');
-          cx.fillStyle = '#ffffff'; cx.fillRect(0,0,c.width,c.height);
-          cx.drawImage(im, 0, 0, c.width, c.height);
-          c.toBlob(b => { URL.revokeObjectURL(url); resolve(b); }, 'image/png');
-        };
-        im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('PNG 转换失败')); };
-        im.src = url;
-      });
+    // 将 KaTeX 生成的 SVG 规整：去掉以 ex 为单位的 style（独立作为 <img> 时会塌缩为 0），改用 viewBox 的像素尺寸并补白底
+    function normalizeSvg(svgStr){
+      const doc = new DOMParser().parseFromString(svgStr, 'image/svg+xml');
+      const s = doc.documentElement;
+      const vb = (s.getAttribute('viewBox')||'0 0 100 20').split(/[\s,]+/).map(Number);
+      const w = Math.ceil(vb[2]||100), h = Math.ceil(vb[3]||20);
+      s.setAttribute('width', String(w));
+      s.setAttribute('height', String(h));
+      s.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      s.removeAttribute('style');
+      if(!s.querySelector('rect.kxbg')){ const r=doc.createElementNS('http://www.w3.org/2000/svg','rect'); r.setAttribute('class','kxbg'); r.setAttribute('width','100%'); r.setAttribute('height','100%'); r.setAttribute('fill','#ffffff'); s.insertBefore(r, s.firstChild); }
+      return { svg: new XMLSerializer().serializeToString(s), w, h };
+    }
+    // 逐行渲染并合并为一个多行 SVG（每行单独 renderToString，避免多公式被当成一条公式而报错）
+    function buildCombined(){
+      const lines = src.value.split('\n').map(s => s.trim()).filter(Boolean);
+      if(!lines.length) return null;
+      const valid = [];
+      for(const t of lines){ try{ valid.push(normalizeSvg(katex.renderToString(t, {throwOnError:false, displayMode:true, output:'svg'}))); }catch(_){ } }
+      if(!valid.length) return null;
+      const gap = 16, W = Math.max(...valid.map(p=>p.w)), H = valid.reduce((a,p)=>a+p.h,0) + gap*(valid.length-1);
+      let y = 0, inner = '';
+      for(const p of valid){ inner += p.svg.replace(/^<svg /, `<svg x="0" y="${y}" `); y += p.h + gap; }
+      return { svg:`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${inner}</svg>`, W, H };
+    }
+    async function combinedToPng(combined){
+      const blob = new Blob([combined.svg], {type:'image/svg+xml;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      try{
+        const im = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error('图片加载失败')); i.src=url; });
+        const scale = 3, c = document.createElement('canvas'); c.width = combined.W*scale; c.height = combined.H*scale;
+        const cx = c.getContext('2d'); cx.fillStyle='#ffffff'; cx.fillRect(0,0,c.width,c.height); cx.drawImage(im, 0, 0, c.width, c.height);
+        return await new Promise(r=>c.toBlob(b=>r(b), 'image/png'));
+      } finally { URL.revokeObjectURL(url); }
     }
 
     $('#mf-copy-tex', body).onclick = () => copyText(src.value);
     $('#mf-copy-html', body).onclick = () => copyText(preview.innerHTML);
     $('#mf-svg', body).onclick = () => {
-      const lines = src.value.split('\n').map(s => s.trim()).filter(Boolean);
-      if(!lines.length){ toast('请输入公式','err'); return; }
-      try{
-        const svg = katex.renderToString(lines.join('\n\n'), { throwOnError:false, displayMode:true, output:'svg' });
-        downloadBlob(new Blob([svg], {type:'image/svg+xml'}), 'formula.svg');
-      }catch(e){ toast('SVG 生成失败','err'); }
+      const combined = buildCombined();
+      if(!combined){ toast('请输入公式','err'); return; }
+      downloadBlob(new Blob([combined.svg], {type:'image/svg+xml;charset=utf-8'}), 'formula.svg');
     };
     $('#mf-png', body).onclick = async () => {
-      const lines = src.value.split('\n').map(s => s.trim()).filter(Boolean);
-      if(!lines.length){ toast('请输入公式','err'); return; }
-      const items = [];
-      for(let i=0;i<lines.length;i++){
-        const svg = katex.renderToString(lines[i], { throwOnError:false, displayMode:true, output:'svg' });
-        try{ const png = await svgToPng(svg); items.push({ name:`formula_${i+1}.png`, blob: png }); }
-        catch(e){ toast('第'+(i+1)+'个公式 PNG 失败','err'); }
-      }
-      if(items.length === 1) downloadBlob(items[0].blob, items[0].name);
-      else if(items.length > 1) downloadZip(items, 'formulas.zip');
+      const combined = buildCombined();
+      if(!combined){ toast('请输入公式','err'); return; }
+      const btn = $('#mf-png', body); btn.disabled = true; btn.textContent = '生成中…';
+      try{ const png = await combinedToPng(combined); if(png) downloadBlob(png, 'formula.png'); else toast('PNG 生成失败','err'); }
+      catch(e){ toast('PNG 生成失败：'+(e.message||e),'err'); }
+      btn.disabled = false; btn.textContent = '下载 PNG';
     };
   }
 };
@@ -5903,7 +5965,6 @@ const TOOLS = [
   {id:'remove-blank', name:'去除空白行',          icon:'🧹', cat:'doc',   desc:'一键清理多余空行（保留非空内容），结果可复制，适合整理日志 / 名单。'},
   {id:'img2excel',     name:'表格识别与导出',      icon:'📊', cat:'doc',   desc:'粘贴表格 / 图片 OCR / PDF·Word 提取，导出 CSV / xls / xlsx / docx / TXT，Markdown 可复制；OCR 支持中英文与版面容差，全程本地。'},
   {id:'pdf-watermark',name:'文档/图片加水印', icon:'🌟', cat:'doc',   desc:'给 PDF / Word(.docx) / 图片批量加文字或图片水印，支持字号 / 颜色 / 透明度 / 旋转 / 平铺 / 页码范围，图片输出 PNG / JPG / WebP，多文件打包 ZIP（Word 先转 PDF 再加水印）。', batch:true},
-  {id:'img-dewater',  name:'图片/PDF 去水印', icon:'🧽', cat:'doc', desc:'涂抹要去除的水印 / 字幕区域，画笔大小可调、支持重置，邻域智能填充修复；支持图片与多页 PDF，本地处理。'},
   {id:'md-to-html',   name:'Markdown 转 HTML',icon:'📝', cat:'doc',   desc:'实时渲染 Markdown 为 HTML，可复制 HTML / 富文本或下载 .html，适配公众号 / 博客。'},
   /* ============ 文本工具 ============ */
   {id:'cn-convert',   name:'繁简体转换',          icon:'🀄', cat:'text',  desc:'简繁中文互转，适合两岸三地稿件初步处理（逐字对照，专业名词建议人工复核）。'},
@@ -5937,9 +5998,6 @@ const TOOLS = [
   {id:'color-picker', name:'配色取色器',          icon:'🎨', cat:'dev',   desc:'HEX 与 RGB 互转，内置 16 色板，点击复制，适合配色取色。'},
   {id:'code-indent',  name:'代码缩进修复',        icon:'💎', cat:'dev',   desc:'按括号层级统一 JS / JSON / Python 代码缩进（2 / 4 空格或 Tab），结果可复制。'},
   {id:'web-search',   name:'联网搜索',            icon:'🔍', cat:'dev',  desc:'由 Cloudflare Functions 通用搜索代理（可配 Brave/Google），未配后端时自动用维基百科兜底；结果新标签打开，国内免墙。'},
-  {id:'weather',      name:'天气查询',            icon:'🌤️', cat:'life', desc:'实时天气 + 未来 7 天预报，由 Open-Meteo 公开接口 + Cloudflare Functions 代理，国内免墙，支持中英文城市名。'},
-  {id:'ip-lookup',    name:'IP 归属查询',         icon:'📡', cat:'life', desc:'查询任意 IP 的国家 / 地区 / 城市 / 运营商，或留空查当前网络出口 IP，由 Cloudflare Functions 代理。'},
-  {id:'phone-lookup', name:'手机号归属',          icon:'📱', cat:'life', desc:'输入中国大陆 11 位手机号查归属地与运营商，由 Cloudflare Functions 代理淘宝公开接口，国内免墙。'},
   /* ============ 涉及金钱 ============ */
   {id:'mortgage',     name:'房贷计算器',          icon:'🏠', cat:'money',  desc:'商业 / 公积金 / 组合贷三种类型，等额本息或等额本金还款，支持 LPR 加点利率与提前还款，输出月供 / 总利息 / 明细表并导出 CSV。'},
   {id:'tax',          name:'个税计算器',          icon:'💰', cat:'money',  desc:'综合所得年度估算：输入税前工资（月 / 年可切换）与五险一金专项扣除，并含子女教育 / 继续教育 / 大病医疗 / 房贷利息 / 房租 / 赡养老人 / 3岁以下照护共 7 项专项附加扣除，按 7 档累进税率算年税与月税。'},
@@ -5952,33 +6010,36 @@ const TOOLS = [
   {id:'electricity',  name:'家用耗电电费',        icon:'💡', cat:'money', desc:'录入多个电器功率 / 时长 / 数量，按阶梯电价算日 / 月 / 年耗电量与电费。'},
   {id:'fuel',         name:'汽车油耗计算器',      icon:'⛽', cat:'money', desc:'加油金额 / 油价 / 里程算百公里油耗，记录多组求平均，并给出每公里费用与总里程 / 总油费。'},
   {id:'work-overtime',name:'工时加班计算器',      icon:'⏱️', cat:'money', desc:'上下班 + 午休算有效工时，按工作日 / 周末 / 节假日倍率核算加班费，支持午休计入开关与按月汇总。'},
+  {id:'renovation',   name:'装修预算估算',        icon:'🏗️', cat:'money', desc:'按面积与档次（简 / 精 / 豪装）估算总预算及分项占比，各项占比可自定义，附条形图可视化。'},
   /* ============ 生活实用 ============ */
   {id:'unit-convert', name:'单位换算',            icon:'📏', cat:'life',  desc:'长度 / 重量 / 温度 / 面积 / 体积 / 速度 / 时间 / 数据存储 / 压强 共九大类单位互转，结果可复制。'},
-  {id:'geo-distance', name:'经纬度距离',          icon:'📍', cat:'life',  desc:'两点经纬度直线距离（公里），采用 Haversine 公式精确计算，结果可复制。'},
+  {id:'weather',      name:'天气查询',            icon:'🌤️', cat:'life', desc:'实时天气 + 未来 7 天预报，由 Open-Meteo 公开接口 + Cloudflare Functions 代理，国内免墙，支持中英文城市名。'},
+  {id:'lunar',        name:'公历农历互转',        icon:'🌗', cat:'life', desc:'公历↔农历互转（1900–2100），含干支 / 生肖 / 朝代 / 星期 / 星座 / 当日节气与传统节日，节气与节日附百科简介并可跳转百度百科，完全离线运行。'},
   {id:'date-diff',    name:'日期差计算',          icon:'📅', cat:'life',  desc:'计算两个日期相差的天 / 周 / 月 / 年数，支持剔除周末与法定节假日（含调休补班），可填入今天、支持倒序日期。'},
   {id:'age',          name:'年龄计算器',          icon:'🎂', cat:'life',  desc:'根据公历生日计算周岁 / 月 / 天与已出生总天数，并显示距下次生日天数。'},
   {id:'countdown',    name:'倒计时 / 纪念日',     icon:'⏳', cat:'life',  desc:'重要日子实时倒计时（自定义标题），多组保存到本地列表、可删除与排序，到点提示。'},
   {id:'zodiac',       name:'星座查询',            icon:'⭐', cat:'life',  desc:'按公历生日查星座、性格、元素与速配，附命中星座日期区间（娱乐参考）。'},
-  {id:'draw',         name:'随机抽签 / 点名',     icon:'🎲', cat:'life',  desc:'粘贴名单随机抽选 1 人，适合点名 / 抽奖；建议配合手动排除实现不重复。'},
-  {id:'rand-num',     name:'随机数字生成',        icon:'🎰', cat:'life',  desc:'区间内随机整数批量生成（上限 1000），结果可复制；适合抽奖 / 验证码（非密码学安全）。'},
-  {id:'speedtest',    name:'网速测试',            icon:'🌐', cat:'life',  desc:'下载一小段资源估算带宽（Mbps），显示体积与耗时，结果仅本机参考（单次采样，高带宽可能偏低）。'},
-  {id:'audio-fix',     name:'修音（音频）',         icon:'🎵', cat:'life',  desc:'上传音频，支持变调 / 变速、自动校音（修五音不全）/ 电音 / 卡通效果，含混响与降噪，生成后可试听并导出 WAV（本地 Web Audio）。'},
-  {id:'lunar',        name:'公历农历互转',        icon:'🌗', cat:'life', desc:'公历↔农历互转（1900–2100），含干支 / 生肖 / 朝代 / 星期 / 星座 / 当日节气与传统节日，节气与节日附百科简介并可跳转百度百科，完全离线运行。'},
-  {id:'solar-term',   name:'二十四节气查询',      icon:'🌱', cat:'life', desc:'查 1900–2100 年间任意年份 24 节气日期与民俗养生，并显示距下一节气天数。'},
-  {id:'ganzhi',       name:'干支纪年换算',        icon:'🀄', cat:'life', desc:'公历年份↔天干地支双向换算，含生肖与朝代；六十甲子全表速查。'},
-  {id:'bazi',         name:'八字排盘(四柱)',      icon:'☯️', cat:'life', desc:'输入出生年月日时排年 / 月 / 日 / 时四柱干支，含五行分布 / 纳音 / 日主说明，按性别顺逆排大运（传统文化参考）。'},
+  {id:'express',      name:'快递查询导航',        icon:'📦', cat:'life', desc:'选快递公司 + 单号，一键跳转官方查询页（内置 12 家，合规无抓取风险）。'},
   {id:'bmi',          name:'BMI 计算器',          icon:'⚖️', cat:'life', desc:'输入身高体重（含性别）算 BMI，按中国成人标准判定分级并给性别化健康体重区间。'},
   {id:'bmr',          name:'基础代谢 BMR',        icon:'🔥', cat:'life', desc:'按 Harris-Benedict 或 Mifflin-St Jeor 公式算基础代谢与每日总热量，附减脂 / 增肌热量建议与今日能量结算。'},
+  {id:'cycle',        name:'经期排卵期计算',      icon:'🌸', cat:'life', desc:'按末次月经与周期推算排卵期 / 易孕期 / 下次经期，支持自定义周期与经期天数（仅供参考）。'},
   {id:'due-date',     name:'预产期计算器',        icon:'🤰', cat:'life', desc:'末次月经或已知孕周推算预产期、当前孕周与关键产检节点，并显示距预产期天数（仅供参考）。'},
   {id:'blood-type',   name:'血型遗传计算器',      icon:'🩸', cat:'life', desc:'父母 ABO 与 Rh(D) 血型推算子女可能 / 不可能血型，附 ABO 遗传与罕见亚型说明。'},
   {id:'vision',       name:'视力度数换算',        icon:'👓', cat:'life', desc:'近视度数与视力表数值对照，含散光轴位、等效球镜与隐形眼镜换算建议（度数→视力单向对照）。'},
-  {id:'express',      name:'快递查询导航',        icon:'📦', cat:'life', desc:'选快递公司 + 单号，一键跳转官方查询页（内置 12 家，合规无抓取风险）。'},
-  {id:'cycle',        name:'经期排卵期计算',      icon:'🌸', cat:'life', desc:'按末次月经与周期推算排卵期 / 易孕期 / 下次经期，支持自定义周期与经期天数（仅供参考）。'},
-  {id:'renovation',   name:'装修预算估算',        icon:'🏗️', cat:'money', desc:'按面积与档次（简 / 精 / 豪装）估算总预算及分项占比，各项占比可自定义，附条形图可视化。'},
+  {id:'solar-term',   name:'二十四节气查询',      icon:'🌱', cat:'life', desc:'查 1900–2100 年间任意年份 24 节气日期与民俗养生，并显示距下一节气天数。'},
+  {id:'ganzhi',       name:'干支纪年换算',        icon:'🀄', cat:'life', desc:'公历年份↔天干地支双向换算，含生肖与朝代；六十甲子全表速查。'},
+  {id:'bazi',         name:'八字排盘(四柱)',      icon:'☯️', cat:'life', desc:'输入出生年月日时排年 / 月 / 日 / 时四柱干支，含五行分布 / 纳音 / 日主说明，按性别顺逆排大运（传统文化参考）。'},
+  {id:'ip-lookup',    name:'IP 归属查询',         icon:'📡', cat:'life', desc:'查询任意 IP 的国家 / 地区 / 城市 / 运营商，或留空查当前网络出口 IP，由 Cloudflare Functions 代理。'},
+  {id:'phone-lookup', name:'手机号归属',          icon:'📱', cat:'life', desc:'输入中国大陆 11 位手机号查归属地与运营商，由 Cloudflare Functions 代理淘宝公开接口，国内免墙。'},
+  {id:'speedtest',    name:'网速测试',            icon:'🌐', cat:'life',  desc:'下载一小段资源估算带宽（Mbps），显示体积与耗时，结果仅本机参考（单次采样，高带宽可能偏低）。'},
+  {id:'audio-fix',     name:'修音（音频）',         icon:'🎵', cat:'life',  desc:'上传音频，支持变调 / 变速、自动校音（修五音不全）/ 电音 / 卡通效果，含混响与降噪，生成后可试听并导出 WAV（本地 Web Audio）。'},
+  {id:'draw',         name:'随机抽签 / 点名',     icon:'🎲', cat:'life',  desc:'粘贴名单随机抽选 1 人，适合点名 / 抽奖；建议配合手动排除实现不重复。'},
+  {id:'rand-num',     name:'随机数字生成',        icon:'🎰', cat:'life',  desc:'区间内随机整数批量生成（上限 1000），结果可复制；适合抽奖 / 验证码（非密码学安全）。'},
   {id:'wheel',        name:'决策转盘',       icon:'🎡', cat:'life',   desc:'多选项转盘随机抽选，支持权重、快速等分、旋转时长 / 圈数、历史记录与导出 PNG；配色为固定调色板。'},
   {id:'scoreboard',   name:'比赛记分',       icon:'🏆', cat:'life',   desc:'多队伍实时计分、自动排名、倒计时与大屏模式，支持自定义加分并导出 CSV / PNG。'},
   {id:'mbti',         name:'MBTI 检测',      icon:'🧠', cat:'life',  desc:'16 题问卷测出 MBTI 类型与各维度百分比，附性格分析与职业建议，支持本地历史记录与结果卡 PNG 下载。'},
   {id:'ideal-type',   name:'理想型测试',     icon:'💞', cat:'life',  desc:'10 题趣味答题测出理想型画像与匹配度，附次要偏好与本地历史记录，结果卡可下载 PNG。'},
+  {id:'geo-distance', name:'经纬度距离',          icon:'📍', cat:'life',  desc:'两点经纬度直线距离（公里），采用 Haversine 公式精确计算，结果可复制。'},
   /* ============ 手机传感器 / 拍照测量（生活实用） ============ */
   {id:'compass',      name:'指南针',          icon:'🧭', cat:'life', desc:'调用手机方向传感器实时显示方位角与朝向（北 / 东北 / …），支持 iOS/Android 权限申请，纯本地无上传。', mobileOnly:true},
   {id:'level',        name:'水平仪',          icon:'📐', cat:'life', desc:'利用手机重力感应显示前后 / 左右倾斜角度，气泡式双轴水平仪，接近水平时提示「已水平」。', mobileOnly:true},
@@ -5988,6 +6049,7 @@ const TOOLS = [
   {id:'photo-height', name:'拍照测高',        icon:'📐', cat:'life', desc:'选一张含参照物的照片，标注参照物与目标的上下端点，按像素比例换算目标真实高度。'},
   {id:'ar-area',      name:'AR 测面积',       icon:'🟦', cat:'life', desc:'选照片后用「自由套索」或「多边形」框选区域，输入图中一条已知边长即可按比例尺算出实际面积。'},
   {id:'photo-count',  name:'拍照计数',        icon:'🔢', cat:'life', desc:'选照片后逐一轻点目标即可自动计数（人数 / 物品数），带标记点与撤销，适合清点。'},
+
 ];;
 
 /* =====================================================================
@@ -6519,6 +6581,18 @@ const CHANGELOG = [
     '【装修预算】从「生活实用」移至「涉及金钱」板块（cat 由 life 改为 money）',
     '【Service Worker】v8：API 路由（/search /visit /weather /lookup）走 network-only 不缓存；缓存导航仍是 network-first，新版本下一次访问即生效；预缓存新增 nav-logo / 水印 / apple-touch-icon',
     '【修复 · 重复日期】更新日志按天合并（同一天只一栏），近 5 天去重',
+    '【汇率换算 · 二修】Failed to fetch 根因是 CSP connect-src 白名单未放行 open.er-api.com（浏览器直接拦截），已在 meta CSP 与 _headers 两处放行；刷新改为「open.er-api.com → frankfurter.app」多源容灾直连，联网更稳',
+    '【倒计时 / 纪念日】纪念日可不选"时、分"，仅填日期即可，列表回填与保存同步兼容',
+    '【加水印 · 去重叠】平铺水印绕图中心旋转后以对角线为范围铺网格、按文字/图片实际尺寸定步距，彻底消除旋转/平铺重叠；文档·图片·PDF 文本水印同步修复',
+    '【去水印 · 已删除】图片/PDF 去水印本地修复效果不佳且易卡顿，按用户要求整体移除该应用（避免误用与资源占用）',
+    '【PDF 转图片 · ZIP 修复】改用 canvas.toBlob 收集 + 自定义分块 ZIP 打包，修复 600DPI 大图 base64 触发 offset is out of bounds 的打包失败',
+    '【数学公式 · 导出/复制修复】公式逐行渲染、SVG 像素化去 ex 单位、白底 PNG；修复多行公式被当一条、PNG 空白、SVG 塌缩等问题，导出/复制/下载均正常',
+    '【论文排版 · 文献排序】每个文献可独立勾选是否编号、可上下调整顺序，自定义顺序 + 编号自动顺延',
+    '【证件照换背景 · 提速】导出由 PNG 改为 JPEG(0.93)，体积约为原 1/5~1/10，下载明显加快',
+    '【应用丰富】公历农历互转（干支/生肖释义）、预产期（孕早中晚期分段与产检重点）、经期排卵期（易孕期/安全期解读与避孕提示）等结果说明更详尽',
+    '【AI 抠图修复】Failed to construct URL: Invalid base URL 已修复：抠图模型资源 publicPath 改用绝对 CDN 地址（jsdelivr → unpkg 多源容灾），不再走相对代理路径，AI 自动 / 手动抠图均可用',
+    '【生活实用 · 排序】生活实用分类按「重要程度 + 完善程度」重新排序：单位换算 / 天气 / 农历 / 日期差等高频率工具置顶，传感器与拍照测量类置后；新工具一律追加在末尾',
+    '【数据保留】更新仅替换网页文件，不触碰浏览器本地数据：收藏 / 历史记录 / 设置 / 倒计时列表均存于 localStorage，换版本不丢失（换域名才会分开）',
   ]},
   { date:'2026-08-20', items:[
     '【PWA 安装】补全 manifest / Service Worker / 图标部署文件并新增「安装到主屏幕」按钮，手机端可真正添加到主屏幕（iOS 用 Safari 分享菜单、Android 用按钮或菜单安装）',
@@ -7172,19 +7246,34 @@ function openTextPreview(text){
 /* ---------- 第三方库 CDN 容灾（jsdelivr 不可达时自动切换 unpkg，提升国内网络可用性） ---------- */
 // ===== 联网处理（云端代理，免墙 / 免 CORS）=====
 // 仅允许代理白名单内的公共 CDN，避免被当作开放代理滥用
-const NET_PROXY_HOSTS = ['cdn.jsdelivr.net','fastly.jsdelivr.net','unpkg.com','esm.sh','cdnjs.cloudflare.com','raw.githubusercontent.com','github.com','huggingface.co','tessdata.projectnaptha.com','fonts.googleapis.com','fonts.gstatic.com'];
+const NET_PROXY_HOSTS = ['cdn.jsdelivr.net','fastly.jsdelivr.net','unpkg.com','esm.sh','cdnjs.cloudflare.com','raw.githubusercontent.com','github.com','huggingface.co','tessdata.projectnaptha.com','fonts.googleapis.com','fonts.gstatic.com','open.er-api.com','api.frankfurter.app'];
 function netProxyEnabled(){ try{ return localStorage.getItem('panqing_net_proxy')==='1'; }catch(_){ return false; } }
 function viaProxy(u){
   try{ const url=new URL(u); if(NET_PROXY_HOSTS.indexOf(url.hostname)<0) return u; }catch(_){ return u; }
   return '/api/proxy?url=' + encodeURIComponent(u);
 }
-// @imgly 抠图：直连失败（常见于国内网络）时自动改用云端代理拉取模型
+// 优先云端代理拉取 JSON（Cloudflare 部署可用），再直连兜底；两者皆失败则抛出
+async function fetchJSONviaProxy(target){
+  let r = null;
+  try{ r = await fetch(viaProxy(target)); }catch(_){ r = null; }
+  if(r && r.ok){ try{ const j = await r.json(); if(j) return j; }catch(_){ } }
+  const d = await fetch(target);
+  if(!d.ok) throw new Error('HTTP ' + d.status);
+  return await d.json();
+}
+// @imgly 抠图：publicPath 必须为绝对 URL（库内部会用 new URL 解析，传相对路径会报 Invalid base URL）；
+// 依次尝试 jsdelivr → unpkg 两个 CDN 拉取模型资源，任一个可用即可
 async function imglyRemove(removeBackground, f, opts){
-  const base = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/';
-  const useProxy = netProxyEnabled();
-  const o1 = useProxy ? Object.assign({}, opts, { publicPath: viaProxy(base) }) : opts;
-  try{ return await removeBackground(f, o1); }
-  catch(e){ if(useProxy) throw e; return await removeBackground(f, Object.assign({}, opts, { publicPath: viaProxy(base) })); }
+  const bases = [
+    'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
+    'https://unpkg.com/@imgly/background-removal@1.5.5/dist/'
+  ];
+  let lastErr = null;
+  for(const base of bases){
+    try{ return await removeBackground(f, Object.assign({}, opts, { publicPath: base })); }
+    catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('模型资源加载失败');
 }
 // 各工具顶部的「联网处理」开关（共享同一设置）
 function setupNetToggle(body){
@@ -7261,6 +7350,7 @@ AppTools['lunar'] = {
         h+=`<div class="row3"><div><b>朝代</b><br>${dynastyOf(r.lYear)}</div><div><b>星期</b><br>${r.ncWeek||''}</div><div><b>星座</b><br>${astroOf(p[0],p[1],p[2])}</div></div>`;
         if(r.isTerm&&r.term) h+=`<div class="tag-green">当日节气：${r.term}</div>`;
         if(fest) h+=`<div class="tag-green">传统节日：${fest}</div>`;
+        h+=`<div class="hint mt">🧧 <b>干支</b>（如 ${r.gzYear||''}）是十天干配十二地支的纪年法，60 年一循环；<b>生肖</b>（${r.animal||''}）对应十二地支，是传统纪年与民俗的组成部分。以上均为内置常识表离线推算，公元 1900–2100 准确。</div>`;
         const bkTerm = r.isTerm&&r.term ? (ENCY[r.term]||'') : '';
         const bkFest = fest ? (ENCY[fest]||'') : '';
         const bkText = bkTerm || bkFest;
@@ -7420,7 +7510,7 @@ AppTools['due-date'] = {
     const f=d=>`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
     $('#dd-mode',body).onchange=()=>{ const m=$('#dd-mode',body).value; $('#dd-lmpbox',body).style.display=m==='lmp'?'':'none'; $('#dd-pregbox',body).style.display=m==='preg'?'':'none'; };
     $('#dd-run',body).onclick=()=>{ const m=$('#dd-mode',body).value; let lmp,edd,wk,days; if(m==='lmp'){ lmp=new Date($('#dd-lmp',body).value); if(isNaN(lmp)){toast('请选择日期');return;} edd=new Date(lmp.getTime()+280*86400000); const ms=Date.now()-lmp; wk=Math.floor(ms/604800000); days=Math.floor(ms/86400000); } else { const wk0=+$('#dd-wk',body).value||0, d0=+$('#dd-day',body).value||0; const today=new Date($('#dd-today',body).value); if(isNaN(today)){toast('请选择当前日期');return;} const days0=wk0*7+d0; lmp=new Date(today.getTime()-days0*86400000); edd=new Date(lmp.getTime()+280*86400000); wk=wk0; days=days0; }
-      $('#dd-out',body).innerHTML=`<div class="big-num">预产期 ≈ ${f(edd)}</div><div class="row3"><div><b>当前孕周</b><br>约 ${wk} 周 ${days%7} 天</div><div><b>已孕天数</b><br>${days} 天</div><div><b>末次月经</b><br>${f(lmp)}</div></div><div class="hint">关键节点：12周 NT、16–20周 唐筛、24–28周 糖耐、36周后 胎心监护。距预产期约 ${Math.round((edd-Date.now())/86400000)} 天。</div>`; };
+      $('#dd-out',body).innerHTML=`<div class="big-num">预产期 ≈ ${f(edd)}</div><div class="row3"><div><b>当前孕周</b><br>约 ${wk} 周 ${days%7} 天</div><div><b>已孕天数</b><br>${days} 天</div><div><b>末次月经</b><br>${f(lmp)}</div></div><div class="card-soft mt"><b>🤰 孕周分段与重点</b><br>· <b>孕早期（1–13 周）</b>：胚胎发育关键期，建议补充叶酸、远离烟酒与慎用药物，12 周左右做 NT 超声；<br>· <b>孕中期（14–27 周）</b>：相对稳定，16–20 周唐筛 / 无创 DNA、24–28 周糖耐（妊娠糖尿病筛查）是重要节点；<br>· <b>孕晚期（28–40 周）</b>：关注胎动与胎心监护（36 周后规律产检），提前备好待产包。</div><div class="hint mt">关键产检节点：12周 NT、16–20周 唐筛、24–28周 糖耐、36周后 胎心监护。距预产期约 ${Math.round((edd-Date.now())/86400000)} 天。</div>`; };
   }
 };
 
@@ -7634,7 +7724,7 @@ AppTools['cycle'] = {
         <div><label class="field-label">易孕期前移(天)</label><input type="number" class="inp" id="cy-f" value="5" min="1" max="10"></div></div>
       <button class="btn" id="cy-run">推算</button><div id="cy-out" class="result-box">结果将显示在此</div>
       <div class="hint">⚠️ 结果仅供参考，不作为避孕或医疗依据；周期 / 经期天数 / 易孕范围均可按自身情况自定义。</div>`;
-    $('#cy-run',body).onclick=()=>{ const lmp=new Date($('#cy-lmp',body).value); const c=+$('#cy-c',body).value||28, m=+$('#cy-m',body).value||5, fwd=+$('#cy-f',body).value||5; if(isNaN(lmp)){toast('请选择日期');return;} const add=d=>new Date(lmp.getTime()+d*86400000); const next=add(c), mend=add(m), ovu=add(c-14), fs=add(c-14-fwd), fe=add(c-14); const fmt=d=>`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; $('#cy-out',body).innerHTML=`<div class="big-num">下次经期 ≈ ${fmt(next)}（持续约 ${m} 天，至 ${fmt(mend)}）</div><div class="row3"><div><b>排卵日</b><br>${fmt(ovu)}</div><div><b>易孕期</b><br>${fmt(fs)}~${fmt(fe)}</div><div><b>安全期</b><br>经期及排卵后</div></div><div class="hint">排卵日按「周期 - 14」估算；易孕期 = 排卵日前 ${fwd} 天至排卵日。</div>`; };
+    $('#cy-run',body).onclick=()=>{ const lmp=new Date($('#cy-lmp',body).value); const c=+$('#cy-c',body).value||28, m=+$('#cy-m',body).value||5, fwd=+$('#cy-f',body).value||5; if(isNaN(lmp)){toast('请选择日期');return;} const add=d=>new Date(lmp.getTime()+d*86400000); const next=add(c), mend=add(m), ovu=add(c-14), fs=add(c-14-fwd), fe=add(c-14); const fmt=d=>`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; $('#cy-out',body).innerHTML=`<div class="big-num">下次经期 ≈ ${fmt(next)}（持续约 ${m} 天，至 ${fmt(mend)}）</div><div class="row3"><div><b>排卵日</b><br>${fmt(ovu)}</div><div><b>易孕期</b><br>${fmt(fs)}~${fmt(fe)}</div><div><b>安全期</b><br>经期及排卵后</div></div><div class="card-soft mt"><b>📌 怎么看这个结果</b><br>· <b>排卵日</b>＝按「周期 − 14 天」估算，是整个月经周期中受孕概率最高的单日（卵子排出后可存活约 12–24 小时）；<br>· <b>易孕期（排卵期）</b>＝排卵日前 ${fwd} 天至排卵日，精子可存活约 2–3 天，此区间同房受孕几率明显升高；<br>· <b>相对安全期</b>＝经期刚结束到易孕期前、以及排卵结束后到下次月经前；但排卵受情绪、压力、作息、疾病影响易提前或推后，安全期避孕失败率较高，<b>不推荐作为唯一避孕方式</b>；<br>· 本测算采用「日历法」，假设周期规律；若周期不规律或近期变动较大，结果仅供参考，建议结合<b>基础体温</b>或<b>排卵试纸</b>监测更准确。</div><div class="hint mt">⚠️ 结果仅供参考，不作为避孕或医疗依据。</div>`; };
   }
 };
 
@@ -7698,8 +7788,8 @@ AppTools['img-watermark'] = {
     const cv=$('#wm-cv',body), ctx=cv.getContext('2d');
     function token(text,fname,n){ return text.replace('{name}',fname||'').replace('{date}',new Date().toISOString().slice(0,10)).replace('{time}',new Date().toLocaleTimeString()).replace('{n}',String(n)); }
     function posFor(W,H){ if(curNorm) return {x:curNorm.fx*W, y:curNorm.fy*H, anchor:'center'}; const p=$('#wm-pos',body).value; if(p==='tile') return {tile:true}; const m=Math.min(W,H)*0.04; if(p==='br')return{x:W-m,y:H-m,anchor:'end'}; if(p==='bl')return{x:m,y:H-m,anchor:'start'}; if(p==='tr')return{x:W-m,y:m,anchor:'end'}; if(p==='tl')return{x:m,y:m,anchor:'start'}; return{x:W/2,y:H/2,anchor:'center'}; }
-    function drawTextOn(x,W,H,fname,n){ const size=+$('#wm-size',body).value,color=$('#wm-color',body).value,alpha=1-(+$('#wm-op',body).value/100); const text=token($('#wm-text',body).value,fname,n); x.save(); x.globalAlpha=alpha; x.fillStyle=color; x.font=`${$('#wm-italic',body).checked?'italic ':''}${$('#wm-bold',body).checked?'bold ':''}${size}px sans-serif`; x.textBaseline='middle'; if($('#wm-shadow',body).checked){x.shadowColor='rgba(0,0,0,.5)';x.shadowBlur=size/6;} if($('#wm-stroke',body).checked){x.lineWidth=Math.max(1,size/16);x.strokeStyle='rgba(0,0,0,.6)';} const pos=posFor(W,H); x.translate(pos.x,pos.y); x.rotate((+$('#wm-rot',body).value)*Math.PI/180); if(pos.tile){ const w=Math.max(20,x.measureText(text).width); const stepX=w+size*2.5, stepY=size*2.8; x.textAlign='center'; for(let y=-H;y<2*H;y+=stepY){ for(let xx=-W;xx<2*W;xx+=stepX){ x.fillText(text,xx,y); if($('#wm-stroke',body).checked)x.strokeText(text,xx,y);} } } else { x.textAlign=pos.anchor; if($('#wm-stroke',body).checked)x.strokeText(text,0,0); x.fillText(text,0,0); } x.restore(); }
-    function drawImgOn(x,W,H){ if(!wmImg)return; const scale=+$('#wm-img-scale',body).value/100,alpha=1-(+$('#wm-img-op',body).value/100); const w=wmImg.naturalWidth*scale*(W/800),h=wmImg.naturalHeight*scale*(H/800); x.save(); x.globalAlpha=alpha; const pos=posFor(W,H); x.translate(pos.x,pos.y); x.rotate((+$('#wm-img-rot',body).value)*Math.PI/180); if(pos.tile){ for(let y=0;y<H;y+=h*1.3){ for(let xx=0;xx<W;xx+=w*1.3){ x.drawImage(wmImg,xx,y,w,h);} } } else { x.drawImage(wmImg,-w/2,-h/2,w,h); } x.restore(); }
+    function drawTextOn(x,W,H,fname,n){ const size=+$('#wm-size',body).value,color=$('#wm-color',body).value,alpha=1-(+$('#wm-op',body).value/100); const text=token($('#wm-text',body).value,fname,n); const rot=(+$('#wm-rot',body).value)*Math.PI/180; x.save(); x.globalAlpha=alpha; x.fillStyle=color; x.font=`${$('#wm-italic',body).checked?'italic ':''}${$('#wm-bold',body).checked?'bold ':''}${size}px sans-serif`; x.textBaseline='middle'; if($('#wm-shadow',body).checked){x.shadowColor='rgba(0,0,0,.5)';x.shadowBlur=size/6;} if($('#wm-stroke',body).checked){x.lineWidth=Math.max(1,size/16);x.strokeStyle='rgba(0,0,0,.6)';} const pos=posFor(W,H); if(pos.tile){ const w=Math.max(20,x.measureText(text).width); const stepX=w+size*2.5, stepY=size*3; const diag=Math.sqrt(W*W+H*H); x.translate(W/2,H/2); x.rotate(rot); x.textAlign='center'; for(let yy=-diag;yy<=diag;yy+=stepY){ for(let xx=-diag;xx<=diag;xx+=stepX){ x.fillText(text,xx,yy); if($('#wm-stroke',body).checked)x.strokeText(text,xx,yy); } } } else { x.translate(pos.x,pos.y); x.rotate(rot); x.textAlign=pos.anchor; if($('#wm-stroke',body).checked)x.strokeText(text,0,0); x.fillText(text,0,0); } x.restore(); }
+    function drawImgOn(x,W,H){ if(!wmImg)return; const scale=+$('#wm-img-scale',body).value/100,alpha=1-(+$('#wm-img-op',body).value/100); const w=wmImg.naturalWidth*scale*(W/800),h=wmImg.naturalHeight*scale*(H/800); const rot=(+$('#wm-img-rot',body).value)*Math.PI/180; x.save(); x.globalAlpha=alpha; const pos=posFor(W,H); if(pos.tile){ const stepX=w*1.3, stepY=h*1.3; const diag=Math.sqrt(W*W+H*H); x.translate(W/2,H/2); x.rotate(rot); for(let yy=-diag;yy<=diag;yy+=stepY){ for(let xx=-diag;xx<=diag;xx+=stepX){ x.drawImage(wmImg,xx-w/2,yy-h/2,w,h);} } } else { x.translate(pos.x,pos.y); x.rotate(rot); x.drawImage(wmImg,-w/2,-h/2,w,h); } x.restore(); }
     function render(){ if(!imgs[0])return; cv.width=imgs[0].naturalWidth; cv.height=imgs[0].naturalHeight; ctx.drawImage(imgs[0],0,0); const pos=posFor(cv.width,cv.height); if($('#wm-type',body).value==='text') drawTextOn(ctx,cv.width,cv.height,files[0]?files[0].name:'',1); else drawImgOn(ctx,cv.width,cv.height); }
     ntBatchAddUI(body,'wm-files',(all)=>{ files=all; imgs=[]; curNorm=null; $('#wm-list',body).textContent='已选 '+all.length+' 张：'+all.map(f=>f.name).join('、'); if(all[0]){ fileToImage(all[0]).then(im=>{ imgs[0]=im; $('#wm-run',body).click(); }); } });
     $('#wm-type',body).onchange=()=>{ const t=$('#wm-type',body).value; $('#wm-text-ui',body).style.display=t==='text'?'':'none'; $('#wm-img-ui',body).style.display=t==='image'?'':'none'; };
@@ -8450,74 +8540,6 @@ AppTools['img-base64'] = {
   }
 };
 
-/* ---------- 图片 / PDF 去水印（涂抹 + 邻域智能填充，支持多页 PDF） ---------- */
-AppTools['img-dewater'] = {
-  build(body){
-    body.innerHTML = `
-      <div class="mb"><label class="field-label">选择图片或 PDF（涂抹要去除的水印 / 字幕区域）</label>
-        <input type="file" class="inp" id="iw-f" accept="image/*,.pdf,application/pdf"></div>
-      <div class="row mb"><div><label class="field-label">画笔大小</label><input type="range" id="iw-brush" min="4" max="160" value="36"><span id="iw-bv">36</span></div>
-        <div><label class="field-label">已涂抹</label><span id="iw-n">0</span> 像素</div></div>
-      <div id="iw-nav" class="btn-row" style="display:none"><button class="btn ghost" id="iw-prev">← 上一页</button><span class="mini-tag" id="iw-pageno">1 / 1</span><button class="btn ghost" id="iw-next">下一页 →</button></div>
-      <div class="btn-row"><button class="btn" id="iw-undo">重置当前涂抹</button><button class="btn" id="iw-run" disabled>去除水印</button><button class="btn" id="iw-dl" disabled>下载</button></div>
-      <div id="iw-wrap" class="hint">选择文件后，在画面上涂抹要去除的水印 / 字幕区域（PDF 可逐页处理）</div>
-      <div class="hint">🔒 本地处理。PDF 会先转为图片再修复，复杂水印请多次涂抹；适合简单水印 / 字幕，无法 100% 还原。</div>`;
-    let mode=null, pages=[], cur=0, painting=false;
-    $('#iw-brush',body).oninput=()=>{ $('#iw-bv',body).textContent=$('#iw-brush',body).value; };
-    function makePage(w,h){ const base=document.createElement('canvas'); base.width=w; base.height=h; const bctx=base.getContext('2d'); const mask=new Uint8Array(w*h); const maskCv=document.createElement('canvas'); maskCv.width=w; maskCv.height=h; return {base,bctx,mask,maskCv,n:0,disp:null,dctx:null}; }
-    function redrawPage(pg){ if(!pg.disp) return; pg.dctx.clearRect(0,0,pg.disp.width,pg.disp.height); pg.dctx.drawImage(pg.base,0,0,pg.disp.width,pg.disp.height); pg.dctx.save(); pg.dctx.globalAlpha=0.45; pg.dctx.drawImage(pg.maskCv,0,0,pg.disp.width,pg.disp.height); pg.dctx.restore(); }
-    function showPage(i){ cur=i; const pg=pages[i]; const sc=Math.min(1, 680/Math.max(pg.base.width,pg.base.height)); const disp=document.createElement('canvas'); disp.width=Math.round(pg.base.width*sc); disp.height=Math.round(pg.base.height*sc); disp.dataset.sc=sc; disp.style.maxWidth='100%'; disp.style.borderRadius='8px'; disp.style.cursor='crosshair'; const wrap=$('#iw-wrap',body); wrap.innerHTML=''; wrap.appendChild(disp); const dctx=disp.getContext('2d'); pg.disp=disp; pg.dctx=dctx; redrawPage(pg); $('#iw-pageno',body).textContent=(i+1)+' / '+pages.length; bindPaint(pg); }
-    function toBase(pg,ev){ const r=pg.disp.getBoundingClientRect(); const cx=(ev.clientX-r.left)*(pg.disp.width/r.width), cy=(ev.clientY-r.top)*(pg.disp.height/r.height); return [cx,cy]; }
-    function paintAt(pg,cx,cy){ const sc=+pg.disp.dataset.sc, bx=Math.floor(cx/sc), by=Math.floor(cy/sc), rad=Math.max(2,Math.round((+$('#iw-brush',body).value)/sc)); const mctx=pg.maskCv.getContext('2d'); mctx.fillStyle='#fff'; mctx.beginPath(); mctx.arc(cx,cy,rad,0,7); mctx.fill(); const W=pg.base.width,H=pg.base.height; for(let y=by-rad;y<=by+rad;y++){ for(let x=bx-rad;x<=bx+rad;x++){ if(x<0||y<0||x>=W||y>=H) continue; if((x-bx)*(x-bx)+(y-by)*(y-by)<=rad*rad && !pg.mask[y*W+x]){ pg.mask[y*W+x]=1; pg.n++; } } } $('#iw-n',body).textContent=pages.reduce((a,p)=>a+p.n,0); }
-    function bindPaint(pg){ const down=ev=>{ painting=true; const [cx,cy]=toBase(pg,ev); paintAt(pg,cx,cy); redrawPage(pg); ev.preventDefault(); }; const move=ev=>{ if(!painting) return; const [cx,cy]=toBase(pg,ev); paintAt(pg,cx,cy); redrawPage(pg); }; const up=()=>{ painting=false; }; pg.disp.addEventListener('mousedown',down); pg.disp.addEventListener('mousemove',move); window.addEventListener('mouseup',up); pg.disp.addEventListener('touchstart',e=>down(e.touches[0]),{passive:false}); pg.disp.addEventListener('touchmove',e=>{ move(e.touches[0]); e.preventDefault(); },{passive:false}); pg.disp.addEventListener('touchend',up); }
-    function fillNeighbor(pg){
-      const W=pg.base.width,H=pg.base.height;
-      const id=pg.bctx.getImageData(0,0,W,H); const d=id.data;
-      let minX=W,minY=H,maxX=0,maxY=0,any=false;
-      for(let y=0;y<H;y++) for(let x=0;x<W;x++){ if(pg.mask[y*W+x]){ any=true; if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; } }
-      if(!any) return;
-      minX=Math.max(0,minX-2); minY=Math.max(0,minY-2); maxX=Math.min(W-1,maxX+2); maxY=Math.min(H-1,maxY+2);
-      const bw=maxX-minX+1, bh=maxY-minY+1;
-      const idx=(x,y)=>((y-minY)*bw+(x-minX))*3;
-      let bufA=new Float32Array(bw*bh*3), bufB=new Float32Array(bw*bh*3);
-      for(let y=minY;y<=maxY;y++) for(let x=minX;x<=maxX;x++){ const o=(y*W+x)*4, k=idx(x,y); bufA[k]=d[o]; bufA[k+1]=d[o+1]; bufA[k+2]=d[o+2]; }
-      const passes=Math.max(24, Math.ceil(Math.max(maxX-minX,maxY-minY)/2));
-      for(let p=0;p<passes;p++){
-        for(let y=minY;y<=maxY;y++) for(let x=minX;x<=maxX;x++){
-          const k=idx(x,y);
-          if(!pg.mask[y*W+x]){ bufB[k]=bufA[k]; bufB[k+1]=bufA[k+1]; bufB[k+2]=bufA[k+2]; continue; }
-          let r=0,g=0,b=0,c=0;
-          for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){ if(dx===0&&dy===0) continue; const nx=x+dx,ny=y+dy; if(nx<minX||ny<minY||nx>maxX||ny>maxY) continue; const nk=idx(nx,ny); r+=bufA[nk]; g+=bufA[nk+1]; b+=bufA[nk+2]; c++; }
-          if(c>0){ bufB[k]=r/c; bufB[k+1]=g/c; bufB[k+2]=b/c; } else { bufB[k]=bufA[k]; bufB[k+1]=bufA[k+1]; bufB[k+2]=bufA[k+2]; }
-        }
-        const tmp=bufA; bufA=bufB; bufB=tmp;
-      }
-      for(let y=minY;y<=maxY;y++) for(let x=minX;x<=maxX;x++){ if(pg.mask[y*W+x]){ const o=(y*W+x)*4, k=idx(x,y); d[o]=bufA[k]; d[o+1]=bufA[k+1]; d[o+2]=bufA[k+2]; } }
-      pg.bctx.putImageData(id,0,0);
-    }
-    $('#iw-f',body).onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const name=f.name.toLowerCase(); pages=[]; $('#iw-run',body).disabled=true; $('#iw-dl',body).disabled=true; $('#iw-n',body).textContent='0';
-      try{
-        if(name.endsWith('.pdf')){
-          mode='pdf'; const buf=new Uint8Array(await f.arrayBuffer()); const pdfjs=await ensurePdfjs(); const pdf=await pdfjs.getDocument({data:buf}).promise;
-          for(let p=1;p<=pdf.numPages;p++){ const page=await pdf.getPage(p); const vp=page.getViewport({scale:2}); const cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height; await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise; const pg=makePage(cv.width,cv.height); pg.bctx.drawImage(cv,0,0); pages.push(pg); }
-          $('#iw-nav',body).style.display=pages.length>1?'flex':'none'; showPage(0);
-        } else {
-          mode='img'; const img=await ntLoadImage(f); const pg=makePage(img.width,img.height); pg.bctx.drawImage(img,0,0); pages.push(pg); $('#iw-nav',body).style.display='none'; showPage(0);
-        }
-        $('#iw-run',body).disabled=false;
-      }catch(err){ $('#iw-wrap',body).innerHTML='<div class="result-box err">打开失败：'+escapeHtml(err.message)+'</div>'; }
-    };
-    $('#iw-prev',body).onclick=()=>{ if(cur>0) showPage(cur-1); };
-    $('#iw-next',body).onclick=()=>{ if(cur<pages.length-1) showPage(cur+1); };
-    $('#iw-undo',body).onclick=()=>{ const pg=pages[cur]; pg.mask=new Uint8Array(pg.base.width*pg.base.height); pg.n=0; pg.maskCv.getContext('2d').clearRect(0,0,pg.maskCv.width,pg.maskCv.height); redrawPage(pg); $('#iw-n',body).textContent=pages.reduce((a,p)=>a+p.n,0); };
-    $('#iw-run',body).onclick=()=>{ if(!pages.length) return; pages.forEach(fillNeighbor); pages.forEach(redrawPage); $('#iw-dl',body).disabled=false; toast('已尝试修复，下载查看效果'); };
-    $('#iw-dl',body).onclick=async()=>{
-      if(mode==='img'){ const pg=pages[0]; downloadBlob(ntDataURLtoBlob(pg.base.toDataURL('image/png')),'dewatered.png'); }
-      else { const PDFLib=await ntGetPDFLib(); const pdf=await PDFLib.PDFDocument.create(); for(const pg of pages){ const cv=document.createElement('canvas'); cv.width=pg.base.width; cv.height=pg.base.height; cv.getContext('2d').drawImage(pg.base,0,0); const png=await new Promise(r=>cv.toBlob(b=>r(b.arrayBuffer()),'image/png')); const emb=await pdf.embedPng(png); const pw=pg.base.width/2, ph=pg.base.height/2; const page=pdf.addPage([pw,ph]); page.drawImage(emb,{x:0,y:0,width:pw,height:ph}); } downloadBlob(new Blob([await pdf.save()],{type:'application/pdf'}),'dewatered.pdf'); }
-    };
-  }
-};
-
 
 /* 图片转 PDF */
 AppTools['img-to-pdf'] = {
@@ -8612,8 +8634,9 @@ AppTools['pdf-watermark'] = {
     function drawWm(ctx, w, h, type){
       const op=1-(+$('#pw-op',body).value/100), rot=+$('#pw-rot',body).value*Math.PI/180, gap=+$('#pw-gap',body).value;
       ctx.save(); ctx.globalAlpha=op; ctx.translate(w/2,h/2); ctx.rotate(rot);
-      if(type==='text'){ const text=$('#pw-text',body).value||' ', size=+$('#pw-size',body).value, color=$('#pw-color',body).value; ctx.font='bold '+size+'px sans-serif'; ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle'; const tw=ctx.measureText(text).width; const stepX=tw+gap*0.5, stepY=gap; for(let y=-h;y<2*h;y+=stepY) for(let x=-w;x<2*w;x+=stepX) ctx.fillText(text,x,y); }
-      else if(wmImg){ const iw=wmImg.width, ih=wmImg.height; const s=Math.min((w*0.5)/iw,(h*0.5)/ih); const dw=iw*s, dh=ih*s; for(let y=-h;y<h;y+=dh+gap*0.4) for(let x=-w;x<w;x+=dw+gap*0.4) ctx.drawImage(wmImg,x-dw/2,y-dh/2,dw,dh); }
+      const diag=Math.sqrt(w*w+h*h);
+      if(type==='text'){ const text=$('#pw-text',body).value||' ', size=+$('#pw-size',body).value, color=$('#pw-color',body).value; ctx.font='bold '+size+'px sans-serif'; ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle'; const tw=ctx.measureText(text).width; const stepX=tw+gap, stepY=size+gap; for(let y=-diag;y<=diag;y+=stepY) for(let x=-diag;x<=diag;x+=stepX) ctx.fillText(text,x,y); }
+      else if(wmImg){ const iw=wmImg.width, ih=wmImg.height; const s=Math.min((w*0.5)/iw,(h*0.5)/ih); const dw=iw*s, dh=ih*s; const stepX=dw+gap*0.4, stepY=dh+gap*0.4; for(let y=-diag;y<=diag;y+=stepY) for(let x=-diag;x<=diag;x+=stepX) ctx.drawImage(wmImg,x-dw/2,y-dh/2,dw,dh); }
       ctx.restore();
     }
     async function applyPdfWatermark(bytes, type){
@@ -8622,7 +8645,7 @@ AppTools['pdf-watermark'] = {
       const op=1-(+$('#pw-op',body).value/100), rot=+$('#pw-rot',body).value*Math.PI/180, gap=+$('#pw-gap',body).value;
       if(type==='text'){
         const text=$('#pw-text',body).value||' ', size=+$('#pw-size',body).value, color=$('#pw-color',body).value;
-        for(const pi of apply){ const pg=pages[pi]; const {width,height}=pg.getSize(); const cv=document.createElement('canvas'); cv.width=Math.ceil(width); cv.height=Math.ceil(height); const c=cv.getContext('2d'); c.translate(width/2,height/2); c.rotate(rot); c.font='bold '+size+'px sans-serif'; c.fillStyle=color; c.globalAlpha=op; c.textAlign='center'; c.textBaseline='middle'; for(let y=-height;y<height;y+=gap) for(let x=-width;x<width;x+=gap) c.fillText(text,x,y); const png=await new Promise(r=>cv.toBlob(b=>r(b.arrayBuffer()),'image/png')); pg.drawImage(await pdf.embedPng(png),{x:0,y:0,width,height}); }
+        for(const pi of apply){ const pg=pages[pi]; const {width,height}=pg.getSize(); const cv=document.createElement('canvas'); cv.width=Math.ceil(width); cv.height=Math.ceil(height); const c=cv.getContext('2d'); c.translate(width/2,height/2); c.rotate(rot); c.font='bold '+size+'px sans-serif'; c.fillStyle=color; c.globalAlpha=op; c.textAlign='center'; c.textBaseline='middle'; const tw=c.measureText(text).width; const stepX=tw+gap, stepY=size+gap; const diag=Math.sqrt(width*width+height*height); for(let y=-diag;y<=diag;y+=stepY) for(let x=-diag;x<=diag;x+=stepX) c.fillText(text,x,y); const png=await new Promise(r=>cv.toBlob(b=>r(b.arrayBuffer()),'image/png')); pg.drawImage(await pdf.embedPng(png),{x:0,y:0,width,height}); }
       } else {
         if(!wmImg) throw new Error('请先选择水印图片');
         const cv=document.createElement('canvas'); cv.width=wmImg.width; cv.height=wmImg.height; const c=cv.getContext('2d'); c.globalAlpha=op; c.drawImage(wmImg,0,0); const png=await new Promise(r=>cv.toBlob(b=>r(b.arrayBuffer()),'image/png')); const emb=await pdf.embedPng(png);

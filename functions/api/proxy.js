@@ -15,6 +15,8 @@ const ALLOW_HOSTS = [
   'tessdata.projectnaptha.com',
   'fonts.googleapis.com',
   'fonts.gstatic.com',
+  'open.er-api.com',
+  'api.frankfurter.app',
 ];
 
 function corsHeaders() {
