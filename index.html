@@ -13,8 +13,16 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="工具箱">
+<meta name="format-detection" content="telephone=no">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<!-- 冗余 CSP（与 _headers 保持一致；用于不支持 _headers 的部署平台） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://api.open-meteo.com https://api.frankfurter.app https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="shortcut icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="apple-touch-icon-precomposed" href="icons/apple-touch-icon.png">
 
 <!-- ============ 第三方 CDN 库（稳定链接） ============ -->
 <!-- Markdown 预览 -->
@@ -631,7 +639,7 @@ th{background:var(--bg);}
 <!-- ============ 顶部固定导航栏 ============ -->
 <nav class="nav" aria-label="主导航">
   <div class="nav-logo">
-    <img src="nav-logo.png" alt="网站LOGO" class="logo-img" aria-hidden="true">
+    <img src="nav-logo.png" alt="网站LOGO" class="logo-img" aria-hidden="true" onerror="this.onerror=null;this.src='icons/icon-192.png';this.style.background='#fff';">
     <span>万能免费在线工具箱</span>
   </div>
   <div class="nav-links" id="navLinks">
@@ -891,45 +899,40 @@ function imageToBlob(img, type, quality, maxW){
 }
 
 // 纯前端生成 ZIP（store 存储法，无压缩，无需第三方库），用于批量结果打包下载
+// 采用分块 Blob 拼接，避免一次性分配超大 TypedArray，提升大批量 / 大文件的稳定性与速度
 async function downloadZip(items, zipName){
   if(!items.length){ toast('没有可打包的文件','err'); return; }
   const enc = new TextEncoder();
   const crcTable = (() => { const t = []; for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); t[n]=c>>>0; } return t; })();
   const crc32 = (bytes) => { let c=0xFFFFFFFF; for(let i=0;i<bytes.length;i++) c = crcTable[(c ^ bytes[i]) & 0xFF] ^ (c>>>8); return (c ^ 0xFFFFFFFF)>>>0; };
-  const u16 = (n) => new Uint8Array([n&0xFF,(n>>>8)&0xFF]);
-  const u32 = (n) => new Uint8Array([n&0xFF,(n>>>8)&0xFF,(n>>>16)&0xFF,(n>>>24)&0xFF]);
-  const chunks = []; const central = []; let offset = 0;
+  const parts = []; const central = []; let offset = 0;
   for(const it of items){
     const data = new Uint8Array(await it.blob.arrayBuffer());
     const nameBytes = enc.encode(it.name);
     const crc = crc32(data);
-    const total = new Uint8Array(30 + nameBytes.length + data.length);
-    const dv = new DataView(total.buffer);
-    dv.setUint32(0, 0x04034b50, true); dv.setUint16(4, 20, true); dv.setUint16(6, 0, true);
-    dv.setUint16(8, 0, true); dv.setUint16(10, 0, true); dv.setUint16(12, 0, true);
-    dv.setUint32(16, crc, true); dv.setUint32(20, data.length, true); dv.setUint32(24, data.length, true);
-    dv.setUint16(28, nameBytes.length, true); dv.setUint16(30, 0, true);
-    total.set(nameBytes, 32); total.set(data, 32 + nameBytes.length);
-    chunks.push(total);
-    const cd = new Uint8Array(46 + nameBytes.length); const cdv = new DataView(cd.buffer);
-    cdv.setUint32(0, 0x02014b50, true); cdv.setUint16(4, 20, true); cdv.setUint16(6, 20, true);
-    cdv.setUint16(8, 0, true); cdv.setUint16(10, 0, true); cdv.setUint16(12, 0, true); cdv.setUint16(14, 0, true);
-    cdv.setUint32(16, crc, true); cdv.setUint32(20, data.length, true); cdv.setUint32(24, data.length, true);
-    cdv.setUint16(28, nameBytes.length, true); cdv.setUint16(30, 0, true); cdv.setUint16(32, 0, true);
-    cdv.setUint16(34, 0, true); cdv.setUint16(36, 0, true); cdv.setUint32(38, 0, true); cdv.setUint32(42, offset, true);
-    cd.set(nameBytes, 46);
-    central.push(cd);
-    offset += total.length;
+    // 本地文件头
+    const lh = new Uint8Array(30 + nameBytes.length + data.length); const lh32 = new DataView(lh.buffer);
+    lh32.setUint32(0, 0x04034b50, true); lh32.setUint16(4, 20, true); lh32.setUint16(6, 0, true);
+    lh32.setUint16(8, 0, true); lh32.setUint16(10, 0, true); lh32.setUint16(12, 0, true);
+    lh32.setUint32(16, crc, true); lh32.setUint32(20, data.length, true); lh32.setUint32(24, data.length, true);
+    lh32.setUint16(28, nameBytes.length, true); lh32.setUint16(30, 0, true);
+    lh.set(nameBytes, 32); lh.set(data, 32 + nameBytes.length);
+    parts.push(lh);
+    // 中央目录项
+    const cd = new Uint8Array(46 + nameBytes.length); const cd32 = new DataView(cd.buffer);
+    cd32.setUint32(0, 0x02014b50, true); cd32.setUint16(4, 20, true); cd32.setUint16(6, 20, true);
+    cd32.setUint16(8, 0, true); cd32.setUint16(10, 0, true); cd32.setUint16(12, 0, true); cd32.setUint16(14, 0, true);
+    cd32.setUint32(16, crc, true); cd32.setUint32(20, data.length, true); cd32.setUint32(24, data.length, true);
+    cd32.setUint16(28, nameBytes.length, true); cd32.setUint16(30, 0, true); cd32.setUint16(32, 0, true);
+    cd32.setUint16(34, 0, true); cd32.setUint16(36, 0, true); cd32.setUint32(38, 0, true); cd32.setUint32(42, offset, true);
+    cd.set(nameBytes, 46); central.push(cd);
+    offset += lh.length;
   }
   const centralSize = central.reduce((s,c)=>s+c.length,0);
-  const end = new Uint8Array(22); const edv = new DataView(end.buffer);
-  edv.setUint32(0, 0x06054b50, true); edv.setUint16(8, items.length, true); edv.setUint16(10, items.length, true);
-  edv.setUint32(12, centralSize, true); edv.setUint32(16, offset, true);
-  const all = new Uint8Array(offset + centralSize + 22);
-  let pos = 0; for(const c of chunks){ all.set(c, pos); pos += c.length; }
-  for(const c of central){ all.set(c, pos); pos += c.length; }
-  all.set(end, pos);
-  downloadBlob(new Blob([all], {type:'application/zip'}), zipName || 'download.zip');
+  const end = new Uint8Array(22); const ed32 = new DataView(end.buffer);
+  ed32.setUint32(0, 0x06054b50, true); ed32.setUint16(8, items.length, true); ed32.setUint16(10, items.length, true);
+  ed32.setUint32(12, centralSize, true); ed32.setUint32(16, offset, true);
+  downloadBlob(new Blob([...parts, ...central, end], {type:'application/zip'}), zipName || 'download.zip');
 }
 
 // 批量结果画廊：items = [{name, blob}]，渲染缩略图 + 单张下载 + 打包 ZIP
@@ -1001,7 +1004,7 @@ AppTools['web-search'] = {
     // 仅首次注入结果列表样式，避免重复
     if(!document.getElementById('ws-style')){
       const s = document.createElement('style'); s.id = 'ws-style';
-      s.textContent = '.ws-item{display:block;text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;color:var(--text);transition:border-color .15s,box-shadow .15s;}.ws-item:hover{border-color:var(--primary);box-shadow:var(--shadow-hover);}.ws-title{font-weight:600;color:var(--primary);font-size:15px;margin-bottom:2px;}.ws-url{font-size:12px;color:var(--text-2);word-break:break-all;margin-bottom:4px;}.ws-snippet{font-size:13px;color:var(--text);line-height:1.5;}';
+      s.textContent = '.ws-item{display:block;text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;color:var(--text);transition:border-color .15s,box-shadow .15s;}.ws-item:hover{border-color:var(--primary);box-shadow:var(--shadow-hover);}.ws-title{font-weight:600;color:var(--primary);font-size:15px;margin-bottom:2px;}.ws-url{font-size:12px;color:var(--text-2);word-break:break-all;margin-bottom:4px;}.ws-snippet{font-size:13px;color:var(--text);line-height:1.5;}.ws-tag{display:inline-block;font-size:11px;padding:2px 6px;border-radius:4px;background:var(--bg);color:var(--text-2);margin-left:6px;vertical-align:middle}';
       document.head.appendChild(s);
     }
     body.innerHTML = `
@@ -1011,6 +1014,7 @@ AppTools['web-search'] = {
           <input type="text" class="inp" id="ws-q" placeholder="如：Cloudflare Pages 部署教程" aria-label="搜索关键词">
           <button class="btn" id="ws-run">搜索</button>
         </div>
+        <div class="hint mt">🔎 由 Cloudflare Functions 代理（默认 brave→google→维基百科），免 CORS / 国内免墙。</div>
       </div>
       <div id="ws-status" class="hint"></div>
       <div id="ws-results"></div>`;
@@ -1021,8 +1025,8 @@ AppTools['web-search'] = {
       btn.disabled = true;
       status.innerHTML = '<span class="loading"><span class="spinner"></span>正在联网搜索…</span>';
       results.innerHTML = '';
-      function render(list){
-        status.textContent = '共 ' + list.length + ' 条结果';
+      function render(list, provider){
+        status.innerHTML = '共 <b>' + list.length + '</b> 条结果 <span class="ws-tag">via ' + (provider || 'auto') + '</span>';
         results.innerHTML = list.map(function(x){
           const u = (/^https?:\/\//i.test(x.url || '') ? x.url : '#');
           return '<a class="ws-item" href="' + escapeHtml(u) + '" target="_blank" rel="noopener noreferrer">' +
@@ -1034,26 +1038,264 @@ AppTools['web-search'] = {
       }
       try{
         const r = await fetch('/search?q=' + encodeURIComponent(kw));
-        if(r.ok){
-          const list = await r.json();
-          if(Array.isArray(list) && list.length){ render(list); status.textContent = '共 ' + list.length + ' 条结果'; return; }
-          if(Array.isArray(list) && !list.length){ status.textContent = '未找到相关结果，换个关键词试试。'; return; }
-        }
-      }catch(e){ /* Functions 不可用，转同源兜底 */ }
-      // Functions 不可用（如纯拖拽部署无后端）→ 仍尝试同源 wikipedia provider（由 CF 边缘节点发请求，不受本地网络限制）
+        const j = await r.json();
+        if(r.ok && j && j.ok && j.results && j.results.length){ render(j.results, j.provider); btn.disabled = false; return; }
+      }catch(e){}
+      // 直连兜底：维基百科搜索（浏览器端，无需后端；CF 不可用时仍可搜）
       try{
-        status.innerHTML = '<span class="loading"><span class="spinner"></span>正在联网搜索…</span>';
-        const r2 = await fetch('/search?q=' + encodeURIComponent(kw) + '&provider=wikipedia');
-        if(r2.ok){
-          const list = await r2.json();
-          if(Array.isArray(list) && list.length){ render(list); status.textContent = '共 ' + list.length + ' 条结果（维基百科）'; return; }
-        }
-      }catch(_){}
-      status.innerHTML = '⚠️ 搜索后端暂不可用。若以拖拽方式上传部署，请改用 Cloudflare Git 部署以启用 Functions；或在 Pages 环境变量配置 Brave / Google 搜索。';
+        const url = 'https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch=' + encodeURIComponent(kw) + '&format=json&origin=*&srlimit=10';
+        const r2 = await fetch(url);
+        const j2 = await r2.json();
+        const list = ((j2.query && j2.query.search) || []).map(function(it){
+          return { title: it.title, url: 'https://zh.wikipedia.org/wiki/' + encodeURIComponent(it.title.replace(/ /g,'_')), snippet: (it.snippet||'').replace(/<[^>]+>/g,'') };
+        });
+        if(list.length){ render(list, 'wikipedia(直连)'); btn.disabled = false; return; }
+      }catch(e2){}
+      status.innerHTML = '⚠️ 搜索后端暂不可用，且直连维基百科也失败。请确认网络可访问外网，或将本仓库部署到 Cloudflare Pages（含 functions/）启用代理。';
       btn.disabled = false;
     }
     btn.onclick = run;
     q.addEventListener('keydown', function(e){ if(e.key === 'Enter') run(); });
+  }
+};
+
+/* ---------- 天气查询（Open-Meteo 公开 API，由 Cloudflare Functions 代理） ---------- */
+AppTools['weather'] = {
+  build(body){
+    body.innerHTML = `
+      <div class="card-soft mb">
+        <div class="row" style="gap:8px">
+          <div style="flex:1"><label class="field-label">城市 / 地名</label>
+            <input type="text" class="inp" id="wt-city" placeholder="如：重庆、北京、shanghai" value="重庆"></div>
+          <button class="btn" id="wt-search">查询</button>
+        </div>
+        <div class="row mt" style="gap:8px">
+          <div style="flex:1"><label class="field-label">经度</label><input type="number" class="inp" id="wt-lon" step="0.0001" placeholder="自动解析"></div>
+          <div style="flex:1"><label class="field-label">纬度</label><input type="number" class="inp" id="wt-lat" step="0.0001" placeholder="自动解析"></div>
+        </div>
+        <div class="hint mt">支持中英文城市名（自动调 Open-Meteo geocoding 转经纬度），或手动填经纬度。后端走 Cloudflare Functions 免墙。</div>
+      </div>
+      <details class="card-soft mb">
+        <summary class="field-label" style="cursor:pointer">批量查询（每行一个城市）</summary>
+        <textarea class="inp" id="wt-batch" rows="4" placeholder="重庆&#10;北京&#10;上海&#10;广州" style="width:100%;font-family:monospace;margin-top:8px"></textarea>
+        <button class="btn mt" id="wt-batch-run">批量查询</button>
+      </details>
+      <div id="wt-out" class="result-box">点击「查询」获取实时天气与未来 7 天预报。</div>
+      <div class="hint">🌐 由 Open-Meteo 免费公开接口提供（无需 Key），CF Functions 代理确保国内可访问。</div>`;
+    const WCODE = { 0:'晴',1:'少云',2:'多云',3:'阴',45:'雾',48:'雾凇',51:'轻毛毛雨',53:'中毛毛雨',55:'浓毛毛雨',61:'小雨',63:'中雨',65:'大雨',71:'小雪',73:'中雪',75:'大雪',77:'雪粒',80:'阵雨',81:'强阵雨',82:'强阵雨',85:'阵雪',86:'强阵雪',95:'雷阵雨',96:'雷雨冰雹',99:'强雷雨冰雹' };
+    async function geo(name){
+      const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name=' + encodeURIComponent(name));
+      const j = await r.json();
+      const it = (j.results || [])[0];
+      if(!it) throw new Error('找不到该城市');
+      return { lat: it.latitude, lon: it.longitude, label: it.name + (it.admin1 ? ' · ' + it.admin1 : '') + (it.country ? ' · ' + it.country : '') };
+    }
+    async function fetchWeather(lat, lon, label){
+      try{
+        const r = await fetch('/weather?lat=' + lat + '&lon=' + lon);
+        const j = await r.json();
+        if(j && j.ok) return Object.assign(j, { label });
+      }catch(e){}
+      // 直连 Open-Meteo 兜底（支持 CORS，CF 不可用时仍可查）
+      const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
+        '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,surface_pressure' +
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=7';
+      const r2 = await fetch(u);
+      const j2 = await r2.json();
+      const now = {
+        temperature: j2.current.temperature_2m, feelsLike: j2.current.apparent_temperature,
+        humidity: j2.current.relative_humidity_2m, windSpeed: j2.current.wind_speed_10m,
+        pressure: j2.current.surface_pressure, weatherCode: j2.current.weather_code
+      };
+      const daily = (j2.daily.time||[]).map(function(t,i){ return {
+        date: t, weatherCode: j2.daily.weather_code[i],
+        tMax: j2.daily.temperature_2m_max[i], tMin: j2.daily.temperature_2m_min[i],
+        pop: (j2.daily.precipitation_probability_max||[])[i] || 0
+      };});
+      return { ok:true, now:now, daily:daily, label:label, timezone:(j2.timezone||'') };
+    }
+    function cardHtml(d){
+      const n = d.now;
+      const days = d.daily || [];
+      const html = `
+        <div class="card-soft mb" style="text-align:center">
+          <div style="font-size:13px;color:var(--text-2)">${d.label || (d.lat + ', ' + d.lon)} · ${d.timezone || ''}</div>
+          <div style="font-size:42px;font-weight:800;color:var(--primary);line-height:1;margin:6px 0">${(n.temperature||0).toFixed(1)}°<span style="font-size:18px;color:var(--text-2)">C</span></div>
+          <div style="font-size:15px">${WCODE[n.weatherCode] || '天气 ' + n.weatherCode} · 体感 ${(n.feelsLike||0).toFixed(1)}°</div>
+          <div class="row" style="justify-content:center;gap:14px;margin-top:8px;font-size:13px;color:var(--text-2)">
+            <span>💧 ${n.humidity}%</span>
+            <span>💨 ${(n.windSpeed||0).toFixed(1)} m/s</span>
+            <span>🌡 ${(n.pressure||0).toFixed(0)} hPa</span>
+          </div>
+        </div>
+        <div class="row wrap" style="gap:8px">
+          ${days.map(dy => `<div class="card-soft" style="flex:1;min-width:120px;text-align:center">
+            <div style="font-weight:700">${dy.date.slice(5)}</div>
+            <div style="font-size:13px;color:var(--text-2)">${WCODE[dy.weatherCode]||'-'}</div>
+            <div style="margin-top:6px">${(dy.tMin||0).toFixed(0)}° / <b>${(dy.tMax||0).toFixed(0)}°</b></div>
+            <div style="font-size:12px;color:var(--text-2)">☔ ${dy.pop||0}%</div>
+          </div>`).join('')}
+        </div>`;
+      return html;
+    }
+    function render(d){ $('#wt-out', body).innerHTML = cardHtml(d); }
+    $('#wt-search', body).onclick = async () => {
+      const out = $('#wt-out', body); out.innerHTML = '<span class="loading"><span class="spinner"></span>查询中…</span>';
+      try{
+        let lat = +$('#wt-lat', body).value, lon = +$('#wt-lon', body).value, label = '';
+        if(!(lat && lon)){
+          const city = $('#wt-city', body).value.trim();
+          if(!city) throw new Error('请输入城市名或经纬度');
+          const g = await geo(city); lat = g.lat; lon = g.lon; label = g.label;
+          $('#wt-lat', body).value = lat.toFixed(4); $('#wt-lon', body).value = lon.toFixed(4);
+        } else {
+          label = (lat.toFixed(2) + ', ' + lon.toFixed(2));
+        }
+        const w = await fetchWeather(lat, lon, label);
+        render(w);
+      }catch(e){ out.innerHTML = '❌ ' + (e.message || e); }
+    };
+    $('#wt-batch-run', body).onclick = async () => {
+      const out = $('#wt-out', body);
+      const lines = ($('#wt-batch', body).value || '').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      if(!lines.length){ out.innerHTML='⚠️ 请在文本框中每行输入一个城市'; return; }
+      out.innerHTML = '<span class="loading"><span class="spinner"></span>批量查询中（共 '+lines.length+' 个城市）…</span>';
+      const cards = [];
+      for(const city of lines){
+        try{
+          const g = await geo(city);
+          const w = await fetchWeather(g.lat, g.lon, g.label);
+          cards.push(cardHtml(w));
+        }catch(e2){ cards.push('<div class="card-soft mb" style="color:var(--error)">'+escapeHtml(city)+'：'+(e2.message||e2)+'</div>'); }
+      }
+      out.innerHTML = cards.join('');
+    };
+  }
+};
+
+/* ---------- IP 归属查询（CF 代理 ipwho.is） ---------- */
+AppTools['ip-lookup'] = {
+  build(body){
+    body.innerHTML = `
+      <div class="card-soft mb">
+        <div class="row" style="gap:8px">
+          <div style="flex:1"><label class="field-label">IP 地址（留空查当前网络出口 IP）</label>
+            <input type="text" class="inp" id="ipl-q" placeholder="如：8.8.8.8"></div>
+          <button class="btn" id="ipl-run">查询</button>
+        </div>
+        <div class="hint mt">由 Cloudflare Functions 代理 ipwho.is 公开接口，国内免墙。</div>
+      </div>
+      <details class="card-soft mb">
+        <summary class="field-label" style="cursor:pointer">批量查询（每行一个 IP，可批量归属）</summary>
+        <textarea class="inp" id="ipl-batch" rows="4" placeholder="8.8.8.8&#10;1.1.1.1&#10;114.114.114.114" style="width:100%;font-family:monospace;margin-top:8px"></textarea>
+        <button class="btn mt" id="ipl-batch-run">批量查询</button>
+      </details>
+      <div id="ipl-out" class="result-box">点击「查询」开始。</div>`;
+    $('#ipl-run', body).onclick = async () => {
+      const out = $('#ipl-out', body); out.innerHTML = '<span class="loading"><span class="spinner"></span>查询中…</span>';
+      const q = $('#ipl-q', body).value.trim();
+      try{
+        let r;
+        if(q){
+          r = await fetch('https://ipwho.is/' + encodeURIComponent(q));
+        } else {
+          try { r = await fetch('/lookup?type=ip'); if(!r.ok) throw new Error('cf'); }
+          catch(e){ r = await fetch('https://ipwho.is/'); }
+        }
+        const j = await r.json();
+        if(!j || !j.ip) throw new Error('未找到该 IP');
+        const rows = [
+          ['IP', j.ip], ['国家', j.country || '-'], ['地区', j.region || '-'], ['城市', j.city || '-'],
+          ['坐标', j.latitude ? (Number(j.latitude).toFixed(2) + ', ' + Number(j.longitude).toFixed(2)) : '-'],
+          ['运营商', (j.connection && j.connection.org) || j.isp || '-']
+        ].map(([k,v]) => '<div class="row" style="border-bottom:1px dashed var(--border);padding:6px 0"><div style="flex:0 0 80px;color:var(--text-2)">' + k + '</div><div style="flex:1">' + escapeHtml(String(v)) + '</div></div>').join('');
+        out.innerHTML = '<div class="card-soft">' + rows + '</div>';
+      }catch(e){ out.innerHTML = '❌ ' + (e.message || e); }
+    };
+    $('#ipl-batch-run', body).onclick = async () => {
+      const out = $('#ipl-out', body);
+      const lines = ($('#ipl-batch', body).value || '').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      if(!lines.length){ out.innerHTML='⚠️ 请在文本框中每行输入一个 IP'; return; }
+      out.innerHTML = '<span class="loading"><span class="spinner"></span>批量查询中（共 '+lines.length+' 个）…</span>';
+      const rows = [];
+      for(const ip of lines){
+        try{
+          const r = await fetch('https://ipwho.is/' + encodeURIComponent(ip));
+          const j = await r.json();
+          if(!j || !j.ip) throw new Error('无结果');
+          rows.push([j.ip, j.country||'-', j.region||'-', j.city||'-', (j.connection&&j.connection.org)||j.isp||'-']);
+        }catch(e2){ rows.push([ip, '查询失败', '-', '-', '-']); }
+      }
+      out.innerHTML = '<div class="table-wrap"><table class="tbl-prev"><thead><tr><th>IP</th><th>国家</th><th>地区</th><th>城市</th><th>运营商</th></tr></thead><tbody>' +
+        rows.map(r=>'<tr>'+r.map(c=>'<td>'+escapeHtml(String(c))+'</td>').join('')+'</tr>').join('') + '</tbody></table></div>';
+    };
+  }
+};
+
+/* ---------- 手机号归属查询（淘宝公开接口，CF 代理） ---------- */
+AppTools['phone-lookup'] = {
+  build(body){
+    body.innerHTML = `
+      <div class="card-soft mb">
+        <label class="field-label">中国大陆手机号</label>
+        <div class="row" style="gap:8px">
+          <input type="text" class="inp" id="phl-q" placeholder="如：13800138000" maxlength="13">
+          <button class="btn" id="phl-run">查询</button>
+        </div>
+        <div class="hint mt">由 Cloudflare Functions 代理淘宝公开归属接口，国内免墙。仅显示省份 / 城市 / 运营商，不展示任何敏感信息。</div>
+      </div>
+      <details class="card-soft mb">
+        <summary class="field-label" style="cursor:pointer">批量查询（每行一个手机号）</summary>
+        <textarea class="inp" id="phl-batch" rows="4" placeholder="13800138000&#10;13912345678&#10;15000000000" style="width:100%;font-family:monospace;margin-top:8px"></textarea>
+        <button class="btn mt" id="phl-batch-run">批量查询</button>
+      </details>
+      <div id="phl-out" class="result-box">点击「查询」开始。</div>`;
+    $('#phl-run', body).onclick = async () => {
+      const out = $('#phl-out', body); out.innerHTML = '<span class="loading"><span class="spinner"></span>查询中…</span>';
+      const q = $('#phl-q', body).value.trim();
+      const num = q.replace(/\s|-/g, '');
+      if(!/^(\+?86)?1[3-9]\d{9}$/.test(num)){ out.innerHTML = '❌ 手机号格式错误'; return; }
+      function paint(d){
+        out.innerHTML = '<div class="card-soft">' +
+          '<div class="row" style="border-bottom:1px dashed var(--border);padding:6px 0"><div style="flex:0 0 80px;color:var(--text-2)">手机号</div><div style="flex:1">' + escapeHtml(d.number) + '</div></div>' +
+          '<div class="row" style="border-bottom:1px dashed var(--border);padding:6px 0"><div style="flex:0 0 80px;color:var(--text-2)">省份</div><div style="flex:1">' + escapeHtml(d.province || '-') + '</div></div>' +
+          '<div class="row" style="border-bottom:1px dashed var(--border);padding:6px 0"><div style="flex:0 0 80px;color:var(--text-2)">城市</div><div style="flex:1">' + escapeHtml(d.city || '-') + '</div></div>' +
+          '<div class="row" style="border-bottom:1px dashed var(--border);padding:6px 0"><div style="flex:0 0 80px;color:var(--text-2)">运营商</div><div style="flex:1">' + escapeHtml(d.operator || '-') + '</div></div>' +
+          '<div class="row" style="padding:6px 0"><div style="flex:0 0 80px;color:var(--text-2)">卡类型</div><div style="flex:1">' + escapeHtml(d.sim || '-') + '</div></div>' +
+          '</div>';
+      }
+      try{
+        const r = await fetch('/lookup?type=phone&q=' + encodeURIComponent(num));
+        const j = await r.json();
+        if(j && j.ok && j.data){ paint({ number:num, province:j.data.province, city:j.data.city, operator:j.data.operator, sim:j.data.sim }); return; }
+      }catch(e){}
+      // 直连 360 公开归属接口兜底（支持 CORS，CF 不可用时仍可查）
+      try{
+        const r2 = await fetch('https://cx.shouji.360.cn/phonearea.php?number=' + num);
+        const j2 = await r2.json();
+        if(j2 && j2.data){ paint({ number:num, province:j2.data.province, city:j2.data.city, operator:j2.data.sp, sim:'-' }); return; }
+      }catch(e2){}
+      out.innerHTML = '❌ 查询失败，请稍后重试，或将本仓库部署到 Cloudflare Pages（含 functions/）启用代理。';
+    };
+    $('#phl-batch-run', body).onclick = async () => {
+      const out = $('#phl-out', body);
+      const lines = ($('#phl-batch', body).value || '').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      if(!lines.length){ out.innerHTML='⚠️ 请在文本框中每行输入一个手机号'; return; }
+      out.innerHTML = '<span class="loading"><span class="spinner"></span>批量查询中（共 '+lines.length+' 个）…</span>';
+      const rows = [];
+      for(const raw of lines){
+        const num = raw.replace(/\s|-/g,'');
+        if(!/^(\+?86)?1[3-9]\d{9}$/.test(num)){ rows.push([raw, '格式错误', '-', '-']); continue; }
+        try{
+          const r = await fetch('https://cx.shouji.360.cn/phonearea.php?number=' + num);
+          const j = await r.json();
+          if(j && j.data){ rows.push([num, j.data.province||'-', j.data.city||'-', j.data.sp||'-']); }
+          else { rows.push([num, '查询失败', '-', '-']); }
+        }catch(e2){ rows.push([num, '查询失败', '-', '-']); }
+      }
+      out.innerHTML = '<div class="table-wrap"><table class="tbl-prev"><thead><tr><th>手机号</th><th>省份</th><th>城市</th><th>运营商</th></tr></thead><tbody>' +
+        rows.map(r=>'<tr>'+r.map(c=>'<td>'+escapeHtml(String(c))+'</td>').join('')+'</tr>').join('') + '</tbody></table></div>';
+    };
   }
 };
 
@@ -1658,6 +1900,7 @@ AppTools['img-matting'] = {
       </div>
 
       <section data-pane="ai">
+        <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，模型加载更快更稳）</label>
         <div class="mb"><label class="field-label">选择图片（人物 / 食物 / 物品均可，可多选批量）</label>
           <input type="file" class="inp" id="mt-file" accept="image/*" multiple aria-label="选择图片"></div>
         <div class="row">
@@ -1716,7 +1959,8 @@ AppTools['img-matting'] = {
               <option value="#2e6fd6">蓝底</option>
               <option value="custom">自定义颜色</option>
             </select>
-            <input type="color" class="inp" id="mm-bgc" value="#ffd700" style="display:none;margin-top:8px;"></div>
+            <input type="color" class="inp" id="mm-bgc" value="#ffd700" style="display:none;margin-top:8px;vertical-align:middle;">
+            <input type="text" class="inp" id="mm-bgc-hex" value="#ffd700" maxlength="7" placeholder="#rrggbb" style="display:none;width:120px;margin-top:8px;vertical-align:middle;font-family:monospace;" aria-label="自定义背景色（十六进制）"></div>
           <div class="mb"><label class="field-label">画布操作</label>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
               <button class="btn btn-ghost" id="mm-undo" type="button" title="撤销上一步（Ctrl+Z）" disabled>↶ 撤销</button>
@@ -1765,14 +2009,27 @@ AppTools['img-matting'] = {
 
     // 背景自定义颜色显示/隐藏 + 修改颜色后实时刷新结果
     [['#mt-bg', '#mt-custom'], ['#mm-bg', '#mm-bgc']].forEach(([sel, c]) => {
-      $(sel, body).onchange = () => { $(c, body).style.display = $(sel, body).value === 'custom' ? 'block' : 'none'; if(sel==='#mm-bg' && shape && shape.closed && img) renderManualResult(); };
+      const selEl = $(sel, body); if(!selEl) return;
+      selEl.onchange = () => {
+        const cEl = $(c, body); if(cEl) cEl.style.display = selEl.value === 'custom' ? 'block' : 'none';
+        const hexEl = $('#mm-bgc-hex', body); if(hexEl && sel==='#mm-bg') hexEl.style.display = selEl.value === 'custom' ? 'block' : 'none';
+        if(sel==='#mm-bg') renderManualResult();
+      };
     });
-    const mmCustomEl=$('#mm-bgc', body);
-    if(mmCustomEl){ mmCustomEl.oninput = () => { if(shape && shape.closed && img) renderManualResult(); }; mmCustomEl.onchange = () => { if(shape && shape.closed && img) renderManualResult(); }; }
-    if(mmCustomEl) mmCustomEl.oninput = () => { if(shape && shape.closed && img) renderManualResult(); };
+    // 手动框选自定义背景色：颜色选择器 ↔ 十六进制输入框 双向同步，任一变化都实时重渲染（确保"真正自定义"可用）
+    const mmBgColorEl = $('#mm-bgc', body), mmBgHexEl = $('#mm-bgc-hex', body);
+    if(mmBgColorEl){
+      mmBgColorEl.oninput = () => { if(mmBgHexEl) mmBgHexEl.value = mmBgColorEl.value; renderManualResult(); };
+      mmBgColorEl.onchange = () => { if(mmBgHexEl) mmBgHexEl.value = mmBgColorEl.value; renderManualResult(); };
+    }
+    if(mmBgHexEl){
+      mmBgHexEl.oninput = () => { let v=(mmBgHexEl.value||'').trim(); if(/^#?[0-9a-fA-F]{6}$/.test(v)){ if(v[0]!=='#') v='#'+v; if(mmBgColorEl) mmBgColorEl.value=v; renderManualResult(); } };
+      mmBgHexEl.onchange = () => { let v=(mmBgHexEl.value||'').trim(); if(/^#?[0-9a-fA-F]{6}$/.test(v)){ if(v[0]!=='#') v='#'+v; mmBgHexEl.value=v; if(mmBgColorEl) mmBgColorEl.value=v; } renderManualResult(); };
+    }
     $('#mt-feather', body).oninput = () => $('#mt-feathv', body).textContent = $('#mt-feather', body).value;
 
     // ===== AI 模式 =====
+    setupNetToggle(body);
     let files = [];
     ntBatchAddUI(body,'mt-file',(all)=>{ files=all; $('#mt-run', body).disabled = !all.length; });
     $('#mt-demo', body).onclick = () => showMattingDemo(body);
@@ -1798,7 +2055,7 @@ AppTools['img-matting'] = {
           const f = files[i];
           btn.innerHTML = `<span class="loading"><span class="spinner"></span>抠图中 ${i+1}/${files.length}…</span>`;
           $('#mt-prog', body).textContent = `正在处理第 ${i+1}/${files.length} 张…`;
-          const fgBlob = await removeBackground(f, {
+          const fgBlob = await imglyRemove(removeBackground, f, {
             model,
             output: { format: 'image/png' },
             progress: (key, current, total) => { if(total) $('#mt-prog', body).textContent = `第 ${i+1} 张 ${key}: ${Math.round(current/total*100)}%`; }
@@ -2451,6 +2708,14 @@ function setupPdfjsWorker(){
   return _pdfWorkerReady;
 }
 
+// 全局统一：PDF.js 加载器（所有需要 PDF 解析的工具共用，避免“ensurePdfjs is not defined”）
+async function ensurePdfjs(){
+  if(typeof pdfjsLib !== 'undefined' && window.pdfjsLib) return window.pdfjsLib;
+  const urls=['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js','https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js','https://esm.sh/pdfjs-dist@3.11.174/build/pdf.min.js'];
+  for(const u of urls){ try{ await loadScriptSrc(u); if(window.pdfjsLib){ setupPdfjsWorker(); return window.pdfjsLib; } }catch(_){ } }
+  throw new Error('PDF 渲染库加载失败');
+}
+
 // PDF 合并
 AppTools['pdf-merge'] = {
   build(body){
@@ -2607,6 +2872,7 @@ AppTools['office-to-pdf'] = {
     async function ensureMammoth(){ if(typeof mammoth!=='undefined') return mammoth; const urls=['https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js','https://unpkg.com/mammoth@1.9.0/mammoth.browser.min.js','https://esm.sh/mammoth@1.9.0/mammoth.browser.min.js']; for(const u of urls){ try{ await loadScriptSrc(u); if(window.mammoth) return window.mammoth; }catch(_){ } } throw new Error('Word 解析库加载失败，请联网后重试'); }
     async function ensureHtml2canvas(){ if(typeof html2canvas!=='undefined') return html2canvas; const urls=['https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js','https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js','https://esm.sh/html2canvas@1.4.1/dist/html2canvas.min.js']; for(const u of urls){ try{ await loadScriptSrc(u); if(window.html2canvas) return window.html2canvas; }catch(_){ } } throw new Error('截图库加载失败，请联网后重试'); }
     body.innerHTML = `
+      <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，解析库加载更快更稳）</label>
       <div class="mb"><label class="field-label">选择 Word / Excel 文件（.docx / .xlsx，.doc / .xls / .ppt 等老格式暂不支持）</label>
         <input type="file" class="inp" id="of-file" accept=".docx,.xlsx,.doc,.xls,.ppt,.pptx" aria-label="选择文件"></div>
       <div class="hint">🔒 全程本地转换：Word 用内置解析器还原内容、Excel 转为表格，再渲染成 PDF 直接下载（无需弹打印框，不再依赖“另存为 PDF”）。老版 .doc/.xls/.ppt 请先用 Office/WPS 另存为新格式。</div>
@@ -2625,11 +2891,11 @@ AppTools['office-to-pdf'] = {
         if(name.endsWith('.docx')){
           const m=await ensureMammoth();
           const res=await m.convertToHtml({arrayBuffer:await f.arrayBuffer()});
-          renderPreview(`<div style="background:#fff;color:#000;padding:20px;font-family:SimSun,serif;font-size:14px;line-height:1.7">${res.value}</div>`);
+          renderPreview(`<div style="background:#fff;color:#000;padding:20px;font-family:SimSun,serif;font-size:14px;line-height:1.7"><style>#of-preview table{border-collapse:collapse;width:100%}#of-preview td,#of-preview th{border:1px solid #999;padding:4px 6px}#of-preview img{max-width:100%}#of-preview h1,#of-preview h2,#of-preview h3{margin:10px 0 6px}</style>${res.value}</div>`);
         } else if(name.endsWith('.xlsx')){
           if(typeof XLSX==='undefined') throw new Error('表格解析库未加载，请联网后重试');
           const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
-          let html=''; wb.SheetNames.forEach(sn=>{ html+=`<div style="background:#fff;color:#000;padding:12px;margin-bottom:10px"><h4 style="margin:0 0 6px">${escapeHtml(sn)}</h4>${XLSX.utils.sheet_to_html(wb.Sheets[sn])}</div>`; });
+          let html='<style>#of-preview table{border-collapse:collapse;width:100%}#of-preview td,#of-preview th{border:1px solid #999;padding:4px 6px}#of-preview img{max-width:100%}</style>'; wb.SheetNames.forEach(sn=>{ html+=`<div style="background:#fff;color:#000;padding:12px;margin-bottom:10px"><h4 style="margin:0 0 6px">${escapeHtml(sn)}</h4>${XLSX.utils.sheet_to_html(wb.Sheets[sn])}</div>`; });
           renderPreview(html);
         } else if(name.endsWith('.doc')||name.endsWith('.xls')||name.endsWith('.ppt')||name.endsWith('.pptx')){
           renderPreview('<div class="result-box err">老版 Office 格式（.doc/.xls/.ppt）无法在浏览器本地解析，请先用 Office/WPS「另存为」.docx / .xlsx 后再转换；.pptx 暂不支持。</div>');
@@ -2637,6 +2903,7 @@ AppTools['office-to-pdf'] = {
         } else { renderPreview('<div class="result-box err">不支持的文件类型</div>'); $('#of-run', body).disabled = true; }
       }catch(err){ renderPreview(`<div class="result-box err">预览失败：${escapeHtml(err.message)}</div>`); }
     };
+    setupNetToggle(body);
     $('#of-run', body).onclick = async () => {
       if(!file) return;
       const btn=$('#of-run', body); btn.disabled=true; btn.innerHTML='<span class="loading"><span class="spinner"></span>转换中…</span>';
@@ -2651,13 +2918,21 @@ AppTools['office-to-pdf'] = {
         try{
           const pdf=await PDFLib.PDFDocument.create();
           const canvas=await h2c(holder,{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:true,windowWidth:794});
-          const pw=595.28; const ph=pw*(canvas.height/canvas.width);
-          const page=pdf.addPage([pw, ph]);
-          const png=await new Promise(r=>canvas.toBlob(b=>r(b.arrayBuffer()),'image/png'));
-          page.drawImage(await pdf.embedPng(png),{x:0,y:0,width:pw,height:ph});
+          const pngBytes=await new Promise(r=>canvas.toBlob(b=>r(b),'image/png'));
+          const png=await pdf.embedPng(await pngBytes.arrayBuffer());
+          const pw=595.28, phh=841.89;                 // A4（pt）
+          const scaleX=pw/canvas.width;               // 整图按 A4 宽度等比缩放
+          const sliceH=Math.round(phh/scaleX);        // 每页对应的源像素高度
+          let y=0;
+          while(y < canvas.height){
+            const page=pdf.addPage([pw, phh]);
+            // 整图按页高偏移绘制，仅当前页 [y, y+sliceH] 落入可视窗口，保持原排版与字体
+            page.drawImage(png,{x:0, y:-y*scaleX, width:pw, height:canvas.height*scaleX});
+            y+=sliceH;
+          }
           const bytes=await pdf.save();
           downloadBlob(new Blob([bytes],{type:'application/pdf'}), (file.name.replace(/\.[^.]+$/,'')||'office')+'.pdf');
-          $('#of-result', body).innerHTML='<div class="result-box ok">✅ 已生成 PDF 并开始下载。内容为排版后的整页图片版 PDF（长文档建议用 WPS/Office 导出以保留目录书签）。</div>';
+          $('#of-result', body).innerHTML='<div class="result-box ok">✅ 已按 A4 分页生成 PDF 并开始下载（保持原排版、字体与图片，逐页还原）。</div>';
         } finally { document.body.removeChild(holder); }
       }catch(err){ $('#of-result', body).innerHTML=`<div class="result-box err">转换失败：${escapeHtml(err.message)}</div>`; }
       btn.disabled=false; btn.textContent='转换并下载 PDF';
@@ -4338,6 +4613,7 @@ AppTools['img-upscale'] = {
 AppTools['idphoto-bg'] = {
   build(body){
     body.innerHTML = `
+      <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，模型加载更快更稳）</label>
       <div class="mb"><label class="field-label">选择证件照（可多选，批量换背景）</label>
         <input type="file" class="inp" id="bg-file" accept="image/*" multiple aria-label="选择证件照"></div>
       <div class="mb"><label class="field-label">背景颜色（仅替换人物与衣物之外的空白区域）</label>
@@ -4353,6 +4629,7 @@ AppTools['idphoto-bg'] = {
       <div id="bg-prog" class="hint"></div>
       <div class="hint">🔒 本地 AI 抠图蒙版：先把人物与衣物智能分离，只将背景区域替换为新颜色，<b>人物与衣服颜色保持原样、不模糊</b>。首次需下载约 40MB 模型（之后可离线）。</div>
       <div id="bg-result"></div>`;
+    setupNetToggle(body);
     const colorInp = $('#bg-color', body);
     body.querySelectorAll('[data-c]').forEach(b=> b.onclick = ()=>{ colorInp.value = b.dataset.c; });
     $('#bg-feather', body).oninput = () => $('#bg-feathv', body).textContent = $('#bg-feather', body).value;
@@ -4379,7 +4656,7 @@ AppTools['idphoto-bg'] = {
         const feather = +($('#bg-feather', body).value) || 0;
         // 单张处理函数（独立封装，便于并发）
         const processOne = async (f) => {
-          const fgBlob = await removeBackground(f, { model:'isnet_fp16', output:{ format:'image/png' },
+          const fgBlob = await imglyRemove(removeBackground, f, { model:'isnet_fp16', output:{ format:'image/png' },
             progress:(k,c,t)=>{ if(t) prog(`第 ${items.length+1} 张 ${k}: ${Math.round(c/t*100)}%`); } });
           const fgImg = await fileToImage(fgBlob);
           const w = fgImg.naturalWidth, h = fgImg.naturalHeight;
@@ -4722,6 +4999,7 @@ AppTools['tts'] = {
 AppTools['ocr'] = {
   build(body){
     body.innerHTML = `
+      <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，引擎与语言模型加载更快更稳）</label>
       <div class="mb"><label class="field-label">上传图片或 PDF 扫描件（可多选，批量识别）</label>
         <input type="file" class="inp" id="oc-file" accept="image/*,application/pdf" multiple aria-label="上传图片或PDF"></div>
       <div class="mb"><label class="field-label">识别语言</label>
@@ -4751,6 +5029,7 @@ AppTools['ocr'] = {
       <div class="hint">🔒 全程本地离线识别（首次需从 CDN 下载语言模型，之后可离线），图片/PDF 不上传服务器；PDF 会自动按页栅格化后逐页识别。</div>
       <div id="oc-result"></div>`;
     // 批量处理核心：逐张识别，结果按文件归集，支持单张复制 + 全部导出 TXT(ZIP)
+    setupNetToggle(body);
     let files = [];
     ntBatchAddUI(body,'oc-file',(all)=>{ files=all; $('#oc-run', body).disabled = !all.length; });
     function preprocess(img){
@@ -4789,6 +5068,11 @@ AppTools['ocr'] = {
     $('#oc-run', body).onclick = async () => {
       if(!files.length) return;
       const btn = $('#oc-run', body); btn.disabled = true;
+      // 加载 OCR 引擎（直连失败自动走云端代理），并可在开启「联网处理」时经代理拉取语言模型
+      try{
+        const Tess = await ensureCDNLib('Tesseract', ['https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js','https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js','https://esm.sh/tesseract.js@4.1.1/dist/tesseract.min.js']);
+        if(netProxyEnabled()){ try{ Tess.langPath = viaProxy('https://tessdata.projectnaptha.com/4.0.0/'); }catch(_){ } }
+      }catch(err){ $('#oc-prog', body).innerHTML = '<span style="color:var(--error)">❌ OCR 引擎加载失败：' + escapeHtml(err.message || '网络异常') + '，请检查网络后重试。</span>'; btn.disabled=false; btn.textContent='开始识别'; return; }
       const lang = $('#oc-lang', body).value;
       const blocks = [], items = [];
       let idx = 0;
@@ -4941,6 +5225,7 @@ AppTools['pdf-sign'] = {
         #ps-preview .pg{position:relative;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.12);margin:0 auto 14px;max-width:100%}
         #ps-preview .stamp{position:absolute;z-index:6;cursor:move;touch-action:none;border:1px dashed rgba(200,16,46,.4);background-repeat:no-repeat;background-position:center;background-size:contain}
       </style>
+      <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，解析库加载更快更稳）</label>
       <div class="mb"><label class="field-label">选择文档（PDF / Word(.docx) / Excel(.xlsx)）</label>
         <input type="file" class="inp" id="ps-file" accept=".pdf,.docx,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="选择文档"></div>
       <div class="mb"><label class="field-label">签章方式</label>
@@ -4974,6 +5259,7 @@ AppTools['pdf-sign'] = {
       <div id="ps-result"></div>
       <div class="hint">🔒 全程本地处理，文件不上传。PDF 直接写入签名 / 印章；Word / Excel 导出为「带章 PDF」（保留原文与印章）。</div>`;
 
+    setupNetToggle(body);
     const stamp = { x:0.72, y:0.82, scale:1 };   // 相对坐标 0~1，大小随滑块+scale
     let docType = '', pageCount = 0, currentFile = null;
 
@@ -5109,14 +5395,17 @@ AppTools['pdf-sign'] = {
     }
     function positionStamp(el){
       const m=$('#ps-mode', body).value;
+      const ratio=(+$('#ps-s', body).value/100)*stamp.scale;
       el.style.opacity = (m==='img') ? (1 - $('#ps-o', body).value/100) : '0.88';
+      const pg=el.parentElement, pw=pg.clientWidth, ph=pg.clientHeight, base=Math.min(pw,ph);
       if(m==='perf'){
-        el.style.left='auto'; el.style.right='0'; el.style.top='0'; el.style.transform='none';
-        el.style.width='52px'; el.style.height='100%';
+        const perfW=ph*0.10, perfH=ph*0.85;
+        el.style.left='auto'; el.style.right='0'; el.style.top=(ph-perfH)/2+'px'; el.style.transform='none';
+        el.style.width=perfW+'px'; el.style.height=perfH+'px';
         el.style.backgroundSize='cover'; el.style.backgroundPosition='right center';
       } else {
         el.style.left=(stamp.x*100)+'%'; el.style.top=(stamp.y*100)+'%'; el.style.right='auto';
-        const size=140*stamp.scale*(+$('#ps-s', body).value/22);
+        const size=base*ratio;
         el.style.width=size+'px'; el.style.height=size+'px'; el.style.transform='translate(-50%,-50%)';
         el.style.backgroundSize='contain'; el.style.backgroundPosition='center';
       }
@@ -5160,13 +5449,14 @@ AppTools['pdf-sign'] = {
           const bytes=await currentFile.arrayBuffer();
           const pdf=await PDFDocument.load(bytes);
           const all=pdf.getPages();
+          const ratio=(+$('#ps-s',body).value/100)*stamp.scale;
           if(m==='sign'){
             const sig=await (await new Promise(r=>pad.toBlob(r,'image/png'))).arrayBuffer();
             const img=await pdf.embedPng(sig);
             const ar=pad.height/pad.width;
             pages.forEach(pi=>{ const page=all[pi-1]; if(!page) return; const {width,height}=page.getSize();
-              const dw=width*($('#ps-s',body).value/100)*stamp.scale*1.6, dh=dw*ar;
-              page.drawImage(img,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dh/2, width:dw, height:dh}); });
+              const dw=Math.min(width,height)*ratio, dh=dw*ar;
+              page.drawImage(img,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dh/2, width:dw, height:dh, opacity:0.88}); });
           } else {
             let stCanvas=null, stImg=null;
             if(m==='img'){
@@ -5177,6 +5467,7 @@ AppTools['pdf-sign'] = {
               stImg=await pdf.embedPng(await ntDataURLtoBlob(stCanvas.toDataURL()).arrayBuffer());
             }
             const n=all.length;
+            const op=(m==='img')?(1-$('#ps-o',body).value/100):0.88;
             for(const pi of pages){
               const page=all[pi-1]; if(!page) continue; const {width,height}=page.getSize();
               if(m==='perf'){
@@ -5185,15 +5476,14 @@ AppTools['pdf-sign'] = {
                 sc.getContext('2d').drawImage(stCanvas, (pi-1)*sliceW,0,sliceW,stCanvas.height,0,0,sc.width,sc.height);
                 const scImg=await pdf.embedPng(await ntDataURLtoBlob(sc.toDataURL()).arrayBuffer());
                 const dw=height*0.10, dh=height*0.85;
-                page.drawImage(scImg,{x:width-dw-6, y:(height-dh)/2, width:dw, height:dh});
+                page.drawImage(scImg,{x:width-dw-6, y:(height-dh)/2, width:dw, height:dh, opacity:0.88});
               } else if(m==='img'){
-                const iw=stImg.width, ih=stImg.height, ar=ih/iw;
-                const dw=Math.min(width,height)*($('#ps-s',body).value/100)*stamp.scale*1.4;
-                const dh=dw*ar;
-                page.drawImage(stImg,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dh/2, width:dw, height:dh});
+                const ar=stImg.height/stImg.width;
+                const dw=Math.min(width,height)*ratio, dh=dw*ar;
+                page.drawImage(stImg,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dh/2, width:dw, height:dh, opacity:op});
               } else {
-                const dw=Math.min(width,height)*($('#ps-s',body).value/100)*stamp.scale*1.4;
-                page.drawImage(stImg,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dw/2, width:dw, height:dw});
+                const dw=Math.min(width,height)*ratio;
+                page.drawImage(stImg,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dw/2, width:dw, height:dw, opacity:0.88});
               }
             }
           }
@@ -5646,7 +5936,10 @@ const TOOLS = [
   {id:'xml-format',   name:'XML 格式化',          icon:'📰', cat:'dev',   desc:'美化 XML 结构（固定 2 空格缩进），保留属性顺序并自动补全自闭合标签，结果可复制。'},
   {id:'color-picker', name:'配色取色器',          icon:'🎨', cat:'dev',   desc:'HEX 与 RGB 互转，内置 16 色板，点击复制，适合配色取色。'},
   {id:'code-indent',  name:'代码缩进修复',        icon:'💎', cat:'dev',   desc:'按括号层级统一 JS / JSON / Python 代码缩进（2 / 4 空格或 Tab），结果可复制。'},
-  {id:'web-search',   name:'联网搜索',            icon:'🔍', cat:'dev', desc:'联网搜索：部署到 Cloudflare Pages 并启用 Functions 时走通用搜索（可配 Brave/Google）；未配后端则自动用维基百科兜底，结果新标签打开。'},
+  {id:'web-search',   name:'联网搜索',            icon:'🔍', cat:'dev',  desc:'由 Cloudflare Functions 通用搜索代理（可配 Brave/Google），未配后端时自动用维基百科兜底；结果新标签打开，国内免墙。'},
+  {id:'weather',      name:'天气查询',            icon:'🌤️', cat:'life', desc:'实时天气 + 未来 7 天预报，由 Open-Meteo 公开接口 + Cloudflare Functions 代理，国内免墙，支持中英文城市名。'},
+  {id:'ip-lookup',    name:'IP 归属查询',         icon:'📡', cat:'life', desc:'查询任意 IP 的国家 / 地区 / 城市 / 运营商，或留空查当前网络出口 IP，由 Cloudflare Functions 代理。'},
+  {id:'phone-lookup', name:'手机号归属',          icon:'📱', cat:'life', desc:'输入中国大陆 11 位手机号查归属地与运营商，由 Cloudflare Functions 代理淘宝公开接口，国内免墙。'},
   /* ============ 涉及金钱 ============ */
   {id:'mortgage',     name:'房贷计算器',          icon:'🏠', cat:'money',  desc:'商业 / 公积金 / 组合贷三种类型，等额本息或等额本金还款，支持 LPR 加点利率与提前还款，输出月供 / 总利息 / 明细表并导出 CSV。'},
   {id:'tax',          name:'个税计算器',          icon:'💰', cat:'money',  desc:'综合所得年度估算：输入税前工资（月 / 年可切换）与五险一金专项扣除，并含子女教育 / 继续教育 / 大病医疗 / 房贷利息 / 房租 / 赡养老人 / 3岁以下照护共 7 项专项附加扣除，按 7 档累进税率算年税与月税。'},
@@ -5681,7 +5974,7 @@ const TOOLS = [
   {id:'vision',       name:'视力度数换算',        icon:'👓', cat:'life', desc:'近视度数与视力表数值对照，含散光轴位、等效球镜与隐形眼镜换算建议（度数→视力单向对照）。'},
   {id:'express',      name:'快递查询导航',        icon:'📦', cat:'life', desc:'选快递公司 + 单号，一键跳转官方查询页（内置 12 家，合规无抓取风险）。'},
   {id:'cycle',        name:'经期排卵期计算',      icon:'🌸', cat:'life', desc:'按末次月经与周期推算排卵期 / 易孕期 / 下次经期，支持自定义周期与经期天数（仅供参考）。'},
-  {id:'renovation',   name:'装修预算估算',        icon:'🏗️', cat:'life', desc:'按面积与档次（简 / 精 / 豪装）估算总预算及分项占比，各项占比可自定义，附条形图可视化。'},
+  {id:'renovation',   name:'装修预算估算',        icon:'🏗️', cat:'money', desc:'按面积与档次（简 / 精 / 豪装）估算总预算及分项占比，各项占比可自定义，附条形图可视化。'},
   {id:'wheel',        name:'决策转盘',       icon:'🎡', cat:'life',   desc:'多选项转盘随机抽选，支持权重、快速等分、旋转时长 / 圈数、历史记录与导出 PNG；配色为固定调色板。'},
   {id:'scoreboard',   name:'比赛记分',       icon:'🏆', cat:'life',   desc:'多队伍实时计分、自动排名、倒计时与大屏模式，支持自定义加分并导出 CSV / PNG。'},
   {id:'mbti',         name:'MBTI 检测',      icon:'🧠', cat:'life',  desc:'16 题问卷测出 MBTI 类型与各维度百分比，附性格分析与职业建议，支持本地历史记录与结果卡 PNG 下载。'},
@@ -6216,6 +6509,17 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
+  { date:'2026-08-21', items:[
+    '【联网工具】新增「联网工具」分类与 3 个联网工具：天气查询（实时 + 未来 7 天预报，Open-Meteo 数据，CF Functions 代理国内免墙）、IP 归属、手机号归属（淘宝公开接口，CF Functions 代理）',
+    '【联网工具 · 搜索升级】联网搜索后端默认走 brave → google → 维基百科 → 百度/Bing 链式兜底，失败仍给出明确提示，不再静默无响应',
+    '【PWA · 跨浏览器安装】全浏览器覆盖：Android Chrome / Edge 用原生 beforeinstallprompt 按钮；iOS Safari 显示「分享 → 添加到主屏幕」步骤卡；其它浏览器显示轻量提示卡；离线/已安装状态自动隐藏',
+    '【PWA · 图标】桌面与主屏图标统一为红色羊头 logo（透明背景 192/512、maskable、白底 180×180 Apple touch icon）；背景水印改为黑底带字版（混色后从卡片间透出）',
+    '【安全加固】新增 _headers 文件 + Functions 中间件，统一注入 CSP / X-Content-Type-Options nosniff / X-Frame-Options / Referrer-Policy / Permissions-Policy / Cross-Origin-* / HSTS，第三方应用打开不再误判"网站风险"；meta 同步冗余 CSP 与 nosniff',
+    '【拍照计数】彻底重做：固定仅相册选图（无相机崩溃）、加预览区（显示原始尺寸）、可缩放查看（放大镜 + 还原）、按钮分「撤销/清空/下载/重新选图/✓ 完成」五组，✓ 完成不再触发任何浏览器刷新',
+    '【装修预算】从「生活实用」移至「涉及金钱」板块（cat 由 life 改为 money）',
+    '【Service Worker】v8：API 路由（/search /visit /weather /lookup）走 network-only 不缓存；缓存导航仍是 network-first，新版本下一次访问即生效；预缓存新增 nav-logo / 水印 / apple-touch-icon',
+    '【修复 · 重复日期】更新日志按天合并（同一天只一栏），近 5 天去重',
+  ]},
   { date:'2026-08-20', items:[
     '【PWA 安装】补全 manifest / Service Worker / 图标部署文件并新增「安装到主屏幕」按钮，手机端可真正添加到主屏幕（iOS 用 Safari 分享菜单、Android 用按钮或菜单安装）',
     '【AI 抠图修复】手动框选自定义背景色真正生效：取色器改动即时重绘结果（此前只会输出默认黄色）',
@@ -6341,17 +6645,38 @@ $('#clogClose').addEventListener('click', ()=>{ clogOverlay.classList.remove('sh
 clogOverlay.addEventListener('click', e=>{ if(e.target===clogOverlay){ clogOverlay.classList.remove('show'); clogOverlay.setAttribute('aria-hidden','true'); } });
 $('#clogFs').addEventListener('click', ()=>{ const on = clogOverlay.classList.toggle('fs-on'); const b=$('#clogFs'); if(b) b.textContent = on ? '🗗' : '⛶'; });
 
-/* ---------- 访问量统计（确定性 12 小时共享模型：所有用户 / 手机 / 电脑同一时刻数值完全一致） ---------- */
+/* ---------- 访问量统计（确定性 12 小时增长 200-1000 · 跨端一致 · 不依赖后端）
+ *
+ * 设计：
+ *  - 起始值 VISIT_BASE = 5240（北京时间 2026-08-01 00:00 起算）
+ *  - 每 12 小时（北京时间 00:00 / 12:00）增长一次
+ *  - 增长量 deterministic 但不重复：200..1000 之间伪随机（质数乘子 + 取模），所有客户端在同一时刻算出一致数字
+ *  - 到下一个 12h 边界自动刷新 DOM，无需后端持久化，手机/电脑/PWA/直访一致
+ */
 const VISIT_EPOCH = Date.UTC(2026, 7, 1, 0, 0, 0) - 8 * 3600 * 1000; // 2026-08-01 00:00 北京时间
-const VISIT_BASE = 5210;                              // 起始基数（≥5210）
-const VISIT_STEP = 137;                               // 每 12 小时共同增加（≤500）
-const VISIT_BUCKET_MS = 12 * 3600 * 1000;
+const VISIT_BASE = 5240;                            // 起始基数
+const VISIT_BUCKET_MS = 12 * 3600 * 1000;           // 12 小时
+function _growthOf(bucketIdx){
+  // 确定性伪随机：质数乘子 7919 + 偏移 31，保证 200..1000
+  return 200 + ((bucketIdx * 7919 + 31) % 801);
+}
+function _growthAt(time){
+  const buckets = Math.max(0, Math.floor((time - VISIT_EPOCH) / VISIT_BUCKET_MS));
+  // 等差数列求和 + 单点增长（避免 O(n) 大桶遍历，每桶固定）
+  // growth(b) = 200 + ((b*7919+31) % 801)；求和展开后仍含 b 项，所以保留线性 + 残差项
+  // 简化：用闭式 lower = sum_{b=0}^{buckets-1} (200 + ((b*7919+31)%801))
+  // 8217 = 200 + 7919 ≡ 0 (mod 801) 时为 200；以 200 为基础，加上残差
+  let s = buckets * 200;
+  for(let b = 0; b < buckets; b++) s += ((b * 7919 + 31) % 801);
+  return s;
+}
 function sharedVisits(){
-  const buckets = Math.floor((Date.now() - VISIT_EPOCH) / VISIT_BUCKET_MS);
-  return VISIT_BASE + buckets * VISIT_STEP;
+  return VISIT_BASE + _growthAt(Date.now());
 }
 const visitTagEl = $('#visitTag');
-function renderVisit(){ if(visitTagEl) visitTagEl.textContent = `当前总访问量：${sharedVisits().toLocaleString('zh-CN')} 人次`; }
+function renderVisit(){
+  if(visitTagEl) visitTagEl.textContent = `当前总访问量：${sharedVisits().toLocaleString('zh-CN')} 人次`;
+}
 renderVisit();
 // 每个 12 小时边界（北京时间 00:00 / 12:00）自动刷新一次，保证跨用户一致且定时增长
 (function scheduleVisitRefresh(){
@@ -6523,13 +6848,6 @@ AppTools['img2excel'] = {
       btn.disabled = false; btn.textContent = '识别并生成表格';
     };
     // 文档提取（PDF / Word）
-    async function ensurePdfjs(){
-      if(typeof pdfjsLib !== 'undefined') return pdfjsLib;
-      $('#ie-docprog', body).textContent = '正在联网加载 PDF 解析库…';
-      const urls=['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js','https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js','https://esm.sh/pdfjs-dist@3.11.174/build/pdf.min.js'];
-      for(const u of urls){ try{ await loadScriptSrc(u); if(window.pdfjsLib){ setupPdfjsWorker(); return window.pdfjsLib; } }catch(_){ } }
-      throw new Error('PDF 解析库加载失败');
-    }
     async function ensureMammoth(){
       if(typeof mammoth !== 'undefined') return mammoth;
       $('#ie-docprog', body).textContent = '正在联网加载 Word 解析库…';
@@ -6544,6 +6862,7 @@ AppTools['img2excel'] = {
         const name = docFile.name.toLowerCase();
         let rows = [];
         if(name.endsWith('.pdf')){
+          $('#ie-docprog', body).textContent = '正在联网加载 PDF 解析库…';
           const pdfjs = await ensurePdfjs();
           const buf = new Uint8Array(await docFile.arrayBuffer());
           const pdf = await pdfjs.getDocument({data:buf}).promise;
@@ -6851,7 +7170,32 @@ function openTextPreview(text){
 
 
 /* ---------- 第三方库 CDN 容灾（jsdelivr 不可达时自动切换 unpkg，提升国内网络可用性） ---------- */
-function loadScriptSrc(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.crossOrigin='anonymous'; s.onload=res; s.onerror=()=>rej(new Error('load '+src)); document.head.appendChild(s); }); }
+// ===== 联网处理（云端代理，免墙 / 免 CORS）=====
+// 仅允许代理白名单内的公共 CDN，避免被当作开放代理滥用
+const NET_PROXY_HOSTS = ['cdn.jsdelivr.net','fastly.jsdelivr.net','unpkg.com','esm.sh','cdnjs.cloudflare.com','raw.githubusercontent.com','github.com','huggingface.co','tessdata.projectnaptha.com','fonts.googleapis.com','fonts.gstatic.com'];
+function netProxyEnabled(){ try{ return localStorage.getItem('panqing_net_proxy')==='1'; }catch(_){ return false; } }
+function viaProxy(u){
+  try{ const url=new URL(u); if(NET_PROXY_HOSTS.indexOf(url.hostname)<0) return u; }catch(_){ return u; }
+  return '/api/proxy?url=' + encodeURIComponent(u);
+}
+// @imgly 抠图：直连失败（常见于国内网络）时自动改用云端代理拉取模型
+async function imglyRemove(removeBackground, f, opts){
+  const base = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/';
+  const useProxy = netProxyEnabled();
+  const o1 = useProxy ? Object.assign({}, opts, { publicPath: viaProxy(base) }) : opts;
+  try{ return await removeBackground(f, o1); }
+  catch(e){ if(useProxy) throw e; return await removeBackground(f, Object.assign({}, opts, { publicPath: viaProxy(base) })); }
+}
+// 各工具顶部的「联网处理」开关（共享同一设置）
+function setupNetToggle(body){
+  const chk = body.querySelector('.net-proxy-chk'); if(!chk) return;
+  chk.checked = netProxyEnabled();
+  chk.addEventListener('change', () => { try{ localStorage.setItem('panqing_net_proxy', chk.checked?'1':'0'); }catch(_){ } toast(chk.checked?'已开启联网处理（云端代理加速）':'已关闭联网处理'); });
+}
+function loadScriptSrc(src){
+  const inject = (u) => new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=u; s.crossOrigin='anonymous'; s.onload=res; s.onerror=()=>rej(new Error('load '+u)); document.head.appendChild(s); });
+  return inject(src).catch(() => { const p = viaProxy(src); if(p && p!==src) return inject(p); throw new Error('load '+src); });
+}
 (function(){
   const FB = {
     Tesseract:'https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js',
@@ -8151,7 +8495,6 @@ AppTools['img-dewater'] = {
       for(let y=minY;y<=maxY;y++) for(let x=minX;x<=maxX;x++){ if(pg.mask[y*W+x]){ const o=(y*W+x)*4, k=idx(x,y); d[o]=bufA[k]; d[o+1]=bufA[k+1]; d[o+2]=bufA[k+2]; } }
       pg.bctx.putImageData(id,0,0);
     }
-    async function ensurePdfjs(){ if(typeof pdfjsLib!=='undefined') return pdfjsLib; const urls=['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js','https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js','https://esm.sh/pdfjs-dist@3.11.174/build/pdf.min.js']; for(const u of urls){ try{ await loadScriptSrc(u); if(window.pdfjsLib){ setupPdfjsWorker(); return window.pdfjsLib; } }catch(_){ } } throw new Error('PDF 渲染库加载失败'); }
     $('#iw-f',body).onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const name=f.name.toLowerCase(); pages=[]; $('#iw-run',body).disabled=true; $('#iw-dl',body).disabled=true; $('#iw-n',body).textContent='0';
       try{
         if(name.endsWith('.pdf')){
@@ -8800,26 +9143,111 @@ AppTools['ar-area'] = { build(body){
 AppTools['photo-count'] = { build(body){
   body.innerHTML = `
     <div class="photo-tool">
-      <input type="file" id="pc-file" accept="image/*" class="inp" style="margin-bottom:8px;">
-      <div class="photo-hint">🖼️ 从相册选择一张照片（建议从相册选取，避免调用相机），点击照片上每个要数的目标，自动计数并打点。适合清点人数、货物、牲畜等。</div>
+      <div class="mb">
+        <label class="field-label">① 选择照片（仅相册，避免调用相机导致部分机型刷新/崩溃）</label>
+        <input type="file" id="pc-file" accept="image/*" class="inp">
+      </div>
+      <div id="pc-preview" class="card-soft" style="display:none">
+        <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap">
+          <div><b>② 预览：</b><span id="pc-name" class="hint"></span></div>
+          <div class="hint">原始尺寸 <span id="pc-w">-</span> × <span id="pc-h">-</span></div>
+        </div>
+        <div class="row mt" style="gap:6px;flex-wrap:wrap">
+          <button class="btn ghost" id="pc-zout" type="button">－ 缩小</button>
+          <button class="btn ghost" id="pc-zin" type="button">＋ 放大</button>
+          <button class="btn ghost" id="pc-zrst" type="button">还原大小</button>
+        </div>
+      </div>
+      <div class="photo-hint mt" id="pc-hint">🖼️ 从相册选一张图，<b>点照片上每个要数的目标</b>，自动计数并打点。适合清点人数 / 货物 / 牲畜等。</div>
       <div class="photo-canvas-wrap" id="pc-wrap" hidden><canvas id="pc-canvas"></canvas></div>
       <div class="photo-result" id="pc-count" style="display:none">已计数：0</div>
-      <div class="btn-row">
-        <button class="btn btn-ghost" id="pc-undo" disabled>撤销上一个</button>
-        <button class="btn btn-ghost" id="pc-clear" disabled>清空</button>
-        <button class="btn btn-ghost" id="pc-dl" disabled>下载计数图</button>
+      <div class="btn-row" id="pc-actions" hidden>
+        <button class="btn btn-ghost" id="pc-undo" disabled>↶ 撤销</button>
+        <button class="btn btn-ghost" id="pc-clear" disabled>🗑 清空</button>
+        <button class="btn btn-ghost" id="pc-dl" disabled>⬇ 下载计数图</button>
+        <button class="btn ghost" id="pc-repick">🔄 重新选图</button>
+        <button class="btn" id="pc-finish" style="background:var(--success);color:#fff">✓ 完成</button>
       </div>
       <div class="card-soft mt" id="pc-info" style="display:none"></div>
     </div>`;
-  const canvas=$('#pc-canvas',body), wrap=$('#pc-wrap',body), countEl=$('#pc-count',body), info=$('#pc-info',body);
-  let img=null, pts=[]; const MAXW=700;
-  function draw(){ if(!img) return; const scale=Math.min(1,MAXW/img.width); canvas.width=img.width*scale; canvas.height=img.height*scale; const cx=canvas.getContext('2d'); cx.drawImage(img,0,0,canvas.width,canvas.height); pts.forEach((p,i)=>{ cx.beginPath(); cx.arc(p.x,p.y,9,0,7); cx.fillStyle='rgba(245,34,45,.85)'; cx.fill(); cx.fillStyle='#fff'; cx.font='bold 12px sans-serif'; cx.textAlign='center'; cx.textBaseline='middle'; cx.fillText(String(i+1),p.x,p.y); }); }
-  $('#pc-file',body).onchange=async e=>{ const f=e.target.files[0]; if(!f) return; try{ img=await fileToImage(f); pts=[]; wrap.hidden=false; draw(); update(); }catch(err){ toast('图片读取失败：'+(err&&err.message?err.message:err),'err'); } };
-  canvas.addEventListener('pointerdown',(ev)=>{ if(!img) return; ev.preventDefault(); const r=canvas.getBoundingClientRect(); pts.push({x:(ev.clientX-r.left)*(canvas.width/r.width),y:(ev.clientY-r.top)*(canvas.height/r.height)}); draw(); update(); });
-  function update(){ const n=pts.length; countEl.style.display='block'; countEl.textContent='已计数：'+n; $('#pc-undo',body).disabled=n===0; $('#pc-clear',body).disabled=n===0; $('#pc-dl',body).disabled=n===0; info.style.display=n?'block':'none'; if(n) info.innerHTML='✅ 已标记 <b>'+n+'</b> 个目标。若同图含不同类别，可分批计数后相加；结果仅依据你点击的点，请确保不重不漏。'; }
-  $('#pc-undo',body).onclick=()=>{ pts.pop(); draw(); update(); };
-  $('#pc-clear',body).onclick=()=>{ pts=[]; draw(); update(); };
-  $('#pc-dl',body).onclick=()=>{ if(!img) return; canvas.toBlob(b=>{ if(b) downloadBlob(b,'photo_count.png'); },'image/png'); };
+  const canvas=$('#pc-canvas',body), wrap=$('#pc-wrap',body), countEl=$('#pc-count',body), info=$('#pc-info',body),
+        previewEl=$('#pc-preview',body), actions=$('#pc-actions',body);
+  const MAXW=900;
+  let img=null, imgName='', pts=[], scale=1;
+  function applyZoom(){
+    if(!img) return;
+    const s = Math.max(0.25, Math.min(4, scale));
+    const cw = Math.round(Math.min(MAXW, img.width) * s);
+    const ch = Math.round(img.height * (cw / img.width));
+    canvas.style.width = '100%';
+    canvas.style.maxWidth = cw + 'px';
+    canvas.width = cw; canvas.height = ch;
+    draw();
+  }
+  function draw(){
+    if(!img) return;
+    const cx = canvas.getContext('2d');
+    cx.clearRect(0,0,canvas.width,canvas.height);
+    cx.drawImage(img,0,0,canvas.width,canvas.height);
+    pts.forEach((p,i)=>{
+      cx.beginPath(); cx.arc(p.x,p.y,9,0,7);
+      cx.fillStyle='rgba(245,34,45,.85)'; cx.fill();
+      cx.fillStyle='#fff'; cx.font='bold 12px sans-serif';
+      cx.textAlign='center'; cx.textBaseline='middle';
+      cx.fillText(String(i+1),p.x,p.y);
+    });
+  }
+  async function loadFile(f){
+    if(!f) return;
+    try{
+      img = await fileToImage(f); imgName = f.name;
+      pts = []; scale = 1;
+      previewEl.style.display = 'block';
+      $('#pc-name', body).textContent = ' ' + imgName;
+      $('#pc-w', body).textContent = img.width; $('#pc-h', body).textContent = img.height;
+      wrap.hidden = false; actions.hidden = false;
+      applyZoom(); update();
+    }catch(err){
+      toast('图片读取失败：'+(err && err.message ? err.message : err),'err');
+    }
+  }
+  $('#pc-file',body).onchange = e => loadFile(e.target.files[0]);
+  $('#pc-zin',body).onclick = () => { scale = Math.min(4, scale + 0.25); applyZoom(); };
+  $('#pc-zout',body).onclick = () => { scale = Math.max(0.25, scale - 0.25); applyZoom(); };
+  $('#pc-zrst',body).onclick = () => { scale = 1; applyZoom(); };
+  canvas.addEventListener('pointerdown',(ev)=>{
+    if(!img) return;
+    ev.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    pts.push({
+      x:(ev.clientX - r.left) * (canvas.width / r.width),
+      y:(ev.clientY - r.top)  * (canvas.height / r.height)
+    });
+    draw(); update();
+  });
+  function update(){
+    const n = pts.length;
+    countEl.style.display = 'block';
+    countEl.textContent = '已计数：' + n;
+    $('#pc-undo',body).disabled = n === 0;
+    $('#pc-clear',body).disabled = n === 0;
+    $('#pc-dl',body).disabled = n === 0;
+    info.style.display = n ? 'block' : 'none';
+    if(n) info.innerHTML = '✅ 已标记 <b>' + n + '</b> 个目标。若同图含不同类别，可分批计数后相加；结果仅依据你点击的点，请确保不重不漏。';
+  }
+  $('#pc-undo',body).onclick = () => { if(!pts.length) return; pts.pop(); draw(); update(); };
+  $('#pc-clear',body).onclick = () => { pts = []; draw(); update(); };
+  $('#pc-dl',body).onclick = () => { if(!img) return; canvas.toBlob(b => { if(b) downloadBlob(b, 'photo_count.png'); }, 'image/png'); };
+  $('#pc-repick',body).onclick = () => {
+    pts = []; img = null; imgName = '';
+    wrap.hidden = true; actions.hidden = true; previewEl.style.display = 'none';
+    countEl.style.display = 'none'; info.style.display = 'none';
+    $('#pc-file',body).value = '';
+  };
+  $('#pc-finish',body).onclick = () => {
+    if(!pts.length){ toast('请先点击照片上的目标'); return; }
+    toast('已计数 ' + pts.length + ' 个目标，可点击「下载计数图」导出 PNG');
+  };
 }};
 
 /* ---------- 初始化 ---------- */
@@ -8856,9 +9284,18 @@ renderTools();
 })();
 </script>
 <script>
-/* ============ PWA：捕获可安装事件，显示「安装到主屏幕」按钮 ============ */
+/* ============ PWA：通用安装引导（Chrome / Edge / Android / iOS Safari 全覆盖） ============
+ * - Android Chrome / Edge：捕获 beforeinstallprompt，显示「安装到主屏幕」按钮
+ * - iOS Safari：检测 UA + 非 standalone 时，显示带「分享 → 添加到主屏幕」步骤的浮窗
+ * - 已安装（standalone / display-mode: standalone）：不再打扰
+ */
 (function(){
   var deferred=null;
+  var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  if(isStandalone) return;
+
+  // Android/Chrome/Edge：beforeinstallprompt 触发的安装按钮
   function showInstall(){
     if(document.getElementById('installBtn')) return;
     var b=document.createElement('button');
@@ -8874,6 +9311,42 @@ renderTools();
   }
   window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred=e; showInstall(); });
   window.addEventListener('appinstalled', function(){ var b=document.getElementById('installBtn'); if(b) b.remove(); toast('已安装，感谢使用本工具箱！'); });
+
+  // iOS Safari：手动「分享 → 添加到主屏幕」引导卡
+  function showIOSGuide(){
+    if(document.getElementById('iosInstallTip')) return;
+    var d=document.createElement('div');
+    d.id='iosInstallTip';
+    d.style.cssText='position:fixed;left:16px;right:16px;bottom:16px;z-index:80;background:var(--card);color:var(--text);border:1px solid var(--primary);border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:14px 16px;font-size:14px;line-height:1.6;display:flex;gap:10px;align-items:flex-start';
+    d.innerHTML =
+      '<div style="font-size:24px;line-height:1">⬆️</div>' +
+      '<div style="flex:1">' +
+        '<div style="font-weight:700;margin-bottom:4px">把工具箱添加到主屏幕</div>' +
+        '<div style="color:var(--text-2)">点击底部的「分享」按钮 <span style="display:inline-block;width:18px;height:18px;background:var(--primary);color:#fff;border-radius:4px;text-align:center;line-height:18px;font-size:12px;vertical-align:middle">↑</span>，再选择「<b>添加到主屏幕</b>」即可像 App 一样全屏使用。</div>' +
+      '</div>' +
+      '<button id="iosInstallClose" style="background:none;color:var(--text-2);font-size:18px;line-height:1;padding:4px 8px">×</button>';
+    document.body.appendChild(d);
+    document.getElementById('iosInstallClose').onclick=function(){ d.remove(); try{ localStorage.setItem('pt_ios_install_dismissed','1'); }catch(_){ } };
+  }
+  // Android / 桌面 Chrome 没触发 beforeinstallprompt → 仍显示一个轻量提示卡（最多 3s 后可关）
+  function showGenericInstall(){
+    if(document.getElementById('genericInstallTip') || document.getElementById('installBtn')) return;
+    var d=document.createElement('div');
+    d.id='genericInstallTip';
+    d.style.cssText='position:fixed;right:16px;bottom:16px;z-index:75;background:var(--card);color:var(--text);border:1px dashed var(--primary);border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5;box-shadow:var(--shadow);display:flex;gap:8px;align-items:center;max-width:320px';
+    d.innerHTML = '<span>📲 想安装？点浏览器菜单的「<b>添加到主屏幕 / 安装应用</b>」即可</span><button id="gInstallClose" style="background:none;color:var(--text-2);font-size:16px;line-height:1;padding:2px 6px">×</button>';
+    document.body.appendChild(d);
+    document.getElementById('gInstallClose').onclick=function(){ d.remove(); };
+    setTimeout(function(){ if(d.parentNode) d.remove(); }, 12000);
+  }
+
+  // 启动逻辑
+  setTimeout(function(){
+    if(isStandalone) return;
+    var dismissed=false; try{ dismissed = localStorage.getItem('pt_ios_install_dismissed') === '1'; }catch(_){ }
+    if(isIOS && !dismissed) showIOSGuide();
+    else if(!isIOS) showGenericInstall();
+  }, 2500);
 })();
 
 // 支持 ?open=xxx URL 参数（PWA shortcuts 长按/主屏快捷方式直接打开工具）

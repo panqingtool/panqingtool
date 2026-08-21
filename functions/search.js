@@ -1,120 +1,155 @@
-/* 万能免费在线工具箱 · 联网搜索代理（Cloudflare Pages Functions）
+/* 联网搜索代理（Cloudflare Pages Functions）
  *
- * 作用：前端只调用同源接口 /search，由本函数在服务端去请求第三方搜索 API。
- * 好处：① 避免浏览器直连第三方导致的 CORS 报错；② API 密钥留在服务端（env），绝不进前端；
- *       ③ 所有外网请求都由 Cloudflare 边缘节点发出，不受用户本地网络（如国内 GFW）影响。
+ * 路由：
+ *   GET /search?q=xxx[&count=10][&provider=auto|brave|google|duckduckgo|wikipedia|bing]
  *
- * 前端调用示例：
- *   const r = await fetch('/search?q=' + encodeURIComponent('Cloudflare Pages 教程'));
- *   const list = await r.json();  // [{ title, url, snippet }, ...]
+ * 行为：
+ *   - 默认 provider=auto：依次尝试 brave → google → wikipedia，命中即返回。
+ *   - wikipedia 走服务端 API（zh.wikipedia.org / en.wikipedia.org），CF 边缘节点请求，国内访问不受影响。
+ *   - 全部失败时返回兜底（502 + 错误信息），前端展示明确提示。
  *
- * 在 Cloudflare Pages 控制台 → Settings → Environment variables 里添加（可选）：
- *   SEARCH_PROVIDER = brave            （可选：wikipedia / brave / google / duckduckgo；不填默认 wikipedia）
- *   BRAVE_API_KEY  = 你的 Brave Search API Key
- *   GOOGLE_API_KEY = 你的 Google API Key         （provider=google 时需要）
- *   GOOGLE_CX      = 你的 Custom Search Engine ID（provider=google 时需要）
- *
- * 说明：
- *   - 默认 wikipedia：服务端调用维基百科 API，CF 节点可达，国内浏览器无障碍，无需任何密钥，开箱即用。
- *   - duckduckgo 近期对自动化请求经常超时/返回空，仅作最后的兜底。
+ * 环境变量（在 Cloudflare Pages 控制台 Settings → Environment variables）：
+ *   SEARCH_PROVIDER  = brave / google / duckduckgo / wikipedia（可选；缺省为 auto）
+ *   BRAVE_API_KEY    = Brave Search API Key
+ *   GOOGLE_API_KEY   = Google API Key
+ *   GOOGLE_CX        = Google CSE ID
+ *   BING_API_KEY     = Bing Web Search API Key
  */
+
+const UA = 'Mozilla/5.0 (compatible; PanQingToolbox/1.0; +https://panqingtool.pages.dev)';
+
+function json(obj, status, extraHeaders) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: Object.assign(
+      { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=120' },
+      extraHeaders || {}
+    )
+  });
+}
 
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
   const q = (url.searchParams.get('q') || '').trim();
-  if (!q) {
-    return json({ error: '缺少参数 q' }, 400);
-  }
-
-  // provider 优先级：请求参数 > 环境变量 > 默认 wikipedia
-  const provider = (url.searchParams.get('provider') || env.SEARCH_PROVIDER || 'wikipedia').toLowerCase();
-  const lang = (url.searchParams.get('lang') || env.SEARCH_LANG || 'zh').toLowerCase();
+  if (!q) return json({ ok: false, error: '缺少参数 q' }, 400);
+  const wantProvider = (url.searchParams.get('provider') || env.SEARCH_PROVIDER || 'auto').toLowerCase();
   const count = Math.min(parseInt(url.searchParams.get('count') || '10', 10) || 10, 20);
 
+  // auto：依次尝试各 provider，第一个成功的就返回
+  if (wantProvider === 'auto') {
+    const chain = ['brave', 'google', 'wikipedia', 'duckduckgo', 'bing'];
+    const tried = [];
+    for (const p of chain) {
+      try {
+        const r = await run(p, q, count, env);
+        r.provider = p + (p === 'wikipedia' ? '(zh)' : '');
+        return json(r, 200);
+      } catch (e) {
+        tried.push({ provider: p, error: String(e && e.message ? e.message : e) });
+      }
+    }
+    return json({ ok: false, error: '所有搜索引擎暂不可用', tried }, 502);
+  }
   try {
-    let data = [];
-
-    if (provider === 'brave') {
-      if (!env.BRAVE_API_KEY) throw new Error('未配置 BRAVE_API_KEY（Pages 环境变量）');
-      data = await braveSearch(q, env.BRAVE_API_KEY, count);
-    } else if (provider === 'google') {
-      if (!env.GOOGLE_API_KEY || !env.GOOGLE_CX) throw new Error('未配置 GOOGLE_API_KEY / GOOGLE_CX');
-      data = await googleSearch(q, env.GOOGLE_API_KEY, env.GOOGLE_CX, count);
-    } else if (provider === 'duckduckgo') {
-      data = await ddgSearch(q, count);
-    }
-
-    // 默认 wikipedia，或上述 provider 返回空时回退到 wikipedia（服务端，最稳）
-    if (!data || !data.length) {
-      data = await wikipediaSearch(q, lang, count);
-    }
-
-    if (!data || !data.length) {
-      return json({ error: '未找到相关结果，换个关键词试试。' }, 200);
-    }
-    return json(data, 200, { 'cache-control': 'public, max-age=300' });
+    const r = await run(wantProvider, q, count, env);
+    r.provider = wantProvider;
+    return json(r, 200);
   } catch (e) {
-    // 任何异常都尽量用 wikipedia 兜底，仍失败才返回错误
-    try {
-      const fb = await wikipediaSearch(q, lang, count);
-      if (fb && fb.length) return json(fb, 200, { 'cache-control': 'public, max-age=60' });
-    } catch (_) {}
-    return json({ error: String(e && e.message ? e.message : e) }, 502);
+    return json({ ok: false, error: String(e && e.message ? e.message : e), provider: wantProvider }, 502);
   }
 }
 
-function json(obj, status, extraHeaders) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: Object.assign({ 'content-type': 'application/json; charset=utf-8' }, extraHeaders || {})
-  });
+async function run(provider, q, count, env) {
+  if (provider === 'brave')          return await braveSearch(q, env.BRAVE_API_KEY, count);
+  if (provider === 'google')         return await googleSearch(q, env.GOOGLE_API_KEY, env.GOOGLE_CX, count);
+  if (provider === 'bing')           return await bingSearch(q, env.BING_API_KEY, count);
+  if (provider === 'duckduckgo')     return await ddgSearch(q, count);
+  if (provider === 'wikipedia')      return await wikiSearch(q, count, 'zh');
+  throw new Error('未知的 provider: ' + provider);
 }
 
-async function wikipediaSearch(q, lang, count) {
-  const api = 'https://' + lang + '.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
-    encodeURIComponent(q) + '&format=json&srlimit=' + count + '&origin=*';
-  const r = await fetch(api, { headers: { 'User-Agent': 'panqingtool/1.0 (search agent)' } });
-  if (!r.ok) throw new Error('Wikipedia HTTP ' + r.status);
-  const j = await r.json();
-  const arr = (j && j.query && j.query.search) || [];
-  return arr.map((it) => ({
-    title: it.title,
-    url: 'https://' + lang + '.wikipedia.org/wiki/' + encodeURIComponent(it.title.replace(/ /g, '_')),
-    snippet: (it.snippet || '').replace(/<[^>]+>/g, '')
-  }));
-}
-
+/* ---------- brave ---------- */
 async function braveSearch(q, key, count) {
-  const u = 'https://api.search.brave.com/res/v1/web/search?q=' +
-    encodeURIComponent(q) + '&count=' + count;
-  const r = await fetch(u, {
-    headers: { Accept: 'application/json', 'X-Subscription-Token': key }
-  });
+  if (!key) throw new Error('未配置 BRAVE_API_KEY');
+  const u = 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(q) + '&count=' + count;
+  const r = await fetch(u, { headers: { 'X-Subscription-Token': key, Accept: 'application/json' } });
+  if (!r.ok) throw new Error('brave http ' + r.status);
   const j = await r.json();
   const items = (j && j.web && j.web.results) || [];
-  return items.map((x) => ({ title: x.title, url: x.url, snippet: x.description || '' }));
+  if (!items.length) throw new Error('brave 无结果');
+  return { ok: true, query: q, results: items.slice(0, count).map((x) => ({ title: x.title, url: x.url, snippet: x.description || '' })) };
 }
 
+/* ---------- google ---------- */
 async function googleSearch(q, key, cx, count) {
-  const u = 'https://www.googleapis.com/customsearch/v1?q=' +
-    encodeURIComponent(q) + '&key=' + key + '&cx=' + cx + '&num=' + count;
+  if (!key || !cx) throw new Error('未配置 GOOGLE_API_KEY / GOOGLE_CX');
+  const u = 'https://www.googleapis.com/customsearch/v1?q=' + encodeURIComponent(q) + '&key=' + key + '&cx=' + cx + '&num=' + count;
   const r = await fetch(u);
+  if (!r.ok) throw new Error('google http ' + r.status);
   const j = await r.json();
-  const items = j.items || [];
-  return items.map((x) => ({ title: x.title, url: x.link, snippet: x.snippet || '' }));
+  const items = (j.items || []);
+  if (!items.length) throw new Error('google 无结果');
+  return { ok: true, query: q, results: items.slice(0, count).map((x) => ({ title: x.title, url: x.link, snippet: x.snippet || '' })) };
 }
 
+/* ---------- bing ---------- */
+async function bingSearch(q, key, count) {
+  if (!key) throw new Error('未配置 BING_API_KEY');
+  const u = 'https://api.bing.microsoft.com/v7.0/search?q=' + encodeURIComponent(q) + '&count=' + count;
+  const r = await fetch(u, { headers: { 'Ocp-Apim-Subscription-Key': key } });
+  if (!r.ok) throw new Error('bing http ' + r.status);
+  const j = await r.json();
+  const items = (j.webPages && j.webPages.value) || [];
+  if (!items.length) throw new Error('bing 无结果');
+  return { ok: true, query: q, results: items.slice(0, count).map((x) => ({ title: x.name, url: x.url, snippet: x.snippet || '' })) };
+}
+
+/* ---------- wikipedia（服务端，免墙） ---------- */
+async function wikiSearch(q, count, lang) {
+  const endpoints = ['zh', 'en'];
+  const errs = [];
+  for (const l of endpoints) {
+    try {
+      const api = 'https://' + l + '.wikipedia.org/w/api.php?action=opensearch&limit=' + count + '&namespace=0&format=json&origin=*&search=' + encodeURIComponent(q);
+      const r = await fetch(api, { headers: { 'User-Agent': UA, Accept: 'application/json' } });
+      if (!r.ok) { errs.push(l + ':http ' + r.status); continue; }
+      const j = await r.json();
+      if (Array.isArray(j) && Array.isArray(j[1]) && j[1].length) {
+        const titles = j[1], descs = j[2] || [], urls = j[3] || [];
+        return {
+          ok: true,
+          query: q,
+          results: titles.slice(0, count).map((t, i) => ({
+            title: t,
+            url: urls[i] || ('https://' + l + '.wikipedia.org/wiki/' + encodeURIComponent(t)),
+            snippet: (descs[i] || ('维基百科 · ' + l)).slice(0, 240)
+          }))
+        };
+      }
+      errs.push(l + ':空');
+    } catch (e) {
+      errs.push(l + ':' + String(e && e.message ? e.message : e));
+    }
+  }
+  throw new Error('wikipedia 失败: ' + errs.join(','));
+}
+
+/* ---------- duckduckgo html（兜底） ---------- */
 async function ddgSearch(q, count) {
   const u = 'https://html.duckduckgo.com/html/?q=' + encodeURIComponent(q);
-  const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  const r = await fetch(u, { headers: { 'User-Agent': UA, Accept: 'text/html' } });
+  if (!r.ok) throw new Error('ddg http ' + r.status);
   const html = await r.text();
-  const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([^<]+)</g;
-  const out = [];
-  let m;
+  const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+  const out = []; let m;
   while ((m = re.exec(html)) && out.length < count) {
-    const href = m[1].replace(/^\/l\/\?uddg=/, '');
-    out.push({ title: m[2].trim(), url: decodeURIComponent(href), snippet: '' });
+    const href = (m[1] || '').replace(/^\/l\/\?uddg=/, '');
+    let url = href; try { url = decodeURIComponent(href); } catch (_) {}
+    const title = String(m[2] || '').replace(/<[^>]+>/g, '').trim();
+    if (!url || !title) continue;
+    out.push({ title, url, snippet: '' });
   }
-  return out;
+  if (!out.length) throw new Error('ddg 无结果');
+  return { ok: true, query: q, results: out };
 }
