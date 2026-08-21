@@ -5869,56 +5869,86 @@ AppTools['math-formula'] = {
       render();
     });
 
-    // 将 KaTeX 生成的 SVG 规整：去掉以 ex 为单位的 style（独立作为 <img> 时会塌缩为 0），改用 viewBox 的像素尺寸并补白底
-    function normalizeSvg(svgStr){
-      const doc = new DOMParser().parseFromString(svgStr, 'image/svg+xml');
-      const s = doc.documentElement;
-      const vb = (s.getAttribute('viewBox')||'0 0 100 20').split(/[\s,]+/).map(Number);
-      const w = Math.ceil(vb[2]||100), h = Math.ceil(vb[3]||20);
-      s.setAttribute('width', String(w));
-      s.setAttribute('height', String(h));
-      s.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      s.removeAttribute('style');
-      if(!s.querySelector('rect.kxbg')){ const r=doc.createElementNS('http://www.w3.org/2000/svg','rect'); r.setAttribute('class','kxbg'); r.setAttribute('width','100%'); r.setAttribute('height','100%'); r.setAttribute('fill','#ffffff'); s.insertBefore(r, s.firstChild); }
-      return { svg: new XMLSerializer().serializeToString(s), w, h };
+    // 将 MathJax SVG 像素化（去掉 ex 单位、设 viewBox 等比像素）并补白底
+    async function texToSvg(tex){
+      await ensureMathJax();
+      const mjx = MathJax.tex2svg(tex, {display: true});
+      const svgEl = mjx.querySelector('svg');
+      if(!svgEl) return null;
+      const vb = (svgEl.getAttribute('viewBox')||'0 0 1000 400').trim().split(/[\s,]+/).map(Number);
+      // MathJax SVG viewBox 单位约定：1em = 1000 viewBox units；按目标字号 32px 换算像素
+      const FONT = 32;
+      const w = Math.ceil((vb[2]||1000) / 1000 * FONT);
+      const h = Math.ceil((vb[3]||400) / 1000 * FONT);
+      const clone = svgEl.cloneNode(true);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clone.setAttribute('width', String(w));
+      clone.setAttribute('height', String(h));
+      // 补白底（最底层 rect）
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('width', '100%'); bg.setAttribute('height', '100%'); bg.setAttribute('fill', '#ffffff');
+      clone.insertBefore(bg, clone.firstChild);
+      return { svg: new XMLSerializer().serializeToString(clone), w, h };
     }
-    // 逐行渲染并合并为一个多行 SVG（每行单独 renderToString，避免多公式被当成一条公式而报错）
-    function buildCombined(){
+    // 逐行渲染并合并为一个多行 SVG（每行单独 tex2svg，避免一条公式塞多行报错）
+    async function buildCombined(){
       const lines = src.value.split('\n').map(s => s.trim()).filter(Boolean);
       if(!lines.length) return null;
-      const valid = [];
-      for(const t of lines){ try{ valid.push(normalizeSvg(katex.renderToString(t, {throwOnError:false, displayMode:true, output:'svg'}))); }catch(_){ } }
-      if(!valid.length) return null;
-      const gap = 16, W = Math.max(...valid.map(p=>p.w)), H = valid.reduce((a,p)=>a+p.h,0) + gap*(valid.length-1);
+      const parts = [];
+      for(const t of lines){
+        try{ const p = await texToSvg(t); if(p) parts.push(p); }catch(_){ }
+      }
+      if(!parts.length) return null;
+      const gap = 16, W = Math.max(...parts.map(p=>p.w)), H = parts.reduce((a,p)=>a+p.h,0) + gap*(parts.length-1);
       let y = 0, inner = '';
-      for(const p of valid){ inner += p.svg.replace(/^<svg /, `<svg x="0" y="${y}" `); y += p.h + gap; }
-      return { svg:`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${inner}</svg>`, W, H };
+      for(const p of parts){
+        // 把每行 SVG 的内容抽出再嵌入合并的 <svg>，统一外层 width/height/viewBox
+        const m = p.svg.match(/<svg[^>]*>([\s\S]*)<\/svg>\s*$/);
+        if(m){ inner += `<g transform="translate(0,${y})">${m[1]}</g>`; y += p.h + gap; }
+      }
+      return { svg:`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="100%" height="100%" fill="#ffffff"/>${inner}</svg>`, W, H };
     }
     async function combinedToPng(combined){
       const blob = new Blob([combined.svg], {type:'image/svg+xml;charset=utf-8'});
       const url = URL.createObjectURL(blob);
       try{
-        const im = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error('图片加载失败')); i.src=url; });
+        const im = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error('SVG 加载失败')); i.src=url; });
         const scale = 3, c = document.createElement('canvas'); c.width = combined.W*scale; c.height = combined.H*scale;
         const cx = c.getContext('2d'); cx.fillStyle='#ffffff'; cx.fillRect(0,0,c.width,c.height); cx.drawImage(im, 0, 0, c.width, c.height);
         return await new Promise(r=>c.toBlob(b=>r(b), 'image/png'));
       } finally { URL.revokeObjectURL(url); }
     }
 
+    // 按需加载 MathJax 3 tex-svg 组件（用于真正生成 SVG；KaTeX 仅用于实时 HTML 预览）
+    async function ensureMathJax(){
+      if(window.MathJax && MathJax.tex2svg && MathJax.startup && MathJax.startup.promise){
+        try{ await MathJax.startup.promise; }catch(_){ } return MathJax;
+      }
+      if(!window.MathJax){
+        window.MathJax = {
+          tex: { packages: { '[+]': ['ams', 'boldsymbol'] }, tags:'none' },
+          svg: { fontCache: 'local', displayAlign: 'left' },
+          startup: { typeset: false, ready: ()=>{ MathJax.startup.defaultReady(); } }
+        };
+      }
+      await loadScriptSrc('https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js');
+      if(MathJax && MathJax.startup && MathJax.startup.promise){ try{ await MathJax.startup.promise; }catch(_){ } }
+      return MathJax;
+    }
+
     $('#mf-copy-tex', body).onclick = () => copyText(src.value);
     $('#mf-copy-html', body).onclick = () => copyText(preview.innerHTML);
-    $('#mf-svg', body).onclick = () => {
-      const combined = buildCombined();
-      if(!combined){ toast('请输入公式','err'); return; }
-      downloadBlob(new Blob([combined.svg], {type:'image/svg+xml;charset=utf-8'}), 'formula.svg');
+    $('#mf-svg', body).onclick = async () => {
+      const btn = $('#mf-svg', body); btn.disabled = true; const old = btn.textContent; btn.textContent = '渲染中…';
+      try{ const combined = await buildCombined(); if(!combined){ toast('请输入公式','err'); return; } downloadBlob(new Blob([combined.svg], {type:'image/svg+xml;charset=utf-8'}), 'formula.svg'); }
+      catch(e){ toast('SVG 生成失败：'+(e.message||e),'err'); }
+      finally{ btn.disabled = false; btn.textContent = old; }
     };
     $('#mf-png', body).onclick = async () => {
-      const combined = buildCombined();
-      if(!combined){ toast('请输入公式','err'); return; }
-      const btn = $('#mf-png', body); btn.disabled = true; btn.textContent = '生成中…';
-      try{ const png = await combinedToPng(combined); if(png) downloadBlob(png, 'formula.png'); else toast('PNG 生成失败','err'); }
+      const btn = $('#mf-png', body); btn.disabled = true; const old = btn.textContent; btn.textContent = '渲染中…';
+      try{ const combined = await buildCombined(); if(!combined){ toast('请输入公式','err'); return; } const png = await combinedToPng(combined); if(png) downloadBlob(png, 'formula.png'); else toast('PNG 生成失败','err'); }
       catch(e){ toast('PNG 生成失败：'+(e.message||e),'err'); }
-      btn.disabled = false; btn.textContent = '下载 PNG';
+      finally{ btn.disabled = false; btn.textContent = old; }
     };
   }
 };
@@ -6593,6 +6623,9 @@ const CHANGELOG = [
     '【AI 抠图修复】Failed to construct URL: Invalid base URL 已修复：抠图模型资源 publicPath 改用绝对 CDN 地址（jsdelivr → unpkg 多源容灾），不再走相对代理路径，AI 自动 / 手动抠图均可用',
     '【生活实用 · 排序】生活实用分类按「重要程度 + 完善程度」重新排序：单位换算 / 天气 / 农历 / 日期差等高频率工具置顶，传感器与拍照测量类置后；新工具一律追加在末尾',
     '【数据保留】更新仅替换网页文件，不触碰浏览器本地数据：收藏 / 历史记录 / 设置 / 倒计时列表均存于 localStorage，换版本不丢失（换域名才会分开）',
+    '【AI 抠图 · 二修】根因不是路径而是"包内无模型"：@imgly/background-removal@1.5.5 的 npm 包只有 JS、模型(~44MB)托管在 imgly 官方数据 CDN；之前传 jsdelivr dist 路径（那里没有 resources.json/models/）→ "Resource /models/isnet_quint8 not found"。修复：publicPath 指向官方 `https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/`（绝对 URL，避免 Invalid base URL），并放行 CSP connect-src',
+    '【数学公式 · 白板根因】KaTeX 0.16 根本没有 output:"svg" 选项（只支持 html/mathml/htmlAndMathml），`renderToString(..., output:"svg")` 实际返回 HTML `<span>`，`normalizeSvg` 用 SVG 解析 HTML 必然失败 → 导出 SVG/PNG 全空白。修复：改用 MathJax 3 `tex2svg` 真正生成 SVG（按需加载 cdn.jsdelivr.net/mathjax@3.2.2），再用 SVG→Image→canvas 转 PNG，SVG 与 PNG 内容一致',
+    '【logo · 透明化】网站名称 logo（nav-logo.png）与快捷方式图标（icons/icon-192/512/maskable-512/apple-touch-icon）统一改为"红色透明"版：去掉白/浅灰背景、保留红色羊头 + 抗锯齿边缘，alpha 范围 0-255。背景水印（bg-watermark，黑色带字）按要求不动',
   ]},
   { date:'2026-08-20', items:[
     '【PWA 安装】补全 manifest / Service Worker / 图标部署文件并新增「安装到主屏幕」按钮，手机端可真正添加到主屏幕（iOS 用 Safari 分享菜单、Android 用按钮或菜单安装）',
@@ -7261,19 +7294,20 @@ async function fetchJSONviaProxy(target){
   if(!d.ok) throw new Error('HTTP ' + d.status);
   return await d.json();
 }
-// @imgly 抠图：publicPath 必须为绝对 URL（库内部会用 new URL 解析，传相对路径会报 Invalid base URL）；
-// 依次尝试 jsdelivr → unpkg 两个 CDN 拉取模型资源，任一个可用即可
+// @imgly 抠图：publicPath 必须为绝对 URL（库内部用 new URL 解析）
+// ⚠️ npm @imgly/background-removal 包内**只有 JS**，模型（~44MB）托管在 imgly 官方数据 CDN
+//    jsdelivr/unpkg 的 npm dist 路径没有 resources.json/models/，必须用 staticimgly data CDN
 async function imglyRemove(removeBackground, f, opts){
   const bases = [
-    'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
-    'https://unpkg.com/@imgly/background-removal@1.5.5/dist/'
+    'https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/',
+    'https://staticimgly.com/@imgly/background-removal-data/1.5.4/dist/'
   ];
   let lastErr = null;
   for(const base of bases){
     try{ return await removeBackground(f, Object.assign({}, opts, { publicPath: base })); }
     catch(e){ lastErr = e; }
   }
-  throw lastErr || new Error('模型资源加载失败');
+  throw lastErr || new Error('模型加载失败：模型托管在 imgly 官方数据 CDN（staticimgly.com），请检查网络后重试');
 }
 // 各工具顶部的「联网处理」开关（共享同一设置）
 function setupNetToggle(body){
