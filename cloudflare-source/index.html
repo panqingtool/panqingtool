@@ -787,6 +787,7 @@ th{background:var(--bg);}
       <div class="install-guide-card" id="installGuideContent">
         <h3>📲 一键安装，离线可用</h3>
         <p style="color:var(--text-2);margin:6px 0 14px">安装后像 App 一样全屏打开，免浏览器地址栏，秒开即用（数据本地处理，不上传）。</p>
+        <p style="margin:0 0 14px;font-size:12.5px;color:var(--text-2)">📱 手机上面首次下载打开可能会有点慢，请耐心等待几秒。</p>
         <div class="ig-platform">
           <b>📱 iPhone / iPad（Safari）</b>
           <ol>
@@ -820,45 +821,21 @@ th{background:var(--bg);}
         </div>
 
         <div class="ig-platform" style="border:1px solid #e53935;margin-top:16px">
-          <p style="margin:0 0 10px;color:var(--text-2);font-size:13px;line-height:1.8">对于弹出下载标识但是无法使用或者之前下载了快捷方式但是不小心移除的两种情况导致的<span style="color:#e53935;font-weight:600">无法下载</span>的用户，需要清除电脑及手机浏览器全部数据：</p>
+          <p style="margin:0 0 8px;color:var(--text-2);font-size:13px;line-height:1.7">若已弹出下载标识但无法使用，或之前装过快捷方式又不慎移除，需清除浏览器数据后重试：</p>
 
-          <b style="color:#e53935;display:block;margin-top:8px;font-size:15px">💻 电脑端</b>
-          <ol style="margin:6px 0 0 20px;padding:0">
-            <li style="margin:6px 0"><b>1.Chrome / Edge / Firefox（快捷键法）</b><br>
-              已经下载找不到：右上角"..."→ "更多工具"→ "应用"→ "查看应用"，选择卸载（记得勾选"删除应用历史记录和数据"）或点击"..."创建桌面快捷方式→ 刷新。<br>
-              - 快捷键：Ctrl + Shift + Delete<br>
-              - 时间选"时间不限"或选择您首次打开此网站的时间，勾选"缓存图片和文件"，点击清除<br>
-              - 新建一个无痕窗口并重新访问。
-            </li>
-            <li style="margin:6px 0"><b>2.Mac Safari</b><br>
-              - 菜单栏：Safari浏览器 → 偏好设置 → 隐私 → 管理网站数据 → 全部移除<br>
-              - 新建一个无痕窗口并重新访问。
-            </li>
-            <li style="margin:6px 0"><b>3.通用方法（较易出错）</b><br>
-              - 打开网站 https://panqingtool.pages.dev<br>
-              - 按 F12 打开开发者工具 → 点击 Application（应用程序）标签<br>
-              - 左侧找到 Service Workers，点击 Unregister（取消注册）<br>
-              - 左侧找到 Storage（存储），点击 Clear site data（清除站点数据）<br>
-              - 关闭开发者工具，刷新页面（可多刷新几次）<br>
-              - 新建一个无痕窗口并重新访问。<br>
-              注：若想连带历史记录一起清，可直接点击菜单栏的"历史记录" → "清除历史记录"。
-            </li>
+          <b style="color:#e53935;display:block;margin-top:6px;font-size:15px">💻 电脑端</b>
+          <ol style="margin:4px 0 0 20px;padding:0">
+            <li style="margin:4px 0"><b>Chrome / Edge / Firefox（快捷键法）</b><br>已安装却找不到：右上角"..."→"更多工具"→"应用"→"查看应用"，选择卸载（勾选"删除应用历史记录和数据"），或点"..."创建桌面快捷方式后刷新。也可按 Ctrl+Shift+Delete，时间选"时间不限"，勾选"缓存图片和文件"清除，再用无痕窗口重新访问。</li>
+            <li style="margin:4px 0"><b>Mac Safari</b><br>菜单栏 Safari浏览器→偏好设置→隐私→管理网站数据→全部移除，再新建无痕窗口重新访问。</li>
+            <li style="margin:4px 0"><b>通用方法（开发者工具）</b><br>打开 https://panqingtool.pages.dev，按 F12→Application→左侧 Service Workers 点 Unregister，再 Storage 点 Clear site data，关闭后刷新（可多刷几次），用无痕窗口重新访问。如需连历史记录一起清，可点菜单栏"历史记录"→"清除历史记录"。</li>
           </ol>
 
-          <b style="color:#e53935;display:block;margin-top:12px;font-size:15px">📱 手机端</b>
-          <ol style="margin:6px 0 0 20px;padding:0">
-            <li style="margin:6px 0"><b>1.iPhone Safari</b><br>
-              - 设置 → App → Safari浏览器 → 清除历史记录与网站数据
-            </li>
-            <li style="margin:6px 0"><b>2.iPhone Chrome</b><br>
-              - Chrome App → 右下角"..." → 历史记录 → 清除全部数据（浏览数据） → 时间不限 → 勾选缓存 → 清除
-            </li>
-            <li style="margin:6px 0"><b>3.Android Chrome</b><br>
-              - Chrome App → 右上角"..." → 历史记录 → 清除全部数据（浏览数据） → 时间不限 → 勾选缓存 → 清除数据
-            </li>
-            <li style="margin:6px 0"><b>4.Android 其他浏览器</b><br>
-              - 设置 → 应用 → (应用管理→ )找到浏览器 → （存储 → ）清除全部数据
-            </li>
+          <b style="color:#e53935;display:block;margin-top:8px;font-size:15px">📱 手机端</b>
+          <ol style="margin:4px 0 0 20px;padding:0">
+            <li style="margin:4px 0"><b>iPhone Safari</b><br>设置→App→Safari浏览器→清除历史记录与网站数据。</li>
+            <li style="margin:4px 0"><b>iPhone Chrome</b><br>Chrome App→右下角"..."→历史记录→清除全部数据→时间不限→勾选缓存→清除。</li>
+            <li style="margin:4px 0"><b>Android Chrome</b><br>Chrome App→右上角"..."→历史记录→清除全部数据→时间不限→勾选缓存→清除数据。</li>
+            <li style="margin:4px 0"><b>Android 其他浏览器</b><br>设置→应用→找到对应浏览器→存储→清除全部数据。</li>
           </ol>
         </div>
       </div>
@@ -1139,10 +1116,20 @@ AppTools['web-search'] = {
       btn.disabled = true;
       status.innerHTML = '<span class="loading"><span class="spinner"></span>正在联网搜索…</span>';
       results.innerHTML = '';
+      // 规整搜索结果链接：补齐缺失协议（http/https/裸域名/协议相对），统一升级为 https；
+      // 链接残缺无法修复时回退为「以标题在 Google 搜索」，保证点击一定有响应。
+      function normalizeWsUrl(raw, title){
+        var u = (raw || '').trim();
+        if(/^https?:\/\//i.test(u)) return u.replace(/^http:/i, 'https:');
+        if(/^\/\//.test(u)) return 'https:' + u;
+        if(/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(u)) return 'https://' + u;
+        if(title) return 'https://www.google.com/search?q=' + encodeURIComponent(title);
+        return '#';
+      }
       function render(list, provider){
         status.innerHTML = '共 <b>' + list.length + '</b> 条结果 <span class="ws-tag">via ' + (provider || 'auto') + '</span>';
         results.innerHTML = list.map(function(x){
-          const u = (/^https?:\/\//i.test(x.url || '') ? x.url : '#');
+          var u = normalizeWsUrl(x.url || x.link || x.href, x.title);
           return '<a class="ws-item" href="' + escapeHtml(u) + '" target="_blank" rel="noopener noreferrer">' +
             '<div class="ws-title">' + escapeHtml(x.title || x.url) + '</div>' +
             '<div class="ws-url">' + escapeHtml(x.url) + '</div>' +
@@ -2708,132 +2695,6 @@ AppTools['img-matting-manual'] = {
     drawAll();
   }
 };
-
-// 重新重做的「AI 自动抠图」独立应用（模型托管在工具箱本站 /imgly-data，国内可达；publicPath 用绝对同源 URL）
-AppTools['img-matting-ai'] = {
-  build(body){
-    body.innerHTML = `
-      <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，引擎加载更快更稳）</label>
-      <div class="mb"><label class="field-label">选择图片（人物 / 食物 / 商品均可，可多选批量抠图）</label>
-        <input type="file" class="inp" id="ia-file" accept="image/*" multiple aria-label="选择图片"></div>
-      <div class="row">
-        <div class="mb"><label class="field-label">输出背景</label>
-          <select class="sel" id="ia-bg" aria-label="输出背景">
-            <option value="transparent">透明背景（PNG）</option>
-            <option value="#ffffff">白底</option>
-            <option value="#2e6fd6">蓝底（证件照风）</option>
-            <option value="custom">自定义颜色</option>
-          </select>
-          <input type="color" class="inp" id="ia-custom" value="#ffd700" aria-label="自定义背景色" style="display:none;margin-top:8px;"></div>
-        <div class="mb"><label class="field-label">模型精度</label>
-          <select class="sel" id="ia-model" aria-label="模型">
-            <option value="isnet_quint8">small（约 44MB，推荐，首次需下载）</option>
-            <option value="isnet_fp16">medium（更精细，约 88MB）</option>
-            <option value="isnet">large（最高精度，约 176MB）</option>
-          </select></div>
-        <div class="mb"><label class="field-label">边缘羽化：<b id="ia-feathv">1.2</b> px</label>
-          <input type="range" id="ia-feather" min="0" max="4" step="0.2" value="1.2" aria-label="边缘羽化"></div>
-        <div class="mb"><label class="field-label">输出缩放（高清）</label>
-          <select class="sel" id="ia-scale" aria-label="输出缩放">
-            <option value="1">1×（原始清晰度）</option>
-            <option value="1.5">1.5×</option>
-            <option value="2">2×（超清）</option>
-          </select></div>
-      </div>
-      <div class="btn-row">
-        <button class="btn" id="ia-run" disabled>🪄 开始 AI 抠图</button>
-      </div>
-      <div id="ia-prog" class="hint"></div>
-      <div class="hint">🔒 全程浏览器本地 AI 抠图，图片不上传；模型托管在工具箱本站（国内可达），首次约下载 44MB，之后浏览器缓存可离线秒开。若加载失败，可改用「手动框选抠图」应用。</div>
-      <div id="ia-result"></div>`;
-
-    setupNetToggle(body);
-    let files = [];
-    ntBatchAddUI(body,'ia-file',(all)=>{ files=all; $('#ia-run', body).disabled = !all.length; });
-    $('#ia-bg', body).onchange = () => { const c = $('#ia-custom', body); if(c) c.style.display = $('#ia-bg', body).value==='custom' ? 'inline-block':'none'; };
-    $('#ia-feather', body).oninput = () => $('#ia-feathv', body).textContent = $('#ia-feather', body).value;
-
-    $('#ia-run', body).onclick = async () => {
-      if(!files.length) return;
-      const btn = $('#ia-run', body); btn.disabled = true;
-      const progEl = $('#ia-prog', body);
-      btn.innerHTML = '<span class="loading"><span class="spinner"></span>加载模型中…</span>';
-      progEl.textContent = '首次使用会从本站下载约 44MB 模型（约 10s，依赖网速）。已预加载则秒开。';
-      const bgMode = $('#ia-bg', body).value, customColor = $('#ia-custom', body).value, model = $('#ia-model', body).value;
-      const feather = +($('#ia-feather', body).value) || 0, scale = +($('#ia-scale', body).value) || 1;
-      let removeBackground;
-      try{
-        let mod;
-        try{ mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm'); }
-        catch(_){ mod = await import('https://esm.sh/@imgly/background-removal@1.5.5'); }
-        removeBackground = mod.removeBackground;
-      }catch(err){
-        progEl.innerHTML = `<span style="color:var(--error)">❌ AI 引擎加载失败：${escapeHtml(errMsg(err, '网络异常'))}<br>💡 可改用「手动框选抠图」应用，无需联网即可使用。</span>`;
-        btn.disabled = false; btn.textContent = '🪄 开始 AI 抠图'; return;
-      }
-      try{
-        const items = [];
-        for(let i=0;i<files.length;i++){
-          const f = files[i];
-          btn.innerHTML = `<span class="loading"><span class="spinner"></span>抠图中 ${i+1}/${files.length}…</span>`;
-          progEl.textContent = `正在处理第 ${i+1}/${files.length} 张…`;
-          const t0 = performance.now();
-          const fgBlob = await imglyRemove(removeBackground, f, {
-            model,
-            output: { format: 'image/png' },
-            progress: (key, current, total) => { if(total) progEl.textContent = `第 ${i+1} 张 ${key}: ${Math.round(current/total*100)}%`; }
-          });
-          const dt = ((performance.now()-t0)/1000).toFixed(1);
-          progEl.textContent = `第 ${i+1} 张抠图完成（${dt}s），正在合成结果…`;
-          const fgImg = await fileToImage(fgBlob);
-          const w = Math.max(1, Math.round(fgImg.naturalWidth * scale)), h = Math.max(1, Math.round(fgImg.naturalHeight * scale));
-          const c = document.createElement('canvas'); c.width = w; c.height = h;
-          const cx = c.getContext('2d');
-          cx.imageSmoothingQuality = 'high';
-          if(bgMode === 'transparent'){
-            if(feather > 0){ cx.filter = `blur(${feather}px)`; cx.globalAlpha = 0.5; cx.drawImage(fgImg, 0, 0, w, h); cx.filter = 'none'; cx.globalAlpha = 1; }
-            cx.drawImage(fgImg, 0, 0, w, h);
-          } else {
-            cx.fillStyle = bgMode === 'custom' ? customColor : bgMode; cx.fillRect(0,0,w,h);
-            cx.drawImage(fgImg, 0, 0, w, h);
-            if(feather > 0){ cx.save(); cx.globalAlpha = 0.6; cx.filter = `blur(${feather}px)`; cx.drawImage(fgImg, 0, 0, w, h); cx.restore(); }
-          }
-          const base = (f.name.replace(/\.[^.]+$/, '') || 'image');
-          await new Promise(r => c.toBlob(b => { items.push({ name: `${base}_matting.png`, blob: b }); r(); }, 'image/png'));
-        }
-        renderBatchResults($('#ia-result', body), items);
-        progEl.innerHTML = '<span style="color:var(--success)">✅ 抠图完成</span>';
-      }catch(err){
-        progEl.innerHTML = `<span style="color:var(--error)">抠图失败：${escapeHtml(errMsg(err))}<br>💡 可改用「手动框选抠图」应用</span>`;
-      }
-      btn.disabled = false; btn.textContent = '🪄 开始 AI 抠图';
-    };
-  }
-};
-
-// 抠图预览示例：生成一张渐变 + 圆形的合成图，自动填入"手动框选"模式便于试用
-async function showMattingDemo(body){
-  try{
-    const c = document.createElement('canvas'); c.width = 720; c.height = 480;
-    const ctx = c.getContext('2d');
-    const g = ctx.createLinearGradient(0,0,720,480); g.addColorStop(0,'#fde68a'); g.addColorStop(1,'#fca5a5');
-    ctx.fillStyle = g; ctx.fillRect(0,0,720,480);
-    ctx.fillStyle = '#1e40af'; ctx.beginPath(); ctx.arc(360,240,140,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 42px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('示例图像', 360, 240);
-    ctx.fillStyle = '#0f172a'; ctx.font = '20px sans-serif';
-    ctx.fillText('演示：拖动鼠标画矩形 / 双击闭合多边形 / 按住画套索', 360, 410);
-    const blob = await new Promise(r => c.toBlob(r, 'image/png'));
-    const file = new File([blob], 'demo_matting.png', {type:'image/png'});
-    // 自动切换到手动模式
-    body.querySelectorAll('.tab').forEach(t => t.classList.toggle('tab-act', t.dataset.tab === 'manual'));
-    body.querySelectorAll('[data-pane]').forEach(p => p.hidden = (p.dataset.pane !== 'manual'));
-    const inp = body.querySelector('#mm-file');
-    const dt = new DataTransfer(); dt.items.add(file); inp.files = dt.files;
-    inp.dispatchEvent(new Event('change'));
-    toast('已载入示例图片，请用鼠标在画面上拖动画出选区');
-  }catch(e){ toast('示例生成失败','err'); }
-}
 
 /* ===================== 文档工具 ===================== */
 
@@ -5164,6 +5025,15 @@ AppTools['tts'] = {
 };
 
 // 在线 OCR（批量处理：多张图片逐一识别，保留各自排版，导出全部 TXT）
+// 去掉 Tesseract 中英混合识别时在汉字 / 全角标点之间误插的空格，保留英文词间空格
+function cleanOcrText(t){
+  if(!t) return t;
+  return t
+    .replace(/([\u3400-\u9fff\u3000-\u303f\uff00-\uffef])\s+([\u3400-\u9fff\u3000-\u303f\uff00-\uffef])/g, '$1$2')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n');
+}
+
 AppTools['ocr'] = {
   build(body){
     body.innerHTML = `
@@ -5269,16 +5139,21 @@ AppTools['ocr'] = {
             if(text === null) throw lastErr || new Error('语言模型加载失败');
             texts.push(pages.length>1 ? `—— 第 ${pi+1} 页 ——\n${text}` : text);
           }
-          const text = texts.join('\n\n');
+          const text = cleanOcrText(texts.join('\n\n'));
           blocks.push(`<div class="batch-item" style="text-align:left"><div class="batch-name">${escapeHtml(f.name)}</div><pre class="result-box" style="white-space:pre-wrap;font-size:13px;max-height:220px;overflow:auto;">${escapeHtml(text)}</pre><button class="btn btn-ghost btn-sm" data-copy="${idx-1}">复制</button></div>`);
-          items.push({ name: (f.name.replace(/\.[^.]+$/, '') || 'ocr') + '.txt', blob: new Blob([text], {type:'text/plain'}) });
+          items.push({ name: (f.name.replace(/\.[^.]+$/, '') || 'ocr') + '.txt', text: text });
         }catch(err){
           blocks.push(`<div class="batch-item" style="text-align:left"><div class="batch-name">${escapeHtml(f.name)}</div><div class="result-box err">识别失败：${escapeHtml(errMsg(err, '未知错误'))}</div></div>`);
         }
       }
-      $('#oc-result', body).innerHTML = `<div class="batch-info">共识别 ${files.length} 个文件</div><div class="thumb-grid">${blocks.join('')}</div><div class="btn-row"><button class="btn" id="oc-zip">导出全部 TXT（ZIP）</button></div><div class="hint" style="margin-top:8px;">🔎 解读：OCR 为机器识别，手写体、艺术字、模糊或倾斜图片可能出现错字 / 漏字；请对照原图核对关键数字与姓名。如需更高准确率，可在「图片预处理」选二值化，并尽量使用清晰正拍的图。</div>`;
-      $('#oc-result', body).querySelectorAll('[data-copy]').forEach(b => b.onclick = () => { const i = +b.dataset.copy; items[i].blob.text().then(t => copyText(t)); });
-      $('#oc-zip', body).onclick = () => downloadZip(items, 'ocr-texts.zip');
+      $('#oc-result', body).innerHTML = `<div class="batch-info">共识别 ${files.length} 个文件</div><div class="thumb-grid">${blocks.join('')}</div><div class="btn-row"><button class="btn" id="oc-txt">导出全部 TXT</button><button class="btn btn-ghost" id="oc-word">导出 Word</button></div><div class="hint" style="margin-top:8px;">🔎 解读：OCR 为机器识别，手写体、艺术字、模糊或倾斜图片可能出现错字 / 漏字；请对照原图核对关键数字与姓名。如需更高准确率，可在「图片预处理」选二值化，并尽量使用清晰正拍的图。</div>`;
+      $('#oc-result', body).querySelectorAll('[data-copy]').forEach(b => b.onclick = () => { const i = +b.dataset.copy; copyText(items[i].text); });
+      $('#oc-txt', body).onclick = () => { const all = items.map(it => it.text).join('\n\n'); downloadBlob(new Blob([all], {type:'text/plain;charset=utf-8'}), 'ocr-texts.txt'); };
+      $('#oc-word', body).onclick = () => {
+        const all = items.map(it => '<p>' + escapeHtml(it.text).replace(/\n/g, '<br>') + '</p>').join('');
+        const wdoc = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body>' + all + '</body></html>';
+        downloadBlob(new Blob(['﻿' + wdoc], {type:'application/msword'}), 'ocr-texts.doc');
+      };
       btn.disabled = false; btn.textContent = '开始识别';
     };
   }
@@ -5403,6 +5278,7 @@ AppTools['pdf-sign'] = {
     body.innerHTML = `
       <style>
         #ps-preview .pg{position:relative;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.12);margin:0 auto 14px;max-width:100%}
+        #ps-preview .pg-cv{display:block;width:100%;height:auto;max-width:100%}
         #ps-preview .stamp{position:absolute;z-index:6;cursor:move;touch-action:none;border:1px dashed rgba(200,16,46,.4);background-repeat:no-repeat;background-position:center;background-size:contain}
       </style>
       <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，解析库加载更快更稳）</label>
@@ -6088,7 +5964,6 @@ AppTools['math-formula'] = {
 const TOOLS = [
   /* ============ 图片工具 ============ */
   {id:'ocr',          name:'在线 OCR 识字',      icon:'👁️', cat:'image', desc:'支持图片与 PDF 扫描件（自动按页栅格化）一键转文字，支持中文+英文 / 日语 / 韩语 / 法语 / 德语 / 西语 / 俄语 / 葡语 / 意语 / 阿语等多语言识别，灰度 / 对比度 / 二值化预处理，逐张复制或打包 ZIP 下载 TXT；模型首次下载后可离线缓存。', batch:true},
-  {id:'img-matting-ai',     name:'AI 自动抠图',     icon:'🪄', cat:'image', desc:'浏览器本地 AI 一键抠图（人物 / 食物 / 商品，模型托管本站，国内可达），透明 / 白 / 蓝 / 自定义底色，支持精度 / 边缘羽化 / 高清缩放，可批量。', batch:true},
   {id:'img-matting-manual', name:'手动框选抠图',   icon:'✂️', cat:'image', desc:'手动框选抠图，支持矩形 / 多边形 / 套索任意形状，撤销重做、画布缩放平移，同一张图可多次框选不同对象并打包导出，无需联网。', batch:true},
   {id:'idphoto-bg',   name:'证件照换背景',        icon:'🪪', cat:'image', desc:'AI 分割后蓝 / 白 / 红 / 自定义纯色换底，边缘羽化柔化发丝，支持批量；常用于证件照。', batch:true},
   {id:'img-idphoto',  name:'证件照裁剪',          icon:'🪪', cat:'image', desc:'一寸 / 二寸 / 小一寸 / 小二寸 / 大一寸 / 护照等常用证件尺寸预设，自动居中裁剪导出 PNG。'},
@@ -6730,6 +6605,14 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
+  { date:'2026-08-22', items:[
+    '【安装引导 · 点击有响应】顶部「📱 安装」按钮改为：点击始终打开安装引导面板（不再因 beforeinstallprompt 已消费而静默无响应），并保留原生一键安装唤起；面板内容紧凑化——去除清单双编号、项间空行与行首逗号，并在「把工具箱装到主屏幕」下新增"手机上面首次下载打开可能会有点慢"提示',
+    '【PWA · 图标圆角】桌面快捷方式图标改为圆角：maskable 图标由满铺方角改为圆角+透明（手机端由系统遮罩仍为圆角，不受影响），Windows 桌面快捷方式不再方正',
+    '【删除】移除「AI 自动抠图」应用（模型加载长期不可用）；保留「手动框选抠图」与「AI 换背景」',
+    '【OCR · 去空格】在线 OCR 修复 Tesseract 中英混合识别时在汉字/全角标点之间误插的空格（复制与预览均不再有多余空格，英文词间空格保留）；"导出全部 TXT(ZIP)"无响应 → 改为「导出全部 TXT」与「导出 Word(.doc)」直接下载',
+    '【联网搜索 · 链接可打开】搜索结果链接规整：补齐缺失协议（http/https/裸域名/协议相对），统一升级 https，链接残缺无法修复时回退为"以标题在 Google 搜索"，彻底解决点不开网站的问题',
+    '【PDF 签章 · 位置一致】预览画布改为铺满预览区域（消除左右/上下信箱留白与比例失真），预览印章位置与下载后实际位置现在完全一致（坐标系统一为按页比例）',
+  ]},
   { date:'2026-08-21', items:[
     '【AI 抠图 · 缺块补齐】Failed to fetch /onnxruntime-web/ort-wasm-simd.wasm with size 4194304 but got 715569 根因：模型分块文件在 /imgly-data/1.5.5/dist/ 下少了 2 个分块（e9445ca5... 与 b5322978...）。修复：从 staticimgly.com 重新下载并校验 SHA256，全部 51 个默认分块完整；同时补齐 isnet_fp16 / isnet 模型分块（共 92 个分块 / ~280MB），现在 small / medium 都能稳定加载',
     '【手动框选抠图 · 自定义背景色真正生效】之前只有默认黄色能用，是 color picker ↔ hex 输入 ↔ renderManualResult 联动时序不稳定。修复：用 addEventListener 重新绑定 input/change 双事件、抽 syncManualBgUI / refreshManualResult 单独函数，色彩改动即时重渲染（不再锁死黄色）',
@@ -9621,8 +9504,9 @@ renderTools();
   }
   if(openInstallGuide) openInstallGuide.addEventListener('click', function(e){
     e.preventDefault(); e.stopPropagation();
-    // 优先：直接调用浏览器原生安装提示（最贴近用户预期）
-    if(!triggerNativeInstall()) showInstallGuide();
+    // 始终打开引导面板（保证有可见反馈），若浏览器支持原生安装则同时唤起
+    showInstallGuide();
+    if(deferred) triggerNativeInstall();
   });
   if(installClose) installClose.addEventListener('click', hideInstallGuide);
   if(installZoom) installZoom.addEventListener('click', function(){ const on = installOverlay.classList.toggle('fs-on'); installZoom.textContent = on ? '🗗' : '⛶'; });
