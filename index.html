@@ -1107,7 +1107,7 @@ AppTools['web-search'] = {
     // 仅首次注入结果列表样式，避免重复
     if(!document.getElementById('ws-style')){
       const s = document.createElement('style'); s.id = 'ws-style';
-      s.textContent = '.ws-item{display:block;text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;color:var(--text);transition:border-color .15s,box-shadow .15s;}.ws-item:hover{border-color:var(--primary);box-shadow:var(--shadow-hover);}.ws-title{font-weight:600;color:var(--primary);font-size:15px;margin-bottom:2px;}.ws-url{font-size:12px;color:var(--text-2);word-break:break-all;margin-bottom:4px;}.ws-snippet{font-size:13px;color:var(--text);line-height:1.5;}.ws-tag{display:inline-block;font-size:11px;padding:2px 6px;border-radius:4px;background:var(--bg);color:var(--text-2);margin-left:6px;vertical-align:middle}';
+      s.textContent = '.ws-item{display:block;text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;color:var(--text);transition:border-color .15s,box-shadow .15s;}.ws-item:hover{border-color:var(--primary);box-shadow:var(--shadow-hover);}.ws-title{font-weight:600;color:var(--primary);font-size:15px;margin-bottom:2px;}.ws-url{font-size:12px;color:var(--text-2);word-break:break-all;margin-bottom:4px;}.ws-snippet{font-size:13px;color:var(--text);line-height:1.5;}.ws-tag{display:inline-block;font-size:11px;padding:2px 6px;border-radius:4px;background:var(--bg);color:var(--text-2);margin-left:6px;vertical-align:middle}.ws-jump{display:block;text-align:center;text-decoration:none;background:linear-gradient(135deg,#1890ff,#40a9ff);color:#fff;font-weight:600;font-size:14px;padding:11px 14px;border-radius:10px;margin-bottom:12px;box-shadow:var(--shadow);transition:transform .12s,box-shadow .12s;}.ws-jump:hover{transform:translateY(-2px);box-shadow:var(--shadow-hover);}';
       document.head.appendChild(s);
     }
     body.innerHTML = `
@@ -1138,9 +1138,12 @@ AppTools['web-search'] = {
         if(title) return 'https://www.google.com/search?q=' + encodeURIComponent(title);
         return '#';
       }
-      function render(list, provider){
+      function render(list, provider, kw){
         status.innerHTML = '共 <b>' + list.length + '</b> 条结果 <span class="ws-tag">via ' + (provider || 'auto') + '</span>';
-        results.innerHTML = list.map(function(x){
+        var jump = kw
+          ? '<a class="ws-jump" href="https://www.baidu.com/s?wd=' + encodeURIComponent(kw) + '" target="_blank" rel="noopener noreferrer">🔗 在百度中搜索「' + escapeHtml(kw) + '」并打开结果 ↗</a>'
+          : '';
+        results.innerHTML = jump + list.map(function(x){
           var u = normalizeWsUrl(x.url || x.link || x.href, x.title);
           return '<a class="ws-item" href="' + escapeHtml(u) + '" target="_blank" rel="noopener noreferrer">' +
             '<div class="ws-title">' + escapeHtml(x.title || x.url) + '</div>' +
@@ -1152,7 +1155,7 @@ AppTools['web-search'] = {
       try{
         const r = await fetch('/search?q=' + encodeURIComponent(kw));
         const j = await r.json();
-        if(r.ok && j && j.ok && j.results && j.results.length){ render(j.results, j.provider); btn.disabled = false; return; }
+        if(r.ok && j && j.ok && j.results && j.results.length){ render(j.results, j.provider, kw); btn.disabled = false; return; }
       }catch(e){}
       // 直连兜底：维基百科搜索（浏览器端，无需后端；CF 不可用时仍可搜）
       try{
@@ -1162,7 +1165,7 @@ AppTools['web-search'] = {
         const list = ((j2.query && j2.query.search) || []).map(function(it){
           return { title: it.title, url: 'https://zh.wikipedia.org/wiki/' + encodeURIComponent(it.title.replace(/ /g,'_')), snippet: (it.snippet||'').replace(/<[^>]+>/g,'') };
         });
-        if(list.length){ render(list, 'wikipedia(直连)'); btn.disabled = false; return; }
+        if(list.length){ render(list, 'wikipedia(直连)', kw); btn.disabled = false; return; }
       }catch(e2){}
       status.innerHTML = '⚠️ 搜索后端暂不可用，且直连维基百科也失败。请确认网络可访问外网，或将本仓库部署到 Cloudflare Pages（含 functions/）启用代理。';
       btn.disabled = false;
@@ -5037,13 +5040,25 @@ AppTools['tts'] = {
 };
 
 // 在线 OCR（批量处理：多张图片逐一识别，保留各自排版，导出全部 TXT）
-// 去掉 Tesseract 中英混合识别时在汉字 / 全角标点之间误插的空格，保留英文词间空格
+// 彻底清理 Tesseract 误插的多余空格：CJK / 全角标点两侧空格全去；
+// 行内连续空格合并为 1 个（保留英文单词间单空格，避免单词粘连）；多余空行合并。
 function cleanOcrText(t){
   if(!t) return t;
+  const CJK = '[　-〿㐀-䶿一-鿿＀-￯]'; // 全角空格/全角标点 + CJK 各区段
   return t
-    .replace(/([\u3400-\u9fff\u3000-\u303f\uff00-\uffef])\s+([\u3400-\u9fff\u3000-\u303f\uff00-\uffef])/g, '$1$2')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n[ \t]+/g, '\n');
+    .replace(/\t/g, ' ')
+    .split('\n')
+    .map(function(line){
+      // 去掉 CJK/全角标点两侧的空格
+      line = line
+        .replace(new RegExp('(' + CJK + ')\\s+', 'g'), '$1')
+        .replace(new RegExp('\\s+(' + CJK + ')', 'g'), '$1');
+      // 连续空格合并为单个（英文词间保留 1 个，避免单词被拼在一起）
+      line = line.replace(/ {2,}/g, ' ');
+      return line.trim();
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n'); // 多余空行合并为一段
 }
 
 AppTools['ocr'] = {
@@ -6618,14 +6633,14 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-22', items:[
-    '【文档与交互优化】「把工具箱装到主屏幕」板块放大排版，删除冗余提示语（如"浏览器才会识别这是 PWA"），精简标点与行距；新增手机首次加载慢的温馨提示',
+    '【文档与交互优化】「把工具箱装到主屏幕」板块放大排版，精简标点与行距；新增手机首次加载慢的温馨提示',
     '【应用功能修复】移除「AI 自动抠图」（功能不可用）；「在线 OCR 识字」修复复制结果含空格问题，取消 ZIP 导出、改为导出 TXT 单文件；「联网搜索」修复链接无法在应用内打开、改为系统浏览器打开；「PDF 签章/签名」修复预览与下载位置不一致（统一坐标系）；修复所有应用"识别失败：undefined"错误',
     '【PWA 与部署】停用 CloudStudio 部署链接，仅保留 pages.dev 单域名部署；修复 SW 更新机制（版本号变更后自动更新，用户无需手动清缓存）；修复电脑端「安装」按钮无响应；优化桌面快捷方式图标（圆角化）；设置 sw.js 的 Cache-Control: no-cache 确保每次获取最新版本；删除废弃文件与多余缓存',
     '【UI 优化】对支持批量处理的应用（如 IP 归属查询、手机号归属）标注「批量」标识',
     '【稳定性与性能】增强快捷方式稳定性与进入速度；调整 Service Worker 的 fetch 重定向逻辑修复 ERR_FAILED 报错；设置每次发布后首次访问需刷新一次、后续自动更新，不再需要手动清缓存',
   ]},
   { date:'2026-08-21', items:[
-    '【AI 抠图 · 缺块补齐】Failed to fetch /onnxruntime-web/ort-wasm-simd.wasm with size 4194304 but got 715569 根因：模型分块文件在 /imgly-data/1.5.5/dist/ 下少了 2 个分块（e9445ca5... 与 b5322978...）。修复：从 staticimgly.com 重新下载并校验 SHA256，全部 51 个默认分块完整；同时补齐 isnet_fp16 / isnet 模型分块（共 92 个分块 / ~280MB），现在 small / medium 都能稳定加载',
+    '【AI 抠图 · 缺块补齐】模型分块缺失导致加载报错。修复：从官方数据 CDN 重下并校验，补齐全部默认分块与 isnet_fp16 / isnet 模型（共 92 个分块 / ~280MB），small / medium 均稳定加载',
     '【手动框选抠图 · 自定义背景色真正生效】之前只有默认黄色能用，是 color picker ↔ hex 输入 ↔ renderManualResult 联动时序不稳定。修复：用 addEventListener 重新绑定 input/change 双事件、抽 syncManualBgUI / refreshManualResult 单独函数，色彩改动即时重渲染（不再锁死黄色）',
     '【手机端 · 安装引导升级】新增头部「📱 安装」按钮（电脑+手机通用入口），点击打开全平台安装说明面板：iOS Safari「分享 → 添加到主屏幕」分步图示、 Android Chrome/华为/小米「⋮菜单 → 安装」步骤、 电脑 Chrome/Edge「地址栏 ⊕ / ⋮菜单」；支持 beforeinstallprompt 时显示「⚡ 一键安装到本机」按钮，浏览器弹原生确认框；已安装（standalone）自动隐藏',
     '【PWA · 图标已就位】网站名称 logo（nav-logo.png）+ 快捷方式图标（icons/icon-192/512/maskable-512/apple-touch-icon）已替换为红色圆角版（用户提供下载.png，去白底透明、居中缩放 15% 边距，maskable 留 40% 安全区）；背景水印（bg-watermark，黑字）按要求不动',
@@ -6650,7 +6665,7 @@ const CHANGELOG = [
     '【AI 抠图修复】Failed to construct URL: Invalid base URL 已修复：抠图模型资源 publicPath 改用绝对 CDN 地址（jsdelivr → unpkg 多源容灾），不再走相对代理路径，AI 自动 / 手动抠图均可用',
     '【生活实用 · 排序】生活实用分类按「重要程度 + 完善程度」重新排序：单位换算 / 天气 / 农历 / 日期差等高频率工具置顶，传感器与拍照测量类置后；新工具一律追加在末尾',
     '【数据保留】更新仅替换网页文件，不触碰浏览器本地数据：收藏 / 历史记录 / 设置 / 倒计时列表均存于 localStorage，换版本不丢失（换域名才会分开）',
-    '【AI 抠图 · 二修】根因不是路径而是"包内无模型"：@imgly/background-removal@1.5.5 的 npm 包只有 JS、模型(~44MB)托管在 imgly 官方数据 CDN；之前传 jsdelivr dist 路径（那里没有 resources.json/models/）→ "Resource /models/isnet_quint8 not found"。修复：publicPath 指向官方 `https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/`（绝对 URL，避免 Invalid base URL），并放行 CSP connect-src',
+    '【AI 抠图 · 二修】根因是 npm 包不含模型文件（~44MB 托管在 imgly 官方数据 CDN），旧路径无 resources.json/models/ 致"Resource not found"。修复：publicPath 改用官方数据 CDN 绝对地址（避免 Invalid base URL），并放行 CSP connect-src',
     '【数学公式 · 白板根因】KaTeX 0.16 根本没有 output:"svg" 选项（只支持 html/mathml/htmlAndMathml），`renderToString(..., output:"svg")` 实际返回 HTML `<span>`，`normalizeSvg` 用 SVG 解析 HTML 必然失败 → 导出 SVG/PNG 全空白。修复：改用 MathJax 3 `tex2svg` 真正生成 SVG（按需加载 cdn.jsdelivr.net/mathjax@3.2.2），再用 SVG→Image→canvas 转 PNG，SVG 与 PNG 内容一致',
     '【logo · 透明化】网站名称 logo（nav-logo.png）与快捷方式图标（icons/icon-192/512/maskable-512/apple-touch-icon）统一改为"红色透明"版：去掉白/浅灰背景、保留红色羊头 + 抗锯齿边缘，alpha 范围 0-255。背景水印（bg-watermark，黑色带字）按要求不动',
     '【AI 抠图 · 三修 · 站内托管】Failed to fetch 根因：staticimgly.com 在国内不可达。修复：把 @imgly/background-removal-data 全部资源（3 个 ONNX 模型 + 7 个 wasm，共 100+ 文件 ~200MB）下载并上传到本站 /imgly-data/1.5.5/dist/（dist/ 与 cloudflare-source/ 各一份）；publicPath 改用 `window.location.origin + "/imgly-data/1.5.5/dist/"` 跨部署适配；默认模型 isnet_quint8 11/11 chunks 完整，浏览器同源加载稳定无墙',
