@@ -28,10 +28,10 @@ const APP_SHELL = [
   './manifest.webmanifest',
   './nav-logo.png',
   './bg-watermark.png',
-  './icons/icon-192.png?v=20260822-2',
-  './icons/icon-512.png?v=20260822-2',
-  './icons/maskable-512.png?v=20260822-2',
-  './icons/apple-touch-icon.png?v=20260822-2'
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/maskable-512.png',
+  './icons/apple-touch-icon.png'
 ];
 
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'unpkg.com', 'esm.sh'];
