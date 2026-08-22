@@ -789,6 +789,7 @@ th{background:var(--bg);}
         <p style="color:var(--text-2);margin:6px 0 14px">安装后像 App 一样全屏打开，免浏览器地址栏，秒开即用（数据本地处理，不上传）。</p>
         <p style="margin:0 0 14px;font-size:12.5px;color:var(--text-2)">📱 手机上面首次下载打开可能会有点慢，请耐心等待几秒。</p>
         <div style="margin:0 0 14px;padding:8px 12px;background:rgba(82,196,26,.1);border:1px solid rgba(82,196,26,.35);border-radius:8px;font-size:12.5px;color:var(--text-2);line-height:1.6">💡 若快捷方式已添加但暂时无法打开网站，可能是应用正在更新，请勿移除快捷方式，稍等片刻更新成功之后待你刷新即可恢复访问。</div>
+        <div style="margin:0 0 14px;padding:8px 12px;background:rgba(250,173,20,.1);border:1px solid rgba(250,173,20,.4);border-radius:8px;font-size:12.5px;color:var(--text-2);line-height:1.6">⚠️ 若遇白屏现象，通常为缓存加载延迟所致，关闭运行进程重开或强制刷新（Windows 系统按 <b>Ctrl + Shift + R</b>、Mac 系统按 <b>Cmd + Shift + R</b> 强制刷新；或按 <b>Alt + F4</b> 退出再重启；或 <b>Ctrl + Shift + Esc</b> 结束进程）页面即可。</div>
         <div class="ig-platform">
           <b>📱 iPhone / iPad（Safari）</b>
           <ol style="margin:2px 0 0 20px;padding:0;line-height:1.35">
@@ -9428,7 +9429,8 @@ renderTools();
   var deferred=null;
   var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
-  if(isStandalone) return;
+  // 注：不再因 standalone 提前 return —— 这样「已安装快捷方式」内点击顶部「📱 安装」按钮
+  // 仍能打开引导面板并提示「已安装」，避免按钮无反应（八修#3/#5）。
 
   // Android/Chrome/Edge：beforeinstallprompt 触发的安装按钮
   function showInstall(){
@@ -9476,7 +9478,7 @@ renderTools();
     setTimeout(function(){ if(d.parentNode) d.remove(); }, 15000);
   }
 
-  // 启动逻辑
+  // 启动逻辑：standalone（已装快捷方式）下不再弹任何安装推广卡，仅网站/浏览器内才提示
   setTimeout(function(){
     if(isStandalone) return;
     var dismissed=false; try{ dismissed = localStorage.getItem('pt_ios_install_dismissed') === '1'; }catch(_){ }
