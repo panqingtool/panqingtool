@@ -199,6 +199,7 @@ img{max-width:100%;}
 .install-nav-btn:active{transform:scale(.96)}
 @media(max-width:680px){.install-nav-btn span{display:none}}
 .install-guide-card{background:var(--card);border:1px solid var(--primary);border-radius:14px;padding:18px 20px;line-height:1.7;font-size:14px;max-width:520px;margin:0 auto;text-align:left}
+#installOverlay.show.fs-on .install-guide-card{max-width:none;width:100%;}
 .install-guide-card h3{margin:0 0 10px;font-size:18px;color:var(--primary)}
 .install-guide-card ol{margin:6px 0 0 20px;padding:0}
 .install-guide-card ol li{margin:4px 0}
@@ -819,25 +820,46 @@ th{background:var(--bg);}
         </div>
 
         <div class="ig-platform" style="border:1px solid #e53935;margin-top:16px">
-          <b style="color:#e53935">⚠️ 无法下载 / 打不开？先清除浏览器缓存</b>
-          <p style="margin:6px 0 8px;color:var(--text-2);font-size:13px">安装按钮不出现、点击没反应、或打开后空白，多半是浏览器缓存了旧版本。按下面步骤清一次缓存（<b>只勾「缓存的图片和文件」即可，不必清 Cookie / 密码</b>），再刷新页面就能装。</p>
+          <p style="margin:0 0 10px;color:var(--text-2);font-size:13px;line-height:1.8">对于弹出下载标识但是无法使用或者之前下载了快捷方式但是不小心移除的两种情况导致的<span style="color:#e53935;font-weight:600">无法下载</span>的用户，需要清除电脑及手机浏览器全部数据：</p>
 
-          <b style="color:#e53935;display:block;margin-top:4px">💻 电脑端</b>
-          <ul style="margin:6px 0 0 20px;padding:0">
-            <li><b>Chrome / Edge（快捷键）：</b>按 <b>Ctrl+Shift+Delete</b>（Mac 为 <b>⌘+Shift+Delete</b>）→ 时间范围选「所有时间」→ 只勾「缓存的图片和文件」→「清除数据」，然后按 <b>F5</b> 刷新。</li>
-            <li><b>Firefox（快捷键）：</b>按 <b>Ctrl+Shift+Delete</b> → 时间范围「全部」→ 只勾「缓存」→「立即清除」，再刷新。</li>
-            <li><b>Mac Safari：</b>顶部「Safari」→「设置」→「高级」→ 勾选「在菜单栏显示『开发』菜单」→ 顶部「开发」→「清空缓存」（或按 <b>⌥+⌘+E</b>），再刷新。</li>
-            <li><b>通用 F12 法（任意浏览器）：</b>按 <b>F12</b> 打开开发者工具 → 切到「网络(Network)」面板勾选「禁用缓存(Disable cache)」→ 右键地址栏刷新按钮选「清空缓存并硬性重新加载」。</li>
-          </ul>
+          <b style="color:#e53935;display:block;margin-top:8px;font-size:15px">💻 电脑端</b>
+          <ol style="margin:6px 0 0 20px;padding:0">
+            <li style="margin:6px 0"><b>1.Chrome / Edge / Firefox（快捷键法）</b><br>
+              已经下载找不到：右上角"..."→ "更多工具"→ "应用"→ "查看应用"，选择卸载（记得勾选"删除应用历史记录和数据"）或点击"..."创建桌面快捷方式→ 刷新。<br>
+              - 快捷键：Ctrl + Shift + Delete<br>
+              - 时间选"时间不限"或选择您首次打开此网站的时间，勾选"缓存图片和文件"，点击清除<br>
+              - 新建一个无痕窗口并重新访问。
+            </li>
+            <li style="margin:6px 0"><b>2.Mac Safari</b><br>
+              - 菜单栏：Safari浏览器 → 偏好设置 → 隐私 → 管理网站数据 → 全部移除<br>
+              - 新建一个无痕窗口并重新访问。
+            </li>
+            <li style="margin:6px 0"><b>3.通用方法（较易出错）</b><br>
+              - 打开网站 https://panqingtool.pages.dev<br>
+              - 按 F12 打开开发者工具 → 点击 Application（应用程序）标签<br>
+              - 左侧找到 Service Workers，点击 Unregister（取消注册）<br>
+              - 左侧找到 Storage（存储），点击 Clear site data（清除站点数据）<br>
+              - 关闭开发者工具，刷新页面（可多刷新几次）<br>
+              - 新建一个无痕窗口并重新访问。<br>
+              注：若想连带历史记录一起清，可直接点击菜单栏的"历史记录" → "清除历史记录"。
+            </li>
+          </ol>
 
-          <b style="color:#e53935;display:block;margin-top:10px">📱 手机端</b>
-          <ul style="margin:6px 0 0 20px;padding:0">
-            <li><b>iPhone Safari：</b>「设置」→「Safari 浏览器」→「清除历史记录与网站数据」（会连同历史一起清，不影响已装主屏图标）→ 回到 Safari 重新打开本工具箱网址。</li>
-            <li><b>iPhone Chrome：</b>点右下角「⋯」→「设置」→「隐私和安全」→「清除浏览数据」→ 只勾「缓存的图片和文件」→「清除浏览数据」。</li>
-            <li><b>Android Chrome：</b>点右上角「⋮」→「设置」→「隐私和安全」→「清除浏览数据」→ 时间范围「所有时间」→ 只勾「缓存的图片和文件」→「清除数据」，再重新打开页面。</li>
-            <li><b>Android 其他浏览器（华为 / 小米 / 系统浏览器）：</b>在浏览器「设置」→「隐私」/「清除数据」中找「缓存」项清除；清除后重新打开工具箱网址，待页面加载完再点安装。</li>
-          </ul>
-          <p style="margin:8px 0 0;color:var(--text-2);font-size:12.5px">清完缓存若仍<b style="color:#e53935">无法下载</b>，请改用手机自带 Chrome / 系统浏览器（微信、QQ 等内置浏览器可能拦截安装），并先<b>刷新一次页面</b>让浏览器识别为可安装 PWA。</p>
+          <b style="color:#e53935;display:block;margin-top:12px;font-size:15px">📱 手机端</b>
+          <ol style="margin:6px 0 0 20px;padding:0">
+            <li style="margin:6px 0"><b>1.iPhone Safari</b><br>
+              - 设置 → App → Safari浏览器 → 清除历史记录与网站数据
+            </li>
+            <li style="margin:6px 0"><b>2.iPhone Chrome</b><br>
+              - Chrome App → 右下角"..." → 历史记录 → 清除全部数据（浏览数据） → 时间不限 → 勾选缓存 → 清除
+            </li>
+            <li style="margin:6px 0"><b>3.Android Chrome</b><br>
+              - Chrome App → 右上角"..." → 历史记录 → 清除全部数据（浏览数据） → 时间不限 → 勾选缓存 → 清除数据
+            </li>
+            <li style="margin:6px 0"><b>4.Android 其他浏览器</b><br>
+              - 设置 → 应用 → (应用管理→ )找到浏览器 → （存储 → ）清除全部数据
+            </li>
+          </ol>
         </div>
       </div>
     </div>
