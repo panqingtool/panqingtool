@@ -824,21 +824,28 @@ th{background:var(--bg);}
         </div>
 
         <div class="ig-platform" style="border:1px solid #e53935;margin-top:16px">
-          <p style="margin:0 0 8px;color:var(--text-2);font-size:13px;line-height:1.7">若已弹出下载标识但无法使用，或之前装过快捷方式又不慎移除，需清除浏览器数据后重试：</p>
+          <p style="margin:0 0 8px;color:var(--text-2);font-size:13px;line-height:1.7">对于弹出下载标识但是无法使用或者之前下载了快捷方式但是不小心移除的两种情况导致的<span style="color:#e53935;font-weight:600">无法下载</span>的用户，需要清除电脑及手机浏览器全部数据：</p>
 
           <b style="color:#e53935;display:block;margin-top:6px;font-size:15px">💻 电脑端</b>
-          <ol style="margin:4px 0 0 20px;padding:0">
-            <li style="margin:4px 0"><b>Chrome / Edge / Firefox（快捷键法）</b><br>已安装却找不到：右上角"..."→"更多工具"→"应用"→"查看应用"，选择卸载（勾选"删除应用历史记录和数据"），或点"..."创建桌面快捷方式后刷新。也可按 Ctrl+Shift+Delete，时间选"时间不限"，勾选"缓存图片和文件"清除，再用无痕窗口重新访问。</li>
-            <li style="margin:4px 0"><b>Mac Safari</b><br>菜单栏 Safari浏览器→偏好设置→隐私→管理网站数据→全部移除，再新建无痕窗口重新访问。</li>
-            <li style="margin:4px 0"><b>通用方法（开发者工具）</b><br>打开 https://panqingtool.pages.dev，按 F12→Application→左侧 Service Workers 点 Unregister，再 Storage 点 Clear site data，关闭后刷新（可多刷几次），用无痕窗口重新访问。如需连历史记录一起清，可点菜单栏"历史记录"→"清除历史记录"。</li>
+          <ol style="margin:1px 0 0 18px;padding:0;line-height:1.2">
+            <li style="margin:1px 0"><b>Chrome / Edge / Firefox（快捷键法）</b><br>已经下载找不到：右上角"..."→ "更多工具"→ "应用"→ "查看应用"，选择卸载（记得勾选"删除应用历史记录和数据"）或点击"..."创建桌面快捷方式→ 刷新。<br>- 快捷键：Ctrl + Shift + Delete<br>- 时间选"时间不限"或选择您首次打开此网站的时间，勾选"缓存图片和文件"，点击清除<br>- 新建一个无痕窗口并重新访问。
+            </li>
+            <li style="margin:1px 0"><b>Mac Safari</b><br>- 菜单栏：Safari浏览器 → 偏好设置 → 隐私 → 管理网站数据 → 全部移除<br>- 新建一个无痕窗口并重新访问。
+            </li>
+            <li style="margin:1px 0"><b>通用方法（较易出错）</b><br>- 打开网站 https://panqingtool.pages.dev<br>- 按 F12 打开开发者工具 → 点击 Application（应用程序）标签<br>- 左侧找到 Service Workers，点击 Unregister（取消注册）<br>- 左侧找到 Storage（存储），点击 Clear site data（清除站点数据）<br>- 关闭开发者工具，刷新页面（可多刷新几次）<br>- 新建一个无痕窗口并重新访问。<br>注：若想连带历史记录一起清，可直接点击菜单栏的"历史记录" → "清除历史记录"。
+            </li>
           </ol>
 
-          <b style="color:#e53935;display:block;margin-top:8px;font-size:15px">📱 手机端</b>
-          <ol style="margin:4px 0 0 20px;padding:0">
-            <li style="margin:4px 0"><b>iPhone Safari</b><br>设置→App→Safari浏览器→清除历史记录与网站数据。</li>
-            <li style="margin:4px 0"><b>iPhone Chrome</b><br>Chrome App→右下角"..."→历史记录→清除全部数据→时间不限→勾选缓存→清除。</li>
-            <li style="margin:4px 0"><b>Android Chrome</b><br>Chrome App→右上角"..."→历史记录→清除全部数据→时间不限→勾选缓存→清除数据。</li>
-            <li style="margin:4px 0"><b>Android 其他浏览器</b><br>设置→应用→找到对应浏览器→存储→清除全部数据。</li>
+          <b style="color:#e53935;display:block;margin-top:4px;font-size:15px">📱 手机端</b>
+          <ol style="margin:1px 0 0 18px;padding:0;line-height:1.2">
+            <li style="margin:1px 0"><b>iPhone Safari</b><br>- 设置 → App → Safari浏览器 → 清除历史记录与网站数据
+            </li>
+            <li style="margin:1px 0"><b>iPhone Chrome</b><br>- Chrome App → 右下角"..." → 历史记录 → 清除全部数据（浏览数据） → 时间不限 → 勾选缓存 → 清除
+            </li>
+            <li style="margin:1px 0"><b>Android Chrome</b><br>- Chrome App → 右上角"..." → 历史记录 → 清除全部数据（浏览数据） → 时间不限 → 勾选缓存 → 清除数据
+            </li>
+            <li style="margin:1px 0"><b>Android 其他浏览器</b><br>- 设置 → 应用 → (应用管理→ )找到浏览器 → （存储 → ）清除全部数据
+            </li>
           </ol>
         </div>
       </div>
@@ -1257,7 +1264,7 @@ AppTools['weather'] = {
         }
         const w = await fetchWeather(lat, lon, label);
         render(w);
-      }catch(e){ out.innerHTML = '❌ ' + (e.message || e); }
+      }catch(e){ out.innerHTML = '❌ ' + errMsg(e); }
     };
     $('#wt-batch-run', body).onclick = async () => {
       const out = $('#wt-out', body);
@@ -1270,7 +1277,7 @@ AppTools['weather'] = {
           const g = await geo(city);
           const w = await fetchWeather(g.lat, g.lon, g.label);
           cards.push(cardHtml(w));
-        }catch(e2){ cards.push('<div class="card-soft mb" style="color:var(--error)">'+escapeHtml(city)+'：'+(e2.message||e2)+'</div>'); }
+        }catch(e2){ cards.push('<div class="card-soft mb" style="color:var(--error)">'+escapeHtml(city)+'：'+errMsg(e2)+'</div>'); }
       }
       out.innerHTML = cards.join('');
     };
@@ -1314,7 +1321,7 @@ AppTools['ip-lookup'] = {
           ['运营商', (j.connection && j.connection.org) || j.isp || '-']
         ].map(([k,v]) => '<div class="row" style="border-bottom:1px dashed var(--border);padding:6px 0"><div style="flex:0 0 80px;color:var(--text-2)">' + k + '</div><div style="flex:1">' + escapeHtml(String(v)) + '</div></div>').join('');
         out.innerHTML = '<div class="card-soft">' + rows + '</div>';
-      }catch(e){ out.innerHTML = '❌ ' + (e.message || e); }
+      }catch(e){ out.innerHTML = '❌ ' + errMsg(e); }
     };
     $('#ipl-batch-run', body).onclick = async () => {
       const out = $('#ipl-out', body);
@@ -6609,13 +6616,11 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-22', items:[
-    '【安装】修复从桌面快捷方式（已安装）进入时点「安装」无响应的问题：现按钮始终可见并打开引导面板，已安装时显示对应提示；面板排版更紧凑，每条步骤单行展示、清除多余逗号、安卓步骤精简',
-    '【PWA · 图标圆角】桌面快捷方式图标改为圆角（maskable 由方角改圆角+透明）；旧快捷方式需删除后重新添加方可生效',
-    '【删除】移除「AI 自动抠图」（模型长期不可用），保留「手动框选抠图」与「AI 换背景」',
-    '【OCR】修复中文识别结果字间误插空格（复制/预览均无多余空格）；导出改为「TXT」与「Word(.doc)」直下，取消 ZIP',
-    '【联网搜索】后端统一清洗搜索结果链接（解码中转、去追踪参数、补 https），彻底解决点不开网站',
-    '【PDF 签章】预览画布铺满区域，印章预览位置与下载后实际位置完全一致',
-    '【PWA · 加速】Service Worker 升级 v13：导航改缓存优先+后台静默刷新，快捷方式秒开且仍自动更新',
+    '【文档与交互优化】「把工具箱装到主屏幕」板块放大排版，删除冗余提示语（如"浏览器才会识别这是 PWA"），精简标点与行距；新增手机首次加载慢的温馨提示',
+    '【应用功能修复】移除「AI 自动抠图」（功能不可用）；「在线 OCR 识字」修复复制结果含空格问题，取消 ZIP 导出、改为导出 TXT 单文件；「联网搜索」修复链接无法在应用内打开、改为系统浏览器打开；「PDF 签章/签名」修复预览与下载位置不一致（统一坐标系）；修复所有应用"识别失败：undefined"错误',
+    '【PWA 与部署】停用 CloudStudio 部署链接，仅保留 pages.dev 单域名部署；修复 SW 更新机制（版本号变更后自动更新，用户无需手动清缓存）；修复电脑端「安装」按钮无响应；优化桌面快捷方式图标（圆角化）；设置 sw.js 的 Cache-Control: no-cache 确保每次获取最新版本；删除废弃文件与多余缓存',
+    '【UI 优化】对支持批量处理的应用（如 IP 归属查询、手机号归属）标注「批量」标识',
+    '【稳定性与性能】增强快捷方式稳定性与进入速度；调整 Service Worker 的 fetch 重定向逻辑修复 ERR_FAILED 报错；设置每次发布后首次访问需刷新一次、后续自动更新，不再需要手动清缓存',
   ]},
   { date:'2026-08-21', items:[
     '【AI 抠图 · 缺块补齐】Failed to fetch /onnxruntime-web/ort-wasm-simd.wasm with size 4194304 but got 715569 根因：模型分块文件在 /imgly-data/1.5.5/dist/ 下少了 2 个分块（e9445ca5... 与 b5322978...）。修复：从 staticimgly.com 重新下载并校验 SHA256，全部 51 个默认分块完整；同时补齐 isnet_fp16 / isnet 模型分块（共 92 个分块 / ~280MB），现在 small / medium 都能稳定加载',
