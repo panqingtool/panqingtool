@@ -1,22 +1,23 @@
-/* 托托工具箱 · Service Worker v12
+/* 托托工具箱 · Service Worker v13
  *
- * 修复：从主屏快捷方式（standalone）打开时显示「网站暂时无法访问」。
- * 根因：导航请求 req.mode === 'navigate'，直接 fetch(req) 或 caches.match(req)
- *      会抛 TypeError（Cannot construct a Request with mode 'navigate'），
- *      导致 event.respondWith 收到非法响应 / SW 无法正确响应，浏览器报无法访问。
- * v12 改为：对导航请求始终用「非 navigate 模式」的新请求（fetch(url, {redirect:'follow'})）
- * 重新取资源；导航分支永远返回合法 Response（网络 → 缓存 → 离线页），绝不抛错。
+ * 增强：PWA 快捷方式进入速度 + 稳定性。
+ * v12 已修复 standalone 打开崩溃（导航请求始终用 fetch(url,{redirect:'follow'}) 非 navigate 模式，
+ *       永远返回合法 Response：网络 → 缓存 → 离线页）。
+ * v13 进一步把导航策略从「网络优先」改为「缓存优先 + 后台静默刷新（stale-while-revalidate）」：
+ *   - 优先返回缓存的 index.html → 从主屏/桌面快捷方式进入**秒开**，不再等网络握手；
+ *   - 后台用网络拉取最新 index.html 写入缓存，下一次打开即是最新内容（更新无感、无需清缓存）；
+ *   - 网络与缓存都失败才返回离线页（仍合法 Response，绝不抛错）。
  *
  * 缓存策略：
  *  - 预缓存：app 外壳（index.html / manifest / 图标 / nav-logo / 水印）
- *  - 页面导航：网络优先 + 缓存兜底 + 离线页
+ *  - 页面导航：缓存优先 + 后台静默刷新 + 离线页兜底
  *  - 第三方 CDN（jsdelivr/unpkg/esm.sh 锁版本）：cache-first
  *  - 同源静态：cache-first + 后台静默刷新
  *  - /imgly-data/ 模型分块：cache-first（大文件 + 几乎不变）+ 后台静默刷新
  *  - /search / /visit / /weather / /lookup / /api 等 Functions：network-only（不缓存）
  *  - skipWaiting + clients.claim：新版本上线后下一次访问立即生效，无需手动清缓存
  */
-const VERSION = 'v12';
+const VERSION = 'v13';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const CDN_CACHE = 'cdn-' + VERSION;
@@ -83,27 +84,36 @@ self.addEventListener('fetch', (event) => {
   // Functions API：不缓存、永远走网络
   if (API_PATH_RE.test(url.pathname)) return;
 
-  // 页面导航：网络优先 + 缓存兜底 + 离线页
+  // 页面导航：缓存优先 + 后台静默刷新（stale-while-revalidate）→ 快捷方式秒开
   // 关键修复：绝不对 navigate 模式请求直接 fetch(req) / caches.match(req)，
   // 改用 fetch(url, {redirect:'follow'})（默认 cors 模式，合法且能拿到 HTML）。
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
+      const cacheKey = './index.html';
+      // 先取缓存（秒开）
+      let cached = null;
+      try { cached = (await caches.match(cacheKey)) || (await caches.match('./')); } catch (_) {}
+      // 后台静默拉取最新版写入缓存（下次打开即更新）
+      const refresh = (async () => {
+        try {
+          const net = await fetch(url.href, { redirect: 'follow', credentials: 'same-origin' });
+          if (net && net.ok) {
+            const copy = net.clone();
+            caches.open(RUNTIME_CACHE).then((cc) => cc.put(cacheKey, copy)).catch(() => {});
+          }
+        } catch (_) { /* 后台刷新失败不影响本次返回 */ }
+      })();
+      if (cached) { refresh; return cached; }
+      // 无缓存再等网络
       try {
         const net = await fetch(url.href, { redirect: 'follow', credentials: 'same-origin' });
         if (net && net.ok) {
           const copy = net.clone();
-          caches.open(RUNTIME_CACHE).then((cc) => cc.put('./index.html', copy)).catch(() => {});
+          caches.open(RUNTIME_CACHE).then((cc) => cc.put(cacheKey, copy)).catch(() => {});
         }
         if (net) return net;
-      } catch (_) {
-        /* 网络失败，走下方缓存兜底 */
-      }
-      // 兜底 1：缓存的外壳（根路径与 index.html 都尝试）
-      try {
-        const cached = (await caches.match('./index.html')) || (await caches.match('./'));
-        if (cached) return cached;
       } catch (_) {}
-      // 兜底 2：离线页
+      // 兜底：离线页
       return offlineResponse();
     })());
     return;
