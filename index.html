@@ -777,7 +777,10 @@ th{background:var(--bg);}
   <div class="clog" role="dialog" aria-modal="true" aria-labelledby="installTitle">
     <div class="clog-header">
       <h3 id="installTitle">📱 把工具箱装到主屏幕</h3>
-      <button class="modal-close" id="installClose" aria-label="关闭">&times;</button>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="modal-close" id="installZoom" aria-label="放大 / 还原" title="放大 / 还原面板">⛶</button>
+        <button class="modal-close" id="installClose" aria-label="关闭">&times;</button>
+      </div>
     </div>
     <div class="clog-body">
       <div class="install-guide-card" id="installGuideContent">
@@ -813,6 +816,28 @@ th{background:var(--bg);}
         <div id="installNativeBtn" style="margin-top:14px;text-align:center;display:none">
           <button class="btn" id="installNativeClick" style="font-size:15px;padding:10px 24px">⚡ 一键安装到本机</button>
           <div style="color:var(--text-2);font-size:12px;margin-top:6px">（浏览器会弹出确认框）</div>
+        </div>
+
+        <div class="ig-platform" style="border:1px solid #e53935;margin-top:16px">
+          <b style="color:#e53935">⚠️ 无法下载 / 打不开？先清除浏览器缓存</b>
+          <p style="margin:6px 0 8px;color:var(--text-2);font-size:13px">安装按钮不出现、点击没反应、或打开后空白，多半是浏览器缓存了旧版本。按下面步骤清一次缓存（<b>只勾「缓存的图片和文件」即可，不必清 Cookie / 密码</b>），再刷新页面就能装。</p>
+
+          <b style="color:#e53935;display:block;margin-top:4px">💻 电脑端</b>
+          <ul style="margin:6px 0 0 20px;padding:0">
+            <li><b>Chrome / Edge（快捷键）：</b>按 <b>Ctrl+Shift+Delete</b>（Mac 为 <b>⌘+Shift+Delete</b>）→ 时间范围选「所有时间」→ 只勾「缓存的图片和文件」→「清除数据」，然后按 <b>F5</b> 刷新。</li>
+            <li><b>Firefox（快捷键）：</b>按 <b>Ctrl+Shift+Delete</b> → 时间范围「全部」→ 只勾「缓存」→「立即清除」，再刷新。</li>
+            <li><b>Mac Safari：</b>顶部「Safari」→「设置」→「高级」→ 勾选「在菜单栏显示『开发』菜单」→ 顶部「开发」→「清空缓存」（或按 <b>⌥+⌘+E</b>），再刷新。</li>
+            <li><b>通用 F12 法（任意浏览器）：</b>按 <b>F12</b> 打开开发者工具 → 切到「网络(Network)」面板勾选「禁用缓存(Disable cache)」→ 右键地址栏刷新按钮选「清空缓存并硬性重新加载」。</li>
+          </ul>
+
+          <b style="color:#e53935;display:block;margin-top:10px">📱 手机端</b>
+          <ul style="margin:6px 0 0 20px;padding:0">
+            <li><b>iPhone Safari：</b>「设置」→「Safari 浏览器」→「清除历史记录与网站数据」（会连同历史一起清，不影响已装主屏图标）→ 回到 Safari 重新打开本工具箱网址。</li>
+            <li><b>iPhone Chrome：</b>点右下角「⋯」→「设置」→「隐私和安全」→「清除浏览数据」→ 只勾「缓存的图片和文件」→「清除浏览数据」。</li>
+            <li><b>Android Chrome：</b>点右上角「⋮」→「设置」→「隐私和安全」→「清除浏览数据」→ 时间范围「所有时间」→ 只勾「缓存的图片和文件」→「清除数据」，再重新打开页面。</li>
+            <li><b>Android 其他浏览器（华为 / 小米 / 系统浏览器）：</b>在浏览器「设置」→「隐私」/「清除数据」中找「缓存」项清除；清除后重新打开工具箱网址，待页面加载完再点安装。</li>
+          </ul>
+          <p style="margin:8px 0 0;color:var(--text-2);font-size:12.5px">清完缓存若仍<b style="color:#e53935">无法下载</b>，请改用手机自带 Chrome / 系统浏览器（微信、QQ 等内置浏览器可能拦截安装），并先<b>刷新一次页面</b>让浏览器识别为可安装 PWA。</p>
         </div>
       </div>
     </div>
@@ -1035,6 +1060,15 @@ function fmtSize(bytes){
 
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+// 统一错误信息提取：避免 e.message 为 undefined 时渲染出「失败：undefined」
+function errMsg(e, fallback){
+  fallback = fallback || '操作失败，请重试';
+  if(!e) return fallback;
+  if(typeof e === 'string') return e;
+  if(e && typeof e.message === 'string' && e.message.trim()) return e.message;
+  if(e && typeof e.statusText === 'string' && e.statusText.trim()) return e.statusText;
+  return fallback;
 }
 
 /* ---------- 分类与工具清单 ---------- */
@@ -1947,54 +1981,11 @@ AppTools['img-picker'] = {
 };
 
 // AI 智能抠图（支持 AI 自动 + 手动框选两种模式；AI 模型加载失败时自动提示手动模式）
-AppTools['img-matting'] = {
+AppTools['img-matting-manual'] = {
   build(body){
     body.innerHTML = `
       <div class="mb">
-        <div class="tab-bar" role="tablist" style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="tab tab-act" data-tab="ai" role="tab">AI 自动抠图</button>
-          <button class="tab" data-tab="manual" role="tab">手动框选抠图</button>
-        </div>
-      </div>
-
-      <section data-pane="ai">
-        <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，模型加载更快更稳）</label>
-        <div class="mb"><label class="field-label">选择图片（人物 / 食物 / 物品均可，可多选批量）</label>
-          <input type="file" class="inp" id="mt-file" accept="image/*" multiple aria-label="选择图片"></div>
-        <div class="row">
-          <div class="mb"><label class="field-label">输出背景</label>
-            <select class="sel" id="mt-bg" aria-label="输出背景">
-              <option value="transparent">透明背景（PNG）</option>
-              <option value="#ffffff">白底</option>
-              <option value="#2e6fd6">蓝底（证件照风）</option>
-              <option value="custom">自定义颜色</option>
-            </select>
-            <input type="color" class="inp" id="mt-custom" value="#ffd700" aria-label="自定义背景色" style="display:none;margin-top:8px;"></div>
-          <div class="mb"><label class="field-label">模型精度</label>
-            <select class="sel" id="mt-model" aria-label="模型">
-              <option value="isnet_quint8">small（约 44MB，推荐，首次需下载）</option>
-              <option value="isnet_fp16">medium（更精细，约 88MB）</option>
-              <option value="isnet">large（最高精度，约 176MB）</option>
-            </select></div>
-          <div class="mb"><label class="field-label">边缘羽化：<b id="mt-feathv">1.2</b> px</label>
-            <input type="range" id="mt-feather" min="0" max="4" step="0.2" value="1.2" aria-label="边缘羽化"></div>
-          <div class="mb"><label class="field-label">输出缩放（高清）</label>
-            <select class="sel" id="mt-scale" aria-label="输出缩放">
-              <option value="1">1×（原始清晰度）</option>
-              <option value="1.5">1.5×</option>
-              <option value="2">2×（超清）</option>
-            </select></div>
-        </div>
-        <div class="btn-row">
-          <button class="btn" id="mt-run" disabled>开始抠图</button>
-          <button class="btn btn-ghost" id="mt-demo">🎯 预览示例</button>
-        </div>
-        <div id="mt-prog" class="hint"></div>
-        <div class="hint">🔒 全程浏览器本地 AI 抠图，图片不上传；首次使用会从 CDN 下载约 40MB 模型（之后浏览器缓存可离线）。若加载失败，请切换到「手动框选抠图」。</div>
-        <div id="mt-result"></div>
-      </section>
-
-      <section data-pane="manual" hidden>
+      <section data-pane="manual">
         <div class="mb"><label class="field-label">选择图片（手动框选抠图，可任意形状，支持移动 + 缩放）</label>
           <input type="file" class="inp" id="mm-file" accept="image/*" aria-label="选择图片"></div>
         <div class="row">
@@ -2122,68 +2113,7 @@ AppTools['img-matting'] = {
       mmBgHexEl.addEventListener('input', onHex);
       mmBgHexEl.addEventListener('change', onHex);
     }
-    $('#mt-feather', body).oninput = () => $('#mt-feathv', body).textContent = $('#mt-feather', body).value;
 
-    // ===== AI 模式 =====
-    setupNetToggle(body);
-    let files = [];
-    ntBatchAddUI(body,'mt-file',(all)=>{ files=all; $('#mt-run', body).disabled = !all.length; });
-    $('#mt-demo', body).onclick = () => showMattingDemo(body);
-    $('#mt-run', body).onclick = async () => {
-      if(!files.length) return;
-      const btn = $('#mt-run', body); btn.disabled = true;
-      const progEl = $('#mt-prog', body);
-      btn.innerHTML = '<span class="loading"><span class="spinner"></span>加载模型中…</span>';
-      progEl.textContent = '首次使用会从本站下载约 44MB 模型（约 10s，依赖网速）。已预加载则秒开。';
-      const bgMode = $('#mt-bg', body).value, customColor = $('#mt-custom', body).value, model = $('#mt-model', body).value;
-      const feather = +($('#mt-feather', body).value) || 0, scale = +($('#mt-scale', body).value) || 1;
-      let removeBackground;
-      try{
-        let mod;
-        try{ mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm'); }
-        catch(_){ mod = await import('https://esm.sh/@imgly/background-removal@1.5.5'); }
-        removeBackground = mod.removeBackground;
-      }catch(err){
-        progEl.innerHTML = `<span style="color:var(--error)">❌ AI 模型加载失败：${escapeHtml(err.message || '网络异常')}<br>💡 建议切换到 <b>手动框选抠图</b>，无需联网即可使用。</span>`;
-        btn.disabled = false; btn.textContent = '开始抠图'; return;
-      }
-      try{
-        const items = [];
-        for(let i=0;i<files.length;i++){
-          const f = files[i];
-          btn.innerHTML = `<span class="loading"><span class="spinner"></span>抠图中 ${i+1}/${files.length}…</span>`;
-          progEl.textContent = `正在处理第 ${i+1}/${files.length} 张…`;
-          const t0 = performance.now();
-          const fgBlob = await imglyRemove(removeBackground, f, {
-            model,
-            output: { format: 'image/png' },
-            progress: (key, current, total) => { if(total) progEl.textContent = `第 ${i+1} 张 ${key}: ${Math.round(current/total*100)}%`; }
-          });
-          const dt = ((performance.now()-t0)/1000).toFixed(1);
-          progEl.textContent = `第 ${i+1} 张抠图完成（${dt}s），正在合成结果…`;
-          const fgImg = await fileToImage(fgBlob);
-          const w = Math.max(1, Math.round(fgImg.naturalWidth * scale)), h = Math.max(1, Math.round(fgImg.naturalHeight * scale));
-          const c = document.createElement('canvas'); c.width = w; c.height = h;
-          const cx = c.getContext('2d');
-          cx.imageSmoothingQuality = 'high';
-          if(bgMode === 'transparent'){
-            if(feather > 0){ cx.filter = `blur(${feather}px)`; cx.globalAlpha = 0.5; cx.drawImage(fgImg, 0, 0, w, h); cx.filter = 'none'; cx.globalAlpha = 1; }
-            cx.drawImage(fgImg, 0, 0, w, h);
-          } else {
-            cx.fillStyle = bgMode === 'custom' ? customColor : bgMode; cx.fillRect(0,0,w,h);
-            cx.drawImage(fgImg, 0, 0, w, h);
-            if(feather > 0){ cx.save(); cx.globalAlpha = 0.6; cx.filter = `blur(${feather}px)`; cx.drawImage(fgImg, 0, 0, w, h); cx.restore(); }
-          }
-          const base = (f.name.replace(/\.[^.]+$/, '') || 'image');
-          await new Promise(r => c.toBlob(b => { items.push({ name: `${base}_matting.png`, blob: b }); r(); }, 'image/png'));
-        }
-        renderBatchResults($('#mt-result', body), items);
-        progEl.innerHTML = '<span style="color:var(--success)">✅ 抠图完成</span>';
-      }catch(err){
-        progEl.innerHTML = `<span style="color:var(--error)">抠图失败：${escapeHtml(err.message)}<br>💡 建议切换到 <b>手动框选抠图</b></span>`;
-      }
-      btn.disabled = false; btn.textContent = '开始抠图';
-    };
 
     // ===== 手动模式（任意形状 + 自由移动 + 画布缩放/平移） =====
     const stage = $('#mm-stage', body);
@@ -2757,6 +2687,108 @@ AppTools['img-matting'] = {
   }
 };
 
+// 重新重做的「AI 自动抠图」独立应用（模型托管在工具箱本站 /imgly-data，国内可达；publicPath 用绝对同源 URL）
+AppTools['img-matting-ai'] = {
+  build(body){
+    body.innerHTML = `
+      <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，引擎加载更快更稳）</label>
+      <div class="mb"><label class="field-label">选择图片（人物 / 食物 / 商品均可，可多选批量抠图）</label>
+        <input type="file" class="inp" id="ia-file" accept="image/*" multiple aria-label="选择图片"></div>
+      <div class="row">
+        <div class="mb"><label class="field-label">输出背景</label>
+          <select class="sel" id="ia-bg" aria-label="输出背景">
+            <option value="transparent">透明背景（PNG）</option>
+            <option value="#ffffff">白底</option>
+            <option value="#2e6fd6">蓝底（证件照风）</option>
+            <option value="custom">自定义颜色</option>
+          </select>
+          <input type="color" class="inp" id="ia-custom" value="#ffd700" aria-label="自定义背景色" style="display:none;margin-top:8px;"></div>
+        <div class="mb"><label class="field-label">模型精度</label>
+          <select class="sel" id="ia-model" aria-label="模型">
+            <option value="isnet_quint8">small（约 44MB，推荐，首次需下载）</option>
+            <option value="isnet_fp16">medium（更精细，约 88MB）</option>
+            <option value="isnet">large（最高精度，约 176MB）</option>
+          </select></div>
+        <div class="mb"><label class="field-label">边缘羽化：<b id="ia-feathv">1.2</b> px</label>
+          <input type="range" id="ia-feather" min="0" max="4" step="0.2" value="1.2" aria-label="边缘羽化"></div>
+        <div class="mb"><label class="field-label">输出缩放（高清）</label>
+          <select class="sel" id="ia-scale" aria-label="输出缩放">
+            <option value="1">1×（原始清晰度）</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×（超清）</option>
+          </select></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="ia-run" disabled>🪄 开始 AI 抠图</button>
+      </div>
+      <div id="ia-prog" class="hint"></div>
+      <div class="hint">🔒 全程浏览器本地 AI 抠图，图片不上传；模型托管在工具箱本站（国内可达），首次约下载 44MB，之后浏览器缓存可离线秒开。若加载失败，可改用「手动框选抠图」应用。</div>
+      <div id="ia-result"></div>`;
+
+    setupNetToggle(body);
+    let files = [];
+    ntBatchAddUI(body,'ia-file',(all)=>{ files=all; $('#ia-run', body).disabled = !all.length; });
+    $('#ia-bg', body).onchange = () => { const c = $('#ia-custom', body); if(c) c.style.display = $('#ia-bg', body).value==='custom' ? 'inline-block':'none'; };
+    $('#ia-feather', body).oninput = () => $('#ia-feathv', body).textContent = $('#ia-feather', body).value;
+
+    $('#ia-run', body).onclick = async () => {
+      if(!files.length) return;
+      const btn = $('#ia-run', body); btn.disabled = true;
+      const progEl = $('#ia-prog', body);
+      btn.innerHTML = '<span class="loading"><span class="spinner"></span>加载模型中…</span>';
+      progEl.textContent = '首次使用会从本站下载约 44MB 模型（约 10s，依赖网速）。已预加载则秒开。';
+      const bgMode = $('#ia-bg', body).value, customColor = $('#ia-custom', body).value, model = $('#ia-model', body).value;
+      const feather = +($('#ia-feather', body).value) || 0, scale = +($('#ia-scale', body).value) || 1;
+      let removeBackground;
+      try{
+        let mod;
+        try{ mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm'); }
+        catch(_){ mod = await import('https://esm.sh/@imgly/background-removal@1.5.5'); }
+        removeBackground = mod.removeBackground;
+      }catch(err){
+        progEl.innerHTML = `<span style="color:var(--error)">❌ AI 引擎加载失败：${escapeHtml(errMsg(err, '网络异常'))}<br>💡 可改用「手动框选抠图」应用，无需联网即可使用。</span>`;
+        btn.disabled = false; btn.textContent = '🪄 开始 AI 抠图'; return;
+      }
+      try{
+        const items = [];
+        for(let i=0;i<files.length;i++){
+          const f = files[i];
+          btn.innerHTML = `<span class="loading"><span class="spinner"></span>抠图中 ${i+1}/${files.length}…</span>`;
+          progEl.textContent = `正在处理第 ${i+1}/${files.length} 张…`;
+          const t0 = performance.now();
+          const fgBlob = await imglyRemove(removeBackground, f, {
+            model,
+            output: { format: 'image/png' },
+            progress: (key, current, total) => { if(total) progEl.textContent = `第 ${i+1} 张 ${key}: ${Math.round(current/total*100)}%`; }
+          });
+          const dt = ((performance.now()-t0)/1000).toFixed(1);
+          progEl.textContent = `第 ${i+1} 张抠图完成（${dt}s），正在合成结果…`;
+          const fgImg = await fileToImage(fgBlob);
+          const w = Math.max(1, Math.round(fgImg.naturalWidth * scale)), h = Math.max(1, Math.round(fgImg.naturalHeight * scale));
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          const cx = c.getContext('2d');
+          cx.imageSmoothingQuality = 'high';
+          if(bgMode === 'transparent'){
+            if(feather > 0){ cx.filter = `blur(${feather}px)`; cx.globalAlpha = 0.5; cx.drawImage(fgImg, 0, 0, w, h); cx.filter = 'none'; cx.globalAlpha = 1; }
+            cx.drawImage(fgImg, 0, 0, w, h);
+          } else {
+            cx.fillStyle = bgMode === 'custom' ? customColor : bgMode; cx.fillRect(0,0,w,h);
+            cx.drawImage(fgImg, 0, 0, w, h);
+            if(feather > 0){ cx.save(); cx.globalAlpha = 0.6; cx.filter = `blur(${feather}px)`; cx.drawImage(fgImg, 0, 0, w, h); cx.restore(); }
+          }
+          const base = (f.name.replace(/\.[^.]+$/, '') || 'image');
+          await new Promise(r => c.toBlob(b => { items.push({ name: `${base}_matting.png`, blob: b }); r(); }, 'image/png'));
+        }
+        renderBatchResults($('#ia-result', body), items);
+        progEl.innerHTML = '<span style="color:var(--success)">✅ 抠图完成</span>';
+      }catch(err){
+        progEl.innerHTML = `<span style="color:var(--error)">抠图失败：${escapeHtml(errMsg(err))}<br>💡 可改用「手动框选抠图」应用</span>`;
+      }
+      btn.disabled = false; btn.textContent = '🪄 开始 AI 抠图';
+    };
+  }
+};
+
 // 抠图预览示例：生成一张渐变 + 圆形的合成图，自动填入"手动框选"模式便于试用
 async function showMattingDemo(body){
   try{
@@ -2847,7 +2879,7 @@ AppTools['pdf-merge'] = {
         $('#pm-result', body).innerHTML = `<div class="result-box">合并完成，共 ${merged.getPageCount()} 页</div>
           <div class="btn-row"><button class="btn" id="pm-down2">下载合并PDF</button></div>`;
         $('#pm-down2', body).onclick = () => downloadBlob(blob, 'merged.pdf');
-      }catch(err){ $('#pm-result', body).innerHTML = '<div class="result-box err">合并失败：'+escapeHtml(err.message)+'</div>'; }
+      }catch(err){ $('#pm-result', body).innerHTML = '<div class="result-box err">合并失败：'+escapeHtml(errMsg(err))+'</div>'; }
       btn.disabled = false; btn.textContent = '合并 PDF';
     };
   }
@@ -2903,7 +2935,7 @@ AppTools['pdf-split'] = {
         $('#ps-result', body).innerHTML = `<div class="result-box">已提取 ${pages.length} 页</div>
           <div class="btn-row"><button class="btn" id="ps-down">下载</button></div>`;
         $('#ps-down', body).onclick = () => downloadBlob(blob, 'extracted.pdf');
-      }catch(err){ $('#ps-result', body).innerHTML='<div class="result-box err">提取失败：'+escapeHtml(err.message)+'</div>'; }
+      }catch(err){ $('#ps-result', body).innerHTML='<div class="result-box err">提取失败：'+escapeHtml(errMsg(err))+'</div>'; }
       btn.disabled=false; btn.textContent='提取页面';
     };
   }
@@ -2967,7 +2999,7 @@ AppTools['pdf-toimg'] = {
           blobs.forEach((b,i) => downloadBlob(b, `page_${i+1}.png`));
           toast('已开始下载各页');
         };
-      }catch(err){ $('#pi-result', body).innerHTML='<div class="result-box err">转换失败：'+escapeHtml(err.message)+'</div>'; }
+      }catch(err){ $('#pi-result', body).innerHTML='<div class="result-box err">转换失败：'+escapeHtml(errMsg(err))+'</div>'; }
       btn.disabled=false; btn.textContent='转为图片';
     };
   }
@@ -3008,7 +3040,7 @@ AppTools['office-to-pdf'] = {
           renderPreview('<div class="result-box err">老版 Office 格式（.doc/.xls/.ppt）无法在浏览器本地解析，请先用 Office/WPS「另存为」.docx / .xlsx 后再转换；.pptx 暂不支持。</div>');
           $('#of-run', body).disabled = true;
         } else { renderPreview('<div class="result-box err">不支持的文件类型</div>'); $('#of-run', body).disabled = true; }
-      }catch(err){ renderPreview(`<div class="result-box err">预览失败：${escapeHtml(err.message)}</div>`); }
+      }catch(err){ renderPreview(`<div class="result-box err">预览失败：${escapeHtml(errMsg(err))}</div>`); }
     };
     setupNetToggle(body);
     $('#of-run', body).onclick = async () => {
@@ -3041,7 +3073,7 @@ AppTools['office-to-pdf'] = {
           downloadBlob(new Blob([bytes],{type:'application/pdf'}), (file.name.replace(/\.[^.]+$/,'')||'office')+'.pdf');
           $('#of-result', body).innerHTML='<div class="result-box ok">✅ 已按 A4 分页生成 PDF 并开始下载（保持原排版、字体与图片，逐页还原）。</div>';
         } finally { document.body.removeChild(holder); }
-      }catch(err){ $('#of-result', body).innerHTML=`<div class="result-box err">转换失败：${escapeHtml(err.message)}</div>`; }
+      }catch(err){ $('#of-result', body).innerHTML=`<div class="result-box err">转换失败：${escapeHtml(errMsg(err))}</div>`; }
       btn.disabled=false; btn.textContent='转换并下载 PDF';
     };
   }
@@ -3539,7 +3571,7 @@ AppTools['text-crypto'] = {
         const dec = CryptoJS.AES.decrypt($('#tc-in', body).value, $('#tc-key', body).value).toString(CryptoJS.enc.Utf8);
         if(!dec) throw new Error('密码错误或数据损坏');
         show(dec);
-      }catch(e){ $('#tc-result', body).innerHTML='<div class="result-box err">解密失败：'+escapeHtml(e.message)+'</div>'; }
+      }catch(e){ $('#tc-result', body).innerHTML='<div class="result-box err">解密失败：'+escapeHtml(errMsg(e))+'</div>'; }
     };
   }
 };
@@ -3646,7 +3678,7 @@ AppTools['regex-tester'] = {
     function run(){
       const pattern = $('#rx-re', body).value, flags = $('#rx-flags', body).value.trim(), text = $('#rx-text', body).value;
       let re;
-      try{ re = new RegExp(pattern, flags.includes('g')?flags:flags+'g'); }catch(e){ $('#rx-result', body).innerHTML = `<div class="result-box err">正则语法错误：${escapeHtml(e.message)}</div>`; return; }
+      try{ re = new RegExp(pattern, flags.includes('g')?flags:flags+'g'); }catch(e){ $('#rx-result', body).innerHTML = `<div class="result-box err">正则语法错误：${escapeHtml(errMsg(e))}</div>`; return; }
       const matches = []; let m; re.lastIndex = 0;
       while((m = re.exec(text)) !== null){ matches.push({idx:m.index, val:m[0], groups:m.slice(1)}); if(m.index===re.lastIndex) re.lastIndex++; if(matches.length>5000) break; }
       // 高亮渲染
@@ -3742,7 +3774,7 @@ AppTools['xml-format'] = {
         walk(doc.documentElement);
         $('#xf-result', body).innerHTML = `<pre class="result-box" id="xf-out">${escapeHtml(formatted)}</pre><div class="btn-row"><button class="btn" id="xf-copy">复制</button></div>`;
         $('#xf-copy', body).onclick=()=>copyText(formatted);
-      }catch(e){ $('#xf-result', body).innerHTML='<div class="result-box err">'+escapeHtml(e.message)+'</div>'; }
+      }catch(e){ $('#xf-result', body).innerHTML='<div class="result-box err">'+escapeHtml(errMsg(e))+'</div>'; }
     };
   }
 };
@@ -3896,7 +3928,7 @@ AppTools['base-convert'] = {
         $('#bc-result', body).innerHTML = `<div class="result-box">结果（${t} 进制）：${out}</div>
           <div class="btn-row"><button class="btn" id="bc-copy">复制</button></div>`;
         $('#bc-copy', body).onclick=()=>copyText(out);
-      }catch(e){ $('#bc-result', body).innerHTML='<div class="result-box err">'+escapeHtml(e.message)+'</div>'; }
+      }catch(e){ $('#bc-result', body).innerHTML='<div class="result-box err">'+escapeHtml(errMsg(e))+'</div>'; }
     };
   }
 };
@@ -4798,7 +4830,7 @@ AppTools['idphoto-bg'] = {
         renderBatchResults($('#bg-result', body), items);
         const el=$('#bg-prog', body); if(el) el.innerHTML = '<span style="color:var(--success)">✅ 换背景完成</span>';
       }catch(err){
-        const el=$('#bg-prog', body); if(el) el.innerHTML = '<span style="color:var(--error)">处理失败：' + escapeHtml(err.message) + '</span>';
+        const el=$('#bg-prog', body); if(el) el.innerHTML = '<span style="color:var(--error)">处理失败：' + escapeHtml(errMsg(err)) + '</span>';
       }
       btn.disabled = false; btn.textContent = 'AI 换背景（保留人物与衣物原色）';
     };
@@ -5025,7 +5057,7 @@ AppTools['tts'] = {
         rec.start();
         recBtn.textContent='■ 停止录制';
         $('#tt-recstat', body).textContent='录制中…再点一次结束';
-      }catch(err){ $('#tt-recstat', body).innerHTML = '<span style="color:var(--error)">无法访问麦克风：' + escapeHtml(err.message) + '</span>'; }
+      }catch(err){ $('#tt-recstat', body).innerHTML = '<span style="color:var(--error)">无法访问麦克风：' + escapeHtml(errMsg(err)) + '</span>'; }
     };
     $('#tt-recplay', body).onclick = () => { if(recUrl){ const a=new Audio(recUrl); a.play(); } };
     $('#tt-recdown', body).onclick = () => { if(recUrl) downloadURL(recUrl, '我的声音样本.webm'); };
@@ -5173,8 +5205,16 @@ AppTools['ocr'] = {
       }
       return pages;
     }
-    async function recognizeCanvas(cv, lang, idx, total){
+    // 语言模型镜像（按优先级尝试）：国内可达的 jsdelivr 镜像 → 云端代理 → 官方源
+    const OCR_LANG_PATHS = (function(){
+      const list = ['https://cdn.jsdelivr.net/gh/naptha/tessdata/4.0.0/'];
+      try{ if(netProxyEnabled()) list.push('/api/proxy?url=' + encodeURIComponent('https://tessdata.projectnaptha.com/4.0.0/')); }catch(_){ }
+      list.push('https://tessdata.projectnaptha.com/4.0.0/');
+      return list;
+    })();
+    async function recognizeCanvas(cv, lang, idx, total, langPath){
       const res = await Tesseract.recognize(cv, lang, {
+        langPath: langPath,
         logger: m => { if(m.status==='recognizing text') $('#oc-prog', body).textContent = `第 ${idx}/${total} 张进度：${Math.round(m.progress*100)}%`; }
       });
       return res.data.text;
@@ -5182,11 +5222,10 @@ AppTools['ocr'] = {
     $('#oc-run', body).onclick = async () => {
       if(!files.length) return;
       const btn = $('#oc-run', body); btn.disabled = true;
-      // 加载 OCR 引擎（直连失败自动走云端代理），并可在开启「联网处理」时经代理拉取语言模型
+      // 加载 OCR 引擎（jsdelivr → unpkg → esm.sh 容灾）
       try{
-        const Tess = await ensureCDNLib('Tesseract', ['https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js','https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js','https://esm.sh/tesseract.js@4.1.1/dist/tesseract.min.js']);
-        if(netProxyEnabled()){ try{ Tess.langPath = viaProxy('https://tessdata.projectnaptha.com/4.0.0/'); }catch(_){ } }
-      }catch(err){ $('#oc-prog', body).innerHTML = '<span style="color:var(--error)">❌ OCR 引擎加载失败：' + escapeHtml(err.message || '网络异常') + '，请检查网络后重试。</span>'; btn.disabled=false; btn.textContent='开始识别'; return; }
+        await ensureCDNLib('Tesseract', ['https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js','https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js','https://esm.sh/tesseract.js@4.1.1/dist/tesseract.min.js']);
+      }catch(err){ $('#oc-prog', body).innerHTML = '<span style="color:var(--error)">❌ OCR 引擎加载失败：' + escapeHtml(errMsg(err, '网络异常')) + '，请检查网络后重试。</span>'; btn.disabled=false; btn.textContent='开始识别'; return; }
       const lang = $('#oc-lang', body).value;
       const blocks = [], items = [];
       let idx = 0;
@@ -5197,21 +5236,22 @@ AppTools['ocr'] = {
         try{
           let texts = [];
           const isPdf = (f.type==='application/pdf') || /\.pdf$/i.test(f.name);
-          if(isPdf){
-            const pages = await rasterizePdf(f);
-            for(let pi=0; pi<pages.length; pi++){
-              const t = await recognizeCanvas(pages[pi], lang, idx, files.length);
-              texts.push(pages.length>1 ? `—— 第 ${pi+1} 页 ——\n${t}` : t);
+          const pages = isPdf ? await rasterizePdf(f) : [preprocess(await fileToImage(f))];
+          for(let pi=0; pi<pages.length; pi++){
+            // 逐镜像尝试下载语言模型，任一成功即用
+            let text = null, lastErr = null;
+            for(const lp of OCR_LANG_PATHS){
+              try{ text = await recognizeCanvas(pages[pi], lang, idx, files.length, lp); break; }
+              catch(e){ lastErr = e; }
             }
-          } else {
-            const img = await fileToImage(f);
-            texts.push(await recognizeCanvas(preprocess(img), lang, idx, files.length));
+            if(text === null) throw lastErr || new Error('语言模型加载失败');
+            texts.push(pages.length>1 ? `—— 第 ${pi+1} 页 ——\n${text}` : text);
           }
           const text = texts.join('\n\n');
           blocks.push(`<div class="batch-item" style="text-align:left"><div class="batch-name">${escapeHtml(f.name)}</div><pre class="result-box" style="white-space:pre-wrap;font-size:13px;max-height:220px;overflow:auto;">${escapeHtml(text)}</pre><button class="btn btn-ghost btn-sm" data-copy="${idx-1}">复制</button></div>`);
           items.push({ name: (f.name.replace(/\.[^.]+$/, '') || 'ocr') + '.txt', blob: new Blob([text], {type:'text/plain'}) });
         }catch(err){
-          blocks.push(`<div class="batch-item" style="text-align:left"><div class="batch-name">${escapeHtml(f.name)}</div><div class="result-box err">识别失败：${escapeHtml(err.message)}</div></div>`);
+          blocks.push(`<div class="batch-item" style="text-align:left"><div class="batch-name">${escapeHtml(f.name)}</div><div class="result-box err">识别失败：${escapeHtml(errMsg(err, '未知错误'))}</div></div>`);
         }
       }
       $('#oc-result', body).innerHTML = `<div class="batch-info">共识别 ${files.length} 个文件</div><div class="thumb-grid">${blocks.join('')}</div><div class="btn-row"><button class="btn" id="oc-zip">导出全部 TXT（ZIP）</button></div><div class="hint" style="margin-top:8px;">🔎 解读：OCR 为机器识别，手写体、艺术字、模糊或倾斜图片可能出现错字 / 漏字；请对照原图核对关键数字与姓名。如需更高准确率，可在「图片预处理」选二值化，并尽量使用清晰正拍的图。</div>`;
@@ -5326,7 +5366,7 @@ AppTools['exchange'] = {
         $('#ex-note', body).innerHTML = '✔ 已同步实时汇率（多源容灾：open.er-api.com → frankfurter.app，' + (j.time_last_update_utc || j.date || '') + '）';
         toast('汇率已更新');
       }catch(err){
-        $('#ex-note', body).innerHTML = '<span style="color:var(--error)">实时汇率同步失败（' + escapeHtml(err.message) + '），沿用内置参考值。请检查网络后重试。</span>';
+        $('#ex-note', body).innerHTML = '<span style="color:var(--error)">实时汇率同步失败（' + escapeHtml(errMsg(err)) + '），沿用内置参考值。请检查网络后重试。</span>';
       }
       btn.disabled = false; btn.textContent = '↻ 刷新实时汇率';
       calc();
@@ -5490,7 +5530,7 @@ AppTools['pdf-sign'] = {
         $('#ps-prog', body).textContent=`已载入，共 ${pageCount} 页。请在预览上拖动印章到合适位置后点「应用并下载」。`;
         syncModeUI();
       }catch(err){
-        $('#ps-preview', body).innerHTML=`<div class="result-box err">预览失败：${escapeHtml(err.message)}</div>`;
+        $('#ps-preview', body).innerHTML=`<div class="result-box err">预览失败：${escapeHtml(errMsg(err))}</div>`;
         $('#ps-run', body).disabled=true;
       }
     }
@@ -5622,7 +5662,7 @@ AppTools['pdf-sign'] = {
           downloadBlob(new Blob([outBytes],{type:'application/pdf'}),'signed.pdf');
           $('#ps-result', body).innerHTML=`<div class="result-box ok">已导出带章 PDF（${docType==='docx'?'Word':'Excel'} → 图片版 PDF，保留原文与印章）。</div>`;
         }
-      }catch(err){ $('#ps-result', body).innerHTML=`<div class="result-box err">处理失败：${escapeHtml(err.message)}</div>`; }
+      }catch(err){ $('#ps-result', body).innerHTML=`<div class="result-box err">处理失败：${escapeHtml(errMsg(err))}</div>`; }
       btn.disabled=false; btn.textContent='应用并下载';
     };
   }
@@ -5954,7 +5994,7 @@ AppTools['math-formula'] = {
       lines.forEach((t,i) => {
         const el = $('#eq-' + i, preview);
         try{ katex.render(t, el, { throwOnError:false, displayMode:true }); }
-        catch(e){ el.innerHTML = '<span style="color:var(--error)">⚠ '+escapeHtml(e.message)+'</span>'; }
+        catch(e){ el.innerHTML = '<span style="color:var(--error)">⚠ '+escapeHtml(errMsg(e))+'</span>'; }
       });
     }
     src.addEventListener('input', render);
@@ -6026,7 +6066,8 @@ AppTools['math-formula'] = {
 const TOOLS = [
   /* ============ 图片工具 ============ */
   {id:'ocr',          name:'在线 OCR 识字',      icon:'👁️', cat:'image', desc:'支持图片与 PDF 扫描件（自动按页栅格化）一键转文字，支持中文+英文 / 日语 / 韩语 / 法语 / 德语 / 西语 / 俄语 / 葡语 / 意语 / 阿语等多语言识别，灰度 / 对比度 / 二值化预处理，逐张复制或打包 ZIP 下载 TXT；模型首次下载后可离线缓存。', batch:true},
-  {id:'img-matting',  name:'AI 智能抠图',         icon:'🪄', cat:'image', desc:'AI 一键抠图（人物 / 食物 / 商品，首次约 40MB 模型），透明 / 白 / 蓝 / 自定义底色，支持精度 / 边缘羽化 / 高清缩放；附手动框选（矩形 / 多边形 / 套索，撤销重做）批量导出。', batch:true},
+  {id:'img-matting-ai',     name:'AI 自动抠图',     icon:'🪄', cat:'image', desc:'浏览器本地 AI 一键抠图（人物 / 食物 / 商品，模型托管本站，国内可达），透明 / 白 / 蓝 / 自定义底色，支持精度 / 边缘羽化 / 高清缩放，可批量。', batch:true},
+  {id:'img-matting-manual', name:'手动框选抠图',   icon:'✂️', cat:'image', desc:'手动框选抠图，支持矩形 / 多边形 / 套索任意形状，撤销重做、画布缩放平移，同一张图可多次框选不同对象并打包导出，无需联网。', batch:true},
   {id:'idphoto-bg',   name:'证件照换背景',        icon:'🪪', cat:'image', desc:'AI 分割后蓝 / 白 / 红 / 自定义纯色换底，边缘羽化柔化发丝，支持批量；常用于证件照。', batch:true},
   {id:'img-idphoto',  name:'证件照裁剪',          icon:'🪪', cat:'image', desc:'一寸 / 二寸 / 小一寸 / 小二寸 / 大一寸 / 护照等常用证件尺寸预设，自动居中裁剪导出 PNG。'},
   {id:'img-upscale',  name:'图片放大',            icon:'🔍', cat:'image', desc:'按目标长边（原图 / 1080P / 2K / 4K / 8K）高质量重采样放大，支持批量；适合手机随拍 / 老照片放大（非 AI 超分，放大仍可能略糊）。', batch:true},
@@ -6427,7 +6468,7 @@ function restoreTool(id){
   if(miniCache[target]){ modalBody.appendChild(miniCache[target]); delete miniCache[target]; }
   else if(AppTools[target]){
     try{ AppTools[target].build(modalBody); }
-    catch(err){ modalBody.innerHTML = '<div class="result-box err">工具加载失败：'+escapeHtml(err.message)+'</div>'; }
+    catch(err){ modalBody.innerHTML = '<div class="result-box err">工具加载失败：'+escapeHtml(errMsg(err))+'</div>'; }
   }
   activeTool = target;
   overlay.classList.add('show'); overlay.setAttribute('aria-hidden','false'); document.body.style.overflow = 'hidden';
@@ -6456,7 +6497,7 @@ function openToolModal(id){
   window.__toolCleanup = null;
   // 注：已最小化的应用保留在右下角 dock，不在此清空
   try{ tool.build(modalBody); }
-  catch(err){ modalBody.innerHTML = '<div class="result-box err">工具加载失败：'+escapeHtml(err.message)+'</div>'; }
+  catch(err){ modalBody.innerHTML = '<div class="result-box err">工具加载失败：'+escapeHtml(errMsg(err))+'</div>'; }
   overlay.classList.add('show');
   overlay.setAttribute('aria-hidden','false');
   document.body.style.overflow = 'hidden';
@@ -7025,7 +7066,7 @@ AppTools['img2excel'] = {
         table = rows.map(r => { const arr = r.cells.map(c=>c.text); while(arr.length < maxCols) arr.push(''); return arr; });
         headerless = false;
         renderResult();
-      }catch(err){ $('#ie-result', body).innerHTML = '<div class="result-box err">识别失败：' + escapeHtml(err.message) + '</div>'; }
+      }catch(err){ $('#ie-result', body).innerHTML = '<div class="result-box err">识别失败：' + escapeHtml(errMsg(err)) + '</div>'; }
       btn.disabled = false; btn.textContent = '识别并生成表格';
     };
     // 文档提取（PDF / Word）
@@ -7067,7 +7108,7 @@ AppTools['img2excel'] = {
         }
         if(!rows.length) throw new Error('未提取到表格内容，请确认文档含表格或文本');
         table = rows; headerless = false; renderResult();
-      }catch(err){ $('#ie-result', body).innerHTML = '<div class="result-box err">提取失败：' + escapeHtml(err.message) + '</div>'; }
+      }catch(err){ $('#ie-result', body).innerHTML = '<div class="result-box err">提取失败：' + escapeHtml(errMsg(err)) + '</div>'; }
       btn.disabled = false; btn.textContent = '提取表格';
     };
   }
@@ -7172,7 +7213,7 @@ AppTools['audio-fix'] = {
       const f = e.target.files[0]; if(!f) return;
       try{ const ab = await f.arrayBuffer(); const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC(); srcBuf = await ac.decodeAudioData(ab); outBuf=null; ac.close();
         $('#af-run', body).disabled = false; $('#af-prog', body).textContent = `已载入：${srcBuf.duration.toFixed(1)}s`; }
-      catch(err){ $('#af-prog', body).innerHTML = '<span style="color:var(--error)">音频解码失败：' + escapeHtml(err.message) + '</span>'; }
+      catch(err){ $('#af-prog', body).innerHTML = '<span style="color:var(--error)">音频解码失败：' + escapeHtml(errMsg(err)) + '</span>'; }
     };
     function resample(ch, ratio, newLen){
       const out = new Float32Array(newLen);
@@ -7218,7 +7259,7 @@ AppTools['audio-fix'] = {
       const btn = $('#af-run', body); btn.disabled = true; btn.innerHTML = '<span class="loading"><span class="spinner"></span>处理中…</span>';
       setTimeout(() => {
         try{ outBuf = process(); $('#af-play', body).disabled = false; $('#af-dl', body).disabled = false; $('#af-prog', body).textContent = '已生成，可试听或下载'; }
-        catch(err){ $('#af-prog', body).innerHTML = '<span style="color:var(--error)">处理失败：' + escapeHtml(err.message) + '</span>'; }
+        catch(err){ $('#af-prog', body).innerHTML = '<span style="color:var(--error)">处理失败：' + escapeHtml(errMsg(err)) + '</span>'; }
         btn.disabled = false; btn.textContent = '生成';
       }, 30);
     };
@@ -7481,7 +7522,7 @@ AppTools['lunar'] = {
         if(bkText) h+=`<div class="card-soft mt"><b>百科：</b>${bkText}<br><button class="btn btn-ghost btn-sm" id="ln-bk">在百度百科查看「${bkWord}」↗</button></div>`;
         $('#ln-out',body).innerHTML=h;
         if(bkText){ const bk=$('#ln-bk',body); if(bk) bk.onclick=()=>window.open('https://baike.baidu.com/item/'+encodeURIComponent(bkWord),'_blank','noopener'); }
-      }catch(e){ $('#ln-out',body).innerHTML='<span style="color:var(--error)">'+escapeHtml(e.message)+'</span>'; }
+      }catch(e){ $('#ln-out',body).innerHTML='<span style="color:var(--error)">'+escapeHtml(errMsg(e))+'</span>'; }
     };
     $('#ln-toG',body).onclick=()=>{
       const y=+$('#ln-ly',body).value,m=+$('#ln-lm',body).value,d=+$('#ln-ld',body).value,lp=+$('#ln-leap',body).value;
@@ -7491,7 +7532,7 @@ AppTools['lunar'] = {
         if(!dt){ $('#ln-out',body).innerHTML='转换失败，请检查输入'; return; }
         const iso=dt.cYear+'-'+String(dt.cMonth).padStart(2,'0')+'-'+String(dt.cDay).padStart(2,'0');
         $('#ln-out',body).innerHTML=`<div class="big-num">${y}年${LUNAR_MNAME[m-1]}月${d}日（${lp?'闰':''}）→ 公历 ${iso}</div><div class="tag-green">${astroOf(dt.cYear,dt.cMonth,dt.cDay)} · ${dt.ncWeek||''}</div>`;
-      }catch(e){ $('#ln-out',body).innerHTML='<span style="color:var(--error)">'+escapeHtml(e.message)+'</span>'; }
+      }catch(e){ $('#ln-out',body).innerHTML='<span style="color:var(--error)">'+escapeHtml(errMsg(e))+'</span>'; }
     };
   }
 };
@@ -7521,7 +7562,7 @@ AppTools['solar-term'] = {
         if(!next && rows[0]) next={name:rows[0].name, dt:new Date(Y+1,rows[0].m-1,rows[0].d)};
         if(next){ const days=Math.ceil((next.dt-now)/86400000); html+=`<div class="tag-green">距离下一个节气「${next.name}」约 ${days} 天（${next.dt.getFullYear()}-${next.dt.getMonth()+1}-${next.dt.getDate()}）</div>`; }
         $('#st-out',body).innerHTML=html;
-      }catch(e){ $('#st-out',body).innerHTML='<span style="color:var(--error)">'+escapeHtml(e.message)+'</span>'; }
+      }catch(e){ $('#st-out',body).innerHTML='<span style="color:var(--error)">'+escapeHtml(errMsg(e))+'</span>'; }
     };
   }
 };
@@ -8737,7 +8778,7 @@ AppTools['img-to-pdf'] = {
         }
         downloadBlob(new Blob([await doc.save()],{type:'application/pdf'}),'images.pdf');
         $('#ip-out',body).innerHTML='<div class="result-box ok">已生成 PDF（'+imgs.length+' 页），开始下载</div>';
-      }catch(err){ $('#ip-out',body).innerHTML='<div class="result-box err">生成失败：'+escapeHtml(err.message)+'</div>'; }
+      }catch(err){ $('#ip-out',body).innerHTML='<div class="result-box err">生成失败：'+escapeHtml(errMsg(err))+'</div>'; }
       btn.disabled=false; btn.textContent='生成 PDF';
     };
   }
@@ -8827,7 +8868,7 @@ AppTools['pdf-watermark'] = {
         }
         if(out.length===1){ downloadBlob(out[0].blob, out[0].name); $('#pw-out',body).innerHTML='<div class="result-box ok">已添加水印（'+out.length+' 个文件），开始下载</div>'; }
         else { await downloadZip(out, 'watermarked.zip'); $('#pw-out',body).innerHTML='<div class="result-box ok">已处理 '+out.length+' 个文件，开始下载 ZIP</div>'; }
-      }catch(err){ $('#pw-out',body).innerHTML='<div class="result-box err">失败：'+escapeHtml(err.message)+'</div>'; }
+      }catch(err){ $('#pw-out',body).innerHTML='<div class="result-box err">失败：'+escapeHtml(errMsg(err))+'</div>'; }
       busy=false; $('#pw-run',body).disabled=!files.length;
     };
   }
@@ -9480,7 +9521,7 @@ renderTools();
     var b=document.createElement('button');
     b.id='installBtn'; b.className='install-fab'; b.textContent='➕ 安装到主屏幕';
     b.onclick=function(){
-      if(!deferred){ toast('请改用浏览器菜单的「添加到主屏幕 / 安装应用」','info'); return; }
+      if(!deferred){ showInstallGuide(); return; }
       deferred.prompt();
       var uc=deferred.userChoice; deferred=null;
       if(uc&&uc.finally){ uc.finally(function(){ if(b&&b.parentNode) b.remove(); }); }
@@ -9508,16 +9549,16 @@ renderTools();
     document.body.appendChild(d);
     document.getElementById('iosInstallClose').onclick=function(){ d.remove(); try{ localStorage.setItem('pt_ios_install_dismissed','1'); }catch(_){ } };
   }
-  // Android / 桌面 Chrome 没触发 beforeinstallprompt → 仍显示一个轻量提示卡（最多 3s 后可关）
+  // Android / 桌面 Chrome 没触发 beforeinstallprompt → 显示一个可点击的提示卡（点击打开安装引导，真正有安装功能）
   function showGenericInstall(){
     if(document.getElementById('genericInstallTip') || document.getElementById('installBtn')) return;
     var d=document.createElement('div');
     d.id='genericInstallTip';
-    d.style.cssText='position:fixed;right:16px;bottom:16px;z-index:75;background:var(--card);color:var(--text);border:1px dashed var(--primary);border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5;box-shadow:var(--shadow);display:flex;gap:8px;align-items:center;max-width:320px';
-    d.innerHTML = '<span>📲 想安装？点浏览器菜单的「<b>添加到主屏幕 / 安装应用</b>」即可</span><button id="gInstallClose" style="background:none;color:var(--text-2);font-size:16px;line-height:1;padding:2px 6px">×</button>';
+    d.style.cssText='position:fixed;right:16px;bottom:16px;z-index:75;background:var(--card);color:var(--text);border:1px solid var(--primary);border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5;box-shadow:var(--shadow);display:flex;gap:8px;align-items:center;max-width:320px;cursor:pointer';
+    d.innerHTML = '<span>📲 点此打开安装引导（含一键安装 / 手动步骤）</span><button id="gInstallClose" style="background:none;color:var(--text-2);font-size:16px;line-height:1;padding:2px 6px">×</button>';
     document.body.appendChild(d);
-    document.getElementById('gInstallClose').onclick=function(){ d.remove(); };
-    setTimeout(function(){ if(d.parentNode) d.remove(); }, 12000);
+    d.addEventListener('click', function(e){ if(e.target && e.target.id==='gInstallClose'){ d.remove(); return; } showInstallGuide(); });
+    setTimeout(function(){ if(d.parentNode) d.remove(); }, 15000);
   }
 
   // 启动逻辑
@@ -9531,6 +9572,7 @@ renderTools();
   // ===== 顶部「📱 安装」按钮：优先触发原生安装（beforeinstallprompt），否则打开引导面板 =====
   var installOverlay = document.getElementById('installOverlay');
   var installClose = document.getElementById('installClose');
+  var installZoom = document.getElementById('installZoom');
   var openInstallGuide = document.getElementById('openInstallGuide');
   var installNativeBtn = document.getElementById('installNativeBtn');
   var installNativeClick = document.getElementById('installNativeClick');
@@ -9561,6 +9603,7 @@ renderTools();
     if(!triggerNativeInstall()) showInstallGuide();
   });
   if(installClose) installClose.addEventListener('click', hideInstallGuide);
+  if(installZoom) installZoom.addEventListener('click', function(){ const on = installOverlay.classList.toggle('fs-on'); installZoom.textContent = on ? '🗗' : '⛶'; });
   if(installOverlay) installOverlay.addEventListener('click', function(e){ if(e.target===installOverlay) hideInstallGuide(); });
   if(installNativeClick) installNativeClick.addEventListener('click', function(){
     if(!deferred){ toast('当前浏览器暂不支持一键安装，请按上方说明手动添加','info'); return; }
