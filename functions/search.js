@@ -18,20 +18,29 @@
 
 const UA = 'Mozilla/5.0 (compatible; PanQingToolbox/1.0; +https://panqingtool.pages.dev)';
 
-// 规整搜索结果链接：解码双重编码、补齐协议、去除追踪尾参（rut / uddg），保证可打开
+// 规整搜索结果链接：解码双重编码、补齐协议、去除追踪尾参，保证可打开
 function cleanUrl(raw) {
   if (!raw) return '';
   let u = String(raw).trim();
+  // 反转义 HTML 实体（Bing 等返回的 &amp;）
+  u = u.replace(/&amp;/gi, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
   // 去掉 DuckDuckGo 中转页的 rut 等尾参
   u = u.replace(/[?&]rut=[^&]+/i, '').replace(/[?&]ia=[^&]+/i, '');
-  // 去掉 Bing 的追踪尾参
-  u = u.replace(/[?&](form|sk|cvid|aqs|ie|oq|r)=[^&]+/gi, '');
   // 处理 DuckDuckGo 中转：uddg=ENCODED_URL（可能双重编码）
   const m = u.match(/[?&]uddg=([^&]+)/i);
   if (m) {
     try { u = decodeURIComponent(m[1]); } catch (_) {}
   }
-  // 处理 Bing 中转：偏向于直接域名
+  // 处理 Bing 中转 ck/a?...&u=a1BASE64 → 提取真实目标 URL
+  const bu = u.match(/[?&]u=a1([^&]+)/i);
+  if (bu) {
+    try {
+      let dec = Buffer.from(bu[1], 'base64').toString('utf8');
+      // 真实 URL 形如 aHR0cHM... 或 http...
+      const mm = dec.match(/https?:\/\/[^\s"<>]+/i);
+      if (mm) u = mm[0];
+    } catch (_) {}
+  }
   // 反复解码直到稳定（处理 %25 等二次编码）
   let prev;
   let guard = 0;
