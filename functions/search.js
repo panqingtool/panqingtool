@@ -24,11 +24,14 @@ function cleanUrl(raw) {
   let u = String(raw).trim();
   // 去掉 DuckDuckGo 中转页的 rut 等尾参
   u = u.replace(/[?&]rut=[^&]+/i, '').replace(/[?&]ia=[^&]+/i, '');
+  // 去掉 Bing 的追踪尾参
+  u = u.replace(/[?&](form|sk|cvid|aqs|ie|oq|r)=[^&]+/gi, '');
   // 处理 DuckDuckGo 中转：uddg=ENCODED_URL（可能双重编码）
   const m = u.match(/[?&]uddg=([^&]+)/i);
   if (m) {
     try { u = decodeURIComponent(m[1]); } catch (_) {}
   }
+  // 处理 Bing 中转：偏向于直接域名
   // 反复解码直到稳定（处理 %25 等二次编码）
   let prev;
   let guard = 0;
@@ -64,7 +67,7 @@ export async function onRequestGet(context) {
 
   // auto：依次尝试各 provider，第一个成功的就返回
   if (wantProvider === 'auto') {
-    const chain = ['brave', 'google', 'wikipedia', 'duckduckgo', 'bing'];
+    const chain = ['bing-html', 'wikipedia', 'duckduckgo'];
     const tried = [];
     for (const p of chain) {
       try {
@@ -87,12 +90,33 @@ export async function onRequestGet(context) {
 }
 
 async function run(provider, q, count, env) {
+  if (provider === 'bing-html')      return await bingHtmlSearch(q, count);
   if (provider === 'brave')          return await braveSearch(q, env.BRAVE_API_KEY, count);
   if (provider === 'google')         return await googleSearch(q, env.GOOGLE_API_KEY, env.GOOGLE_CX, count);
   if (provider === 'bing')           return await bingSearch(q, env.BING_API_KEY, count);
   if (provider === 'duckduckgo')     return await ddgSearch(q, count);
   if (provider === 'wikipedia')      return await wikiSearch(q, count, 'zh');
   throw new Error('未知的 provider: ' + provider);
+}
+
+/* ---------- bing html（必应公开搜索页，CF 边缘可达，国内亦可访问） ---------- */
+async function bingHtmlSearch(q, count) {
+  const u = 'https://www.bing.com/search?q=' + encodeURIComponent(q) + '&count=' + count;
+  const r = await fetch(u, { headers: { 'User-Agent': UA, 'Accept-Language': 'zh-CN,zh;q=0.9', Accept: 'text/html' } });
+  if (!r.ok) throw new Error('bing http ' + r.status);
+  const html = await r.text();
+  // 必应结果链接：<li class="b_algo"> 内的 <h2><a href="...">
+  const out = [];
+  const re = /<li class="b_algo"[^>]*>[\s\S]*?<h2[^>]*><a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+  let m;
+  while ((m = re.exec(html)) && out.length < count) {
+    const url = cleanUrl(m[1]);
+    const title = String(m[2] || '').replace(/<[^>]+>/g, '').trim();
+    if (!url || !title) continue;
+    out.push({ title, url, snippet: '' });
+  }
+  if (!out.length) throw new Error('bing 无结果');
+  return { ok: true, query: q, results: out };
 }
 
 /* ---------- brave ---------- */
