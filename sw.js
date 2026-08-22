@@ -1,4 +1,4 @@
-/* 托托工具箱 · Service Worker v10
+/* 托托工具箱 · Service Worker v11
  * 缓存策略：
  *  - 预缓存：app 外壳（index.html / manifest / 图标 / nav-logo / 水印）
  *  - 页面导航：stale-while-revalidate（先返回缓存秒开，同时后台拉新版本更新缓存）
@@ -14,7 +14,7 @@
  *  浏览器检测到 sw.js 变化，下载新 SW 并执行 skipWaiting 立即激活，
  *  activate 事件删除所有旧版本缓存，用户无需手动清缓存。
  */
-const VERSION = 'v10';
+const VERSION = 'v11';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const CDN_CACHE = 'cdn-' + VERSION;
@@ -87,17 +87,35 @@ self.addEventListener('fetch', (event) => {
 
   // 页面导航：stale-while-revalidate（关键优化 → 快捷方式秒开）
   // 先返回缓存里的旧 index.html（如果有），同时后台拉新版更新缓存
+  // 全程 try/catch：任何异常都保证返回一个合法 Response，绝不抛出导致
+  // 「网站暂时无法访问 / 空白页」（尤其从主屏快捷方式打开的 standalone 窗口）。
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
-      const cached = await caches.match('./index.html') || await caches.match(req);
-      const fetchPromise = safeFetch(req).then((net) => {
-        if (net && net.ok) {
-          caches.open(RUNTIME_CACHE).then(cc => cc.put('./index.html', net.clone())).catch(() => {});
-        }
-        return net;
-      }).catch(() => null);
-      // 有缓存就立即返回（秒开），网络结果会更新到缓存供下次使用
-      return cached || (await fetchPromise) || new Response('<h1>离线中</h1>', { status: 503, headers: { 'Content-Type': 'text/html' } });
+      try {
+        const cached = await caches.match('./index.html') || await caches.match(req);
+        const fetchPromise = safeFetch(req).then((net) => {
+          if (net && net.ok) {
+            caches.open(RUNTIME_CACHE).then(cc => cc.put('./index.html', net.clone())).catch(() => {});
+          }
+          return net;
+        }).catch(() => null);
+        const net = await fetchPromise;
+        // 缓存秒开优先
+        if (cached) return cached;
+        // 网络成功直接返回（含 4xx/5xx 交给浏览器处理，避免空白）
+        if (net) return net;
+        // 兜底 1：再尝试一次直接网络
+        try { const f2 = await safeFetch(req); if (f2) return f2; } catch (_) {}
+        // 兜底 2：外壳缓存
+        const shell = await caches.match('./index.html');
+        if (shell) return shell;
+        return new Response('<!doctype html><meta charset="utf-8"><h1>离线 / 网络异常</h1><p>请检查网络后下拉刷新，或重新从主屏幕打开本工具箱。</p>', { status: 503, headers: { 'Content-Type': 'text/html;charset=utf-8' } });
+      } catch (err) {
+        // 任何未预期异常：尽量返回网络，再兜底缓存，最后 503
+        try { const f = await safeFetch(req); if (f) return f; } catch (_) {}
+        try { const shell = await caches.match('./index.html'); if (shell) return shell; } catch (_) {}
+        return new Response('<!doctype html><meta charset="utf-8"><h1>离线 / 网络异常</h1><p>请检查网络后下拉刷新，或重新从主屏幕打开本工具箱。</p>', { status: 503, headers: { 'Content-Type': 'text/html;charset=utf-8' } });
+      }
     })());
     return;
   }
