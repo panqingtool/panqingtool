@@ -18,6 +18,32 @@
 
 const UA = 'Mozilla/5.0 (compatible; PanQingToolbox/1.0; +https://panqingtool.pages.dev)';
 
+// 规整搜索结果链接：解码双重编码、补齐协议、去除追踪尾参（rut / uddg），保证可打开
+function cleanUrl(raw) {
+  if (!raw) return '';
+  let u = String(raw).trim();
+  // 去掉 DuckDuckGo 中转页的 rut 等尾参
+  u = u.replace(/[?&]rut=[^&]+/i, '').replace(/[?&]ia=[^&]+/i, '');
+  // 处理 DuckDuckGo 中转：uddg=ENCODED_URL（可能双重编码）
+  const m = u.match(/[?&]uddg=([^&]+)/i);
+  if (m) {
+    try { u = decodeURIComponent(m[1]); } catch (_) {}
+  }
+  // 反复解码直到稳定（处理 %25 等二次编码）
+  let prev;
+  let guard = 0;
+  do {
+    prev = u;
+    try { u = decodeURIComponent(u); } catch (_) { break; }
+  } while (u !== prev && ++guard < 5);
+  u = u.trim();
+  if (/^\/\//.test(u)) u = 'https:' + u;
+  if (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(u)) u = 'https://' + u;
+  // 最终校验：必须是合法 http(s) URL，否则回退空
+  if (!/^https?:\/\//i.test(u)) return '';
+  return u;
+}
+
 function json(obj, status, extraHeaders) {
   return new Response(JSON.stringify(obj), {
     status,
@@ -78,7 +104,7 @@ async function braveSearch(q, key, count) {
   const j = await r.json();
   const items = (j && j.web && j.web.results) || [];
   if (!items.length) throw new Error('brave 无结果');
-  return { ok: true, query: q, results: items.slice(0, count).map((x) => ({ title: x.title, url: x.url, snippet: x.description || '' })) };
+  return { ok: true, query: q, results: items.slice(0, count).map((x) => ({ title: x.title, url: cleanUrl(x.url), snippet: x.description || '' })) };
 }
 
 /* ---------- google ---------- */
@@ -90,7 +116,7 @@ async function googleSearch(q, key, cx, count) {
   const j = await r.json();
   const items = (j.items || []);
   if (!items.length) throw new Error('google 无结果');
-  return { ok: true, query: q, results: items.slice(0, count).map((x) => ({ title: x.title, url: x.link, snippet: x.snippet || '' })) };
+  return { ok: true, query: q, results: items.slice(0, count).map((x) => ({ title: x.title, url: cleanUrl(x.link), snippet: x.snippet || '' })) };
 }
 
 /* ---------- bing ---------- */
@@ -102,7 +128,7 @@ async function bingSearch(q, key, count) {
   const j = await r.json();
   const items = (j.webPages && j.webPages.value) || [];
   if (!items.length) throw new Error('bing 无结果');
-  return { ok: true, query: q, results: items.slice(0, count).map((x) => ({ title: x.name, url: x.url, snippet: x.snippet || '' })) };
+  return { ok: true, query: q, results: items.slice(0, count).map((x) => ({ title: x.name, url: cleanUrl(x.url), snippet: x.snippet || '' })) };
 }
 
 /* ---------- wikipedia（服务端，免墙） ---------- */
@@ -122,7 +148,7 @@ async function wikiSearch(q, count, lang) {
           query: q,
           results: titles.slice(0, count).map((t, i) => ({
             title: t,
-            url: urls[i] || ('https://' + l + '.wikipedia.org/wiki/' + encodeURIComponent(t)),
+            url: cleanUrl(urls[i] || ('https://' + l + '.wikipedia.org/wiki/' + encodeURIComponent(t))),
             snippet: (descs[i] || ('维基百科 · ' + l)).slice(0, 240)
           }))
         };
@@ -144,8 +170,7 @@ async function ddgSearch(q, count) {
   const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
   const out = []; let m;
   while ((m = re.exec(html)) && out.length < count) {
-    const href = (m[1] || '').replace(/^\/l\/\?uddg=/, '');
-    let url = href; try { url = decodeURIComponent(href); } catch (_) {}
+    const url = cleanUrl(m[1]);
     const title = String(m[2] || '').replace(/<[^>]+>/g, '').trim();
     if (!url || !title) continue;
     out.push({ title, url, snippet: '' });
