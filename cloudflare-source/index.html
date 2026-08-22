@@ -790,30 +790,33 @@ th{background:var(--bg);}
         <p style="margin:0 0 14px;font-size:12.5px;color:var(--text-2)">📱 手机上面首次下载打开可能会有点慢，请耐心等待几秒。</p>
         <div class="ig-platform">
           <b>📱 iPhone / iPad（Safari）</b>
-          <ol>
-            <li>点击底部的 <b>「分享」按钮 <span style="display:inline-block;width:18px;height:18px;background:#1890ff;color:#fff;border-radius:4px;text-align:center;line-height:18px;font-size:12px;vertical-align:middle">↑</span></b></li>
-            <li>在弹出菜单里选 <b>「添加到主屏幕」</b></li>
-            <li>名称可改，点右上角 <b>「添加」</b> 完成</li>
-            <li>返回桌面就能看到「托托工具箱」图标</li>
+          <ol style="margin:2px 0 0 20px;padding:0;line-height:1.35">
+            <li style="margin:2px 0">点击底部「分享」<span style="display:inline-block;width:18px;height:18px;background:#1890ff;color:#fff;border-radius:4px;text-align:center;line-height:18px;font-size:12px;vertical-align:middle">↑</span></li>
+            <li style="margin:2px 0">菜单里选「添加到主屏幕」</li>
+            <li style="margin:2px 0">名称可改，点右上角「添加」完成</li>
+            <li style="margin:2px 0">返回桌面即可看到「托托工具箱」图标</li>
           </ol>
         </div>
         <div class="ig-platform">
           <b>🤖 安卓手机（Chrome / 华为 / 小米浏览器）</b>
-          <ol>
-            <li>点击右上角 <b>「⋮」菜单</b>（或浏览器地址栏右侧的「安装」）</li>
-            <li>选择 <b>「安装应用 / 添加到主屏幕」</b></li>
-            <li>在弹窗里点 <b>「安装」</b> 即可</li>
-            <li>如果没看到菜单项，先 <b>刷新一下页面</b>，浏览器才会识别这是 PWA</li>
+          <ol style="margin:2px 0 0 20px;padding:0;line-height:1.35">
+            <li style="margin:2px 0">点右上角「⋮」菜单（或地址栏右侧「安装」）</li>
+            <li style="margin:2px 0">选「安装应用 / 添加到主屏幕」</li>
+            <li style="margin:2px 0">弹窗里点「安装」即可</li>
+            <li style="margin:2px 0">没看到菜单项就先刷新一下页面</li>
           </ol>
-          <div style="margin-top:6px;padding:6px 10px;background:rgba(24,144,255,.08);border-radius:6px;color:var(--text-2);font-size:12.5px;line-height:1.5">💡 <b>建议使用手机自带的 Chrome 或系统浏览器</b>，避免第三方 App 内置浏览器拦截安装步骤。</div>
+          <div style="margin-top:4px;padding:5px 9px;background:rgba(24,144,255,.08);border-radius:6px;color:var(--text-2);font-size:12.5px;line-height:1.45">💡 建议用手机自带 Chrome 或系统浏览器，第三方 App 内置浏览器可能拦截安装步骤。</div>
         </div>
         <div class="ig-platform">
           <b>💻 电脑（Chrome / Edge）</b>
-          <ol>
-            <li>浏览器地址栏右侧会出现 <b>「安装」图标 ⊕</b>，点击即可</li>
-            <li>或点浏览器右上角 <b>「⋮」→「将此应用作为应用安装」</b></li>
-            <li>安装后桌面会有图标，独立窗口运行，不受标签页影响</li>
+          <ol style="margin:2px 0 0 20px;padding:0;line-height:1.35">
+            <li style="margin:2px 0">地址栏右侧出现「安装」图标 ⊕，点击即可</li>
+            <li style="margin:2px 0">或点右上角「⋮」→「将此应用作为应用安装」</li>
+            <li style="margin:2px 0">安装后桌面生成图标，独立窗口运行</li>
           </ol>
+        </div>
+        <div id="igInstalledTip" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(24,144,255,.08);border:1px solid var(--primary);border-radius:8px;color:var(--text-2);font-size:13px;line-height:1.6">
+          ✅ 您已通过快捷方式进入本工具箱（说明安装成功）。如需重新安装，请先卸载当前快捷方式，再点顶部「📱 安装」按浏览器提示添加即可。
         </div>
         <div id="installNativeBtn" style="margin-top:14px;text-align:center;display:none">
           <button class="btn" id="installNativeClick" style="font-size:15px;padding:10px 24px">⚡ 一键安装到本机</button>
@@ -6606,12 +6609,13 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-22', items:[
-    '【安装引导 · 点击有响应】顶部「📱 安装」按钮改为：点击始终打开安装引导面板（不再因 beforeinstallprompt 已消费而静默无响应），并保留原生一键安装唤起；面板内容紧凑化——去除清单双编号、项间空行与行首逗号，并在「把工具箱装到主屏幕」下新增"手机上面首次下载打开可能会有点慢"提示',
-    '【PWA · 图标圆角】桌面快捷方式图标改为圆角：maskable 图标由满铺方角改为圆角+透明（手机端由系统遮罩仍为圆角，不受影响），Windows 桌面快捷方式不再方正',
-    '【删除】移除「AI 自动抠图」应用（模型加载长期不可用）；保留「手动框选抠图」与「AI 换背景」',
-    '【OCR · 去空格】在线 OCR 修复 Tesseract 中英混合识别时在汉字/全角标点之间误插的空格（复制与预览均不再有多余空格，英文词间空格保留）；"导出全部 TXT(ZIP)"无响应 → 改为「导出全部 TXT」与「导出 Word(.doc)」直接下载',
-    '【联网搜索 · 链接可打开】搜索结果链接规整：补齐缺失协议（http/https/裸域名/协议相对），统一升级 https，链接残缺无法修复时回退为"以标题在 Google 搜索"，彻底解决点不开网站的问题',
-    '【PDF 签章 · 位置一致】预览画布改为铺满预览区域（消除左右/上下信箱留白与比例失真），预览印章位置与下载后实际位置现在完全一致（坐标系统一为按页比例）',
+    '【安装】修复从桌面快捷方式（已安装）进入时点「安装」无响应的问题：现按钮始终可见并打开引导面板，已安装时显示对应提示；面板排版更紧凑，每条步骤单行展示、清除多余逗号、安卓步骤精简',
+    '【PWA · 图标圆角】桌面快捷方式图标改为圆角（maskable 由方角改圆角+透明）；旧快捷方式需删除后重新添加方可生效',
+    '【删除】移除「AI 自动抠图」（模型长期不可用），保留「手动框选抠图」与「AI 换背景」',
+    '【OCR】修复中文识别结果字间误插空格（复制/预览均无多余空格）；导出改为「TXT」与「Word(.doc)」直下，取消 ZIP',
+    '【联网搜索】后端统一清洗搜索结果链接（解码中转、去追踪参数、补 https），彻底解决点不开网站',
+    '【PDF 签章】预览画布铺满区域，印章预览位置与下载后实际位置完全一致',
+    '【PWA · 加速】Service Worker 升级 v13：导航改缓存优先+后台静默刷新，快捷方式秒开且仍自动更新',
   ]},
   { date:'2026-08-21', items:[
     '【AI 抠图 · 缺块补齐】Failed to fetch /onnxruntime-web/ort-wasm-simd.wasm with size 4194304 but got 715569 根因：模型分块文件在 /imgly-data/1.5.5/dist/ 下少了 2 个分块（e9445ca5... 与 b5322978...）。修复：从 staticimgly.com 重新下载并校验 SHA256，全部 51 个默认分块完整；同时补齐 isnet_fp16 / isnet 模型分块（共 92 个分块 / ~280MB），现在 small / medium 都能稳定加载',
@@ -9485,8 +9489,17 @@ renderTools();
     if(!installOverlay) return;
     installOverlay.classList.add('show');
     installOverlay.setAttribute('aria-hidden','false');
-    // 如果浏览器可触发原生安装（Android/Edge/Chrome），显示「一键安装」按钮
+    // 若已通过快捷方式进入（standalone），提示「已安装」，不再显示一键安装按钮
+    if(isStandalone){
+      if(installNativeBtn) installNativeBtn.style.display = 'none';
+      var tip = document.getElementById('igInstalledTip');
+      if(tip) tip.style.display = 'block';
+      return;
+    }
+    // 浏览器可触发原生安装（Android/Edge/Chrome）时，显示「一键安装」按钮
     if(deferred && installNativeBtn) installNativeBtn.style.display = 'block';
+    var tip = document.getElementById('igInstalledTip');
+    if(tip) tip.style.display = 'none';
   }
   function hideInstallGuide(){
     if(!installOverlay) return;
@@ -9517,8 +9530,7 @@ renderTools();
     var uc = deferred.userChoice; deferred = null;
     if(uc && uc.finally){ uc.finally(function(){ if(installNativeBtn) installNativeBtn.style.display='none'; }); }
   });
-  // 桌面导航栏的「安装」按钮在已安装/已停用时隐藏
-  if(isStandalone && openInstallGuide) openInstallGuide.style.display = 'none';
+  // standalone 下保留顶部「安装」按钮可见：点击打开引导面板并提示「已安装」，保证任何环境都有响应
 })();
 
 // 支持 ?open=xxx URL 参数（PWA shortcuts 长按/主屏快捷方式直接打开工具）
