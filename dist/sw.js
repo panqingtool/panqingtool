@@ -1,23 +1,22 @@
-/* 托托工具箱 · Service Worker v13
+/* 托托工具箱 · Service Worker v14
  *
- * 增强：PWA 快捷方式进入速度 + 稳定性。
- * v12 已修复 standalone 打开崩溃（导航请求始终用 fetch(url,{redirect:'follow'}) 非 navigate 模式，
- *       永远返回合法 Response：网络 → 缓存 → 离线页）。
- * v13 进一步把导航策略从「网络优先」改为「缓存优先 + 后台静默刷新（stale-while-revalidate）」：
- *   - 优先返回缓存的 index.html → 从主屏/桌面快捷方式进入**秒开**，不再等网络握手；
- *   - 后台用网络拉取最新 index.html 写入缓存，下一次打开即是最新内容（更新无感、无需清缓存）；
- *   - 网络与缓存都失败才返回离线页（仍合法 Response，绝不抛错）。
+ * 目标：PWA 快捷方式「稳定可访问 + 自动更新 + 秒开」。
  *
- * 缓存策略：
- *  - 预缓存：app 外壳（index.html / manifest / 图标 / nav-logo / 水印）
- *  - 页面导航：缓存优先 + 后台静默刷新 + 离线页兜底
- *  - 第三方 CDN（jsdelivr/unpkg/esm.sh 锁版本）：cache-first
- *  - 同源静态：cache-first + 后台静默刷新
- *  - /imgly-data/ 模型分块：cache-first（大文件 + 几乎不变）+ 后台静默刷新
- *  - /search / /visit / /weather / /lookup / /api 等 Functions：network-only（不缓存）
- *  - skipWaiting + clients.claim：新版本上线后下一次访问立即生效，无需手动清缓存
+ * v12 修复 standalone 打开崩溃（导航请求永远用 fetch(url,{redirect:'follow'}) 非 navigate 模式取资源）。
+ * v13 改为缓存优先，但出现手机 PWA 打开「无法访问」的问题（opaque 响应 / 后台刷新笔误）。
+ * v14 采用最稳妥策略，彻底解决：
+ *   导航请求 = 网络优先 + 缓存兜底 + 离线页兜底，全程包在 try/catch 内，
+ *   任何异常都返回合法 Response（缓存 → 离线页），绝不抛错、绝不返回 Response.error()
+ *   到 event.respondWith（那会直接触发浏览器「网站无法访问」）。
+ *   - 网络成功：返回最新页，并写入缓存（下次离线/秒开可用）；
+ *   - 网络失败：返回缓存页（合法 Response，用户照常用）；
+ *   - 都失败：返回离线页（合法 503 HTML）。
+ *   后台对 SW 自身做静默刷新：fetch('/sw.js') 写入 sw 缓存，配合 _headers 的 no-cache 与
+ *   activate 时 skipWaiting + clients.claim，新版本下次打开自动生效，用户无需重装/清缓存。
+ *
+ * activate 阶段自动删除所有「不含当前 VERSION」的旧缓存 → 旧缓存被自动清理。
  */
-const VERSION = 'v13';
+const VERSION = 'v14';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const CDN_CACHE = 'cdn-' + VERSION;
@@ -38,6 +37,32 @@ const APP_SHELL = [
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'unpkg.com', 'esm.sh'];
 const API_PATH_RE = /^\/(search|visit|weather|lookup|api)(\/|$|\?)/;
 const IMGLY_PATH_RE = /^\/imgly-data\//;
+
+// 导航请求的安全处理：永远返回合法 Response（网络 → 缓存 → 离线页），绝不抛错
+async function safeNavigate(url) {
+  const cacheKey = './index.html';
+  // 1) 网络优先
+  try {
+    const net = await fetch(url.href, { redirect: 'follow', credentials: 'same-origin' });
+    if (net && net.ok) {
+      const copy = net.clone();
+      caches.open(RUNTIME_CACHE).then((cc) => cc.put(cacheKey, copy)).catch(() => {});
+      return net;            // 返回最新页
+    }
+  } catch (_) { /* 网络失败，走下方缓存兜底 */ }
+
+  // 2) 缓存兜底（含 SHELL 与 RUNTIME 两个缓存空间）
+  try {
+    const cached =
+      (await caches.match(cacheKey, { cacheName: RUNTIME_CACHE })) ||
+      (await caches.match(cacheKey, { cacheName: SHELL_CACHE })) ||
+      (await caches.match('./'));
+    if (cached) return cached;   // 合法 Response，用户照常用
+  } catch (_) { /* 缓存读取失败，走离线页 */ }
+
+  // 3) 离线页兜底（仍为合法 503 HTML，绝不返回 Response.error()）
+  return offlineResponse();
+}
 
 // 离线兜底页（永远返回合法 HTML，绝不抛错 / Response.error）
 const OFFLINE_HTML =
@@ -84,38 +109,12 @@ self.addEventListener('fetch', (event) => {
   // Functions API：不缓存、永远走网络
   if (API_PATH_RE.test(url.pathname)) return;
 
-  // 页面导航：缓存优先 + 后台静默刷新（stale-while-revalidate）→ 快捷方式秒开
-  // 关键修复：绝不对 navigate 模式请求直接 fetch(req) / caches.match(req)，
-  // 改用 fetch(url, {redirect:'follow'})（默认 cors 模式，合法且能拿到 HTML）。
+  // 页面导航：网络优先 + 缓存兜底 + 离线页兜底（最稳妥，杜绝「网站无法访问」）
+  // 关键修复：绝不对 navigate 模式请求直接 fetch(req)/caches.match(req)（会抛 TypeError）；
+  // 改用 fetch(url.href, {redirect:'follow'})（cors 模式，合法且能拿到 HTML）。
+  // 整段包 try/catch，任何异常都返回合法 Response，绝不把 Response.error() 交给 event.respondWith。
   if (req.mode === 'navigate') {
-    event.respondWith((async () => {
-      const cacheKey = './index.html';
-      // 先取缓存（秒开）
-      let cached = null;
-      try { cached = (await caches.match(cacheKey)) || (await caches.match('./')); } catch (_) {}
-      // 后台静默拉取最新版写入缓存（下次打开即更新）
-      const refresh = (async () => {
-        try {
-          const net = await fetch(url.href, { redirect: 'follow', credentials: 'same-origin' });
-          if (net && net.ok) {
-            const copy = net.clone();
-            caches.open(RUNTIME_CACHE).then((cc) => cc.put(cacheKey, copy)).catch(() => {});
-          }
-        } catch (_) { /* 后台刷新失败不影响本次返回 */ }
-      })();
-      if (cached) { refresh; return cached; }
-      // 无缓存再等网络
-      try {
-        const net = await fetch(url.href, { redirect: 'follow', credentials: 'same-origin' });
-        if (net && net.ok) {
-          const copy = net.clone();
-          caches.open(RUNTIME_CACHE).then((cc) => cc.put(cacheKey, copy)).catch(() => {});
-        }
-        if (net) return net;
-      } catch (_) {}
-      // 兜底：离线页
-      return offlineResponse();
-    })());
+    event.respondWith(safeNavigate(url));
     return;
   }
 
