@@ -4,7 +4,7 @@
 # connect 允许的联网接口（前端 fetch 走这些域）；worker-src 'self' 用于 SW 重新注册
 
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://staticimgly.com https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob:; manifest-src 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://api.open-meteo.com https://api.frankfurter.app https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob:; manifest-src 'self'
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
@@ -16,3 +16,7 @@
 # /functions/* 的安全头（MIME 嗅探等由 functions/_middleware.js 处理）
 /functions/*
   X-Content-Type-Options: nosniff
+
+# Service Worker：禁止缓存，确保每次都能获取最新版本（自动更新机制依赖此）
+/sw.js
+  Cache-Control: no-cache
