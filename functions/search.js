@@ -4,8 +4,10 @@
  *   GET /search?q=xxx[&count=10][&provider=auto|brave|google|duckduckgo|wikipedia|bing]
  *
  * 行为：
- *   - 默认 provider=auto：依次尝试 brave → google → wikipedia，命中即返回。
- *   - wikipedia 走服务端 API（zh.wikipedia.org / en.wikipedia.org），CF 边缘节点请求，国内访问不受影响。
+ *   - 默认 provider=auto：依次尝试 baidu-html → wikipedia → duckduckgo，命中即返回。
+ *   - baidu-html 抓百度公开搜索页（国内原生可达、速度快、无需 Key），作为主数据源。
+ *   - wikipedia 走服务端 API（zh.wikipedia.org），CF 边缘节点请求，国内访问不受影响。
+ *   - duckduckgo 作为最后兜底。
  *   - 全部失败时返回兜底（502 + 错误信息），前端展示明确提示。
  *
  * 环境变量（在 Cloudflare Pages 控制台 Settings → Environment variables）：
@@ -76,7 +78,7 @@ export async function onRequestGet(context) {
 
   // auto：依次尝试各 provider，第一个成功的就返回
   if (wantProvider === 'auto') {
-    const chain = ['bing-html', 'wikipedia', 'duckduckgo'];
+    const chain = ['baidu-html', 'wikipedia', 'duckduckgo'];
     const tried = [];
     for (const p of chain) {
       try {
@@ -99,6 +101,7 @@ export async function onRequestGet(context) {
 }
 
 async function run(provider, q, count, env) {
+  if (provider === 'baidu-html')     return await baiduHtmlSearch(q, count);
   if (provider === 'bing-html')      return await bingHtmlSearch(q, count);
   if (provider === 'brave')          return await braveSearch(q, env.BRAVE_API_KEY, count);
   if (provider === 'google')         return await googleSearch(q, env.GOOGLE_API_KEY, env.GOOGLE_CX, count);
@@ -106,6 +109,45 @@ async function run(provider, q, count, env) {
   if (provider === 'duckduckgo')     return await ddgSearch(q, count);
   if (provider === 'wikipedia')      return await wikiSearch(q, count, 'zh');
   throw new Error('未知的 provider: ' + provider);
+}
+
+/* ---------- baidu html（百度公开搜索页，国内原生可达、速度快、无需 Key） ---------- */
+async function baiduHtmlSearch(q, count) {
+  const u = 'https://www.baidu.com/s?wd=' + encodeURIComponent(q) + '&rn=' + count;
+  const r = await fetch(u, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+      'Accept-Language': 'zh-CN,zh;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml'
+    }
+  });
+  if (!r.ok) throw new Error('baidu http ' + r.status);
+  const html = await r.text();
+  const out = [];
+  // 主解析：c-container 上的 mu 属性即真实落地 URL，紧跟其内的 h3.t 标题
+  const reMu = /<div[^>]*class="[^"]*c-container[^"]*"[^>]*mu="([^"]+)"[\s\S]*?<h3[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/g;
+  let m;
+  while ((m = reMu.exec(html)) && out.length < count) {
+    const url = cleanUrl(m[1]);
+    const title = String(m[2] || '').replace(/<[^>]+>/g, '').trim();
+    if (!url || !title) continue;
+    out.push({ title, url, snippet: '' });
+  }
+  // 兜底：直接抓 h3.t 内的 <a href>（部分结果 href 即真实链接）
+  if (out.length < count) {
+    const reA = /<h3[^>]*class="t"[^>]*>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+    while ((m = reA.exec(html)) && out.length < count) {
+      const raw = m[1];
+      if (/baidu\.com\/link\?/i.test(raw)) continue; // 跳过百度加密跳转链接
+      const url = cleanUrl(raw);
+      const title = String(m[2] || '').replace(/<[^>]+>/g, '').trim();
+      if (!url || !title) continue;
+      if (out.some((x) => x.url === url)) continue;
+      out.push({ title, url, snippet: '' });
+    }
+  }
+  if (!out.length) throw new Error('baidu 无结果');
+  return { ok: true, query: q, results: out };
 }
 
 /* ---------- bing html（必应公开搜索页，CF 边缘可达，国内亦可访问） ---------- */
