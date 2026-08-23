@@ -299,7 +299,6 @@ img{max-width:100%;}
 .filter-bar .tag:active{transform:scale(0.95);}
 .filter-bar{cursor:grab;}
 .filter-bar.grabbing{cursor:grabbing;user-select:none;}
-.filter-bar.grabbing .tag{pointer-events:none;}
 
 /* ============ 在线 OCR 卡片布局 ============ */
 .ocr-card{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:16px;margin-bottom:14px;}
@@ -372,9 +371,11 @@ img{max-width:100%;}
 .modal{
   background:var(--card);border-radius:16px;width:100%;max-width:720px;max-height:90vh;
   display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);
-  transform:translateY(12px);transition:transform .2s ease;overflow:hidden;
+  overflow:hidden;
 }
-.modal-overlay.show .modal{transform:translateY(0);}
+/* 关键：模态框静止时不得带 transform（iOS Safari 中，position:fixed 祖先含 transform 会导致内部 file input 无法唤起文件选择器）。动画仅在打开瞬间播放，结束后 transform:none */
+.modal-overlay.show .modal{animation:modalIn .2s ease both;}
+@keyframes modalIn{from{opacity:.5;transform:translateY(12px);}to{opacity:1;transform:none;}}
 .modal-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:20px 30px;border-bottom:1px solid var(--border);
@@ -460,6 +461,8 @@ img{max-width:100%;}
 }
 .inp:focus,.txt:focus,.sel:focus{outline:none;border-color:var(--primary);}
 .txt{min-height:120px;resize:vertical;line-height:1.6;}
+/* 视觉隐藏但保留在布局中（iOS Safari 对 display:none 的 file input 调用 .click() 经常无法唤起选择器，改用此方式） */
+.vis-hide{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important;}
 .row{display:flex;gap:12px;flex-wrap:wrap;}
 .row > *{flex:1;min-width:120px;}
 .btn{
@@ -1798,7 +1801,7 @@ AppTools['img-merge'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（按顺序；可多次添加）</label>
-        <input type="file" class="inp" id="mg-file" accept="image/*" multiple aria-label="选择图片" style="display:none">
+        <input type="file" class="inp vis-hide" id="mg-file" accept="image/*" multiple aria-label="选择图片">
         <button class="btn" id="mg-add">＋ 选择 / 继续添加图片</button></div>
       <div id="mg-list" class="fq-list"></div>
       <div class="mb"><label class="field-label">拼接方向</label>
@@ -2762,7 +2765,7 @@ AppTools['pdf-merge'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择多个 PDF（按列表顺序合并；可多次添加）</label>
-        <input type="file" class="inp" id="pm-file" accept="application/pdf" multiple aria-label="选择PDF" style="display:none">
+        <input type="file" class="inp vis-hide" id="pm-file" accept="application/pdf" multiple aria-label="选择PDF">
         <button class="btn" id="pm-add">＋ 选择 / 继续添加 PDF</button></div>
       <div id="pm-list" class="fq-list"></div>
       <button class="btn" id="pm-run" disabled>合并 PDF</button>
@@ -3856,7 +3859,7 @@ AppTools['md5'] = {
       <button class="btn" id="md-run">计算摘要</button>
       <div class="hint" style="margin-top:8px">⚠️ MD5 / SHA‑1 已被证实可人为制造碰撞，<b>不可用于密码存储、数字签名、完整性校验等安全场景</b>；建议改用 <b>SHA‑256 / SHA‑512</b>。也支持把文件拖到下方计算哈希。</div>
       <div class="mb" style="margin-top:10px"><div id="md-drop" style="border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;color:var(--text-2)">把文件拖到这里计算哈希（不联网、不上传）</div>
-        <input type="file" id="md-file" style="display:none" aria-label="选择文件"></div>
+        <input type="file" id="md-file" class="vis-hide" aria-label="选择文件"></div>
       <div id="md-result"></div>`;
     function hashText(v, name){
       const map = { md5:'MD5', sha1:'SHA1', sha256:'SHA256', sha512:'SHA512' };
@@ -6356,32 +6359,32 @@ function goToFilter(cat){
   }
 }
 
-// 筛选栏：桌面端支持鼠标拖拽横向滑动 + 滚轮横向滑动（点击仍可正常切换）
+// 筛选栏：桌面/移动通用 —— 指针拖拽横向滑动（绝不影响点击切换分类）
+// 触摸端直接沿用 overflow-x:auto 的原生横滑，仅鼠标用指针拖拽避免重复滚动
 (function enableFilterBarDrag(){
   if(!filterBar) return;
   // 滚轮：竖向滚轮转为横向滚动（除非已按 Shift）
   filterBar.addEventListener('wheel', (e)=>{
-    if(e.deltaY === 0) return;
-    if(e.shiftKey) return;
-    filterBar.scrollLeft += e.deltaY;
-    e.preventDefault();
+    if(e.deltaY === 0 || e.shiftKey) return;
+    filterBar.scrollLeft += e.deltaY; e.preventDefault();
   }, {passive:false});
-  let down=false, startX=0, startLeft=0, moved=false;
-  filterBar.addEventListener('mousedown', (e)=>{
-    if(e.button!==0) return;
-    down=true; moved=false; startX=e.pageX; startLeft=filterBar.scrollLeft;
+  let down=false, sx=0, sl=0, dragged=false;
+  filterBar.addEventListener('pointerdown', (e)=>{
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    down=true; dragged=false; sx=e.clientX; sl=filterBar.scrollLeft;
     filterBar.classList.add('grabbing');
   });
-  window.addEventListener('mouseup', ()=>{ if(down){ down=false; filterBar.classList.remove('grabbing'); } });
-  filterBar.addEventListener('mousemove', (e)=>{
-    if(!down) return;
-    const dx = e.pageX - startX;
-    if(Math.abs(dx) > 4) moved=true;
-    filterBar.scrollLeft = startLeft - dx;
+  filterBar.addEventListener('pointermove', (e)=>{
+    if(!down || e.pointerType!=='mouse') return;
+    const dx = e.clientX - sx;
+    if(Math.abs(dx) > 6){ dragged=true; filterBar.scrollLeft = sl - dx; }
   });
-  // 拖拽后拦截误触发的 click，避免切换分类
+  const end = ()=>{ if(down){ down=false; filterBar.classList.remove('grabbing'); } };
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+  // 拖拽结束后吞掉误触发的分类切换 click（纯点击不受影响）
   filterBar.addEventListener('click', (e)=>{
-    if(moved){ e.preventDefault(); e.stopPropagation(); moved=false; }
+    if(dragged){ e.preventDefault(); e.stopPropagation(); dragged=false; }
   }, true);
 })();
 
@@ -8643,7 +8646,7 @@ AppTools['img-round'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
-        <input type="file" class="inp" id="ir-files" accept="image/*" multiple style="display:none">
+        <input type="file" class="inp vis-hide" id="ir-files" accept="image/*" multiple>
         <div class="btn-row" style="margin-top:8px">
           <button class="btn" id="ir-add">＋ 选择 / 继续添加图片</button>
           <button class="btn ghost" id="ir-clear" disabled>清空</button>
@@ -8721,7 +8724,7 @@ AppTools['img-base64'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
-        <input type="file" class="inp" id="ib-files" accept="image/*" multiple style="display:none">
+        <input type="file" class="inp vis-hide" id="ib-files" accept="image/*" multiple>
         <div class="btn-row" style="margin-top:8px">
           <button class="btn" id="ib-add">＋ 选择 / 继续添加图片</button>
           <button class="btn ghost" id="ib-clear" disabled>清空</button>
@@ -8746,7 +8749,7 @@ AppTools['img-to-pdf'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，按顺序排列，可多次继续添加）</label>
-        <input type="file" class="inp" id="ip-files" accept="image/*" multiple style="display:none">
+        <input type="file" class="inp vis-hide" id="ip-files" accept="image/*" multiple>
         <div class="btn-row" style="margin-top:8px">
           <button class="btn" id="ip-add">＋ 选择 / 继续添加图片</button>
           <button class="btn ghost" id="ip-clear" disabled>清空</button>
@@ -8916,7 +8919,7 @@ AppTools['sensitive-word'] = {
         <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <button class="btn ghost" id="sw-doc" type="button">📄 选择文档</button>
           <span class="mini-tag" id="sw-docinfo">支持 .txt / .md / .csv / .json / .text</span>
-          <input type="file" id="sw-file" accept=".txt,.md,.csv,.json,.text,text/plain,text/*" multiple style="display:none">
+          <input type="file" id="sw-file" class="vis-hide" accept=".txt,.md,.csv,.json,.text,text/plain,text/*" multiple>
         </div></div>
       <div class="mb"><label class="field-label">自定义敏感词（空格分隔，叠加在默认词库上）</label><input type="text" class="inp" id="sw-extra" value=""></div>
       <div class="btn-row"><button class="btn" id="sw-run">检测</button><button class="btn ghost" id="sw-clear">去除敏感词</button></div>
