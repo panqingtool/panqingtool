@@ -5139,9 +5139,14 @@ AppTools['ocr'] = {
       list.push('https://tessdata.projectnaptha.com/4.0.0/');
       return list;
     })();
+    // Tesseract v4 的 worker 脚本 / 核心 wasm 也必须从同镜像拉，否则手机上 core 默认回官方源超时
+    const OCR_WORKER_PATH = 'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/worker.min.js';
+    const OCR_CORE_PATH   = 'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract-core.wasm.js';
     async function recognizeCanvas(cv, lang, idx, total, langPath){
       const res = await Tesseract.recognize(cv, lang, {
         langPath: langPath,
+        workerPath: OCR_WORKER_PATH,
+        corePath: OCR_CORE_PATH,
         logger: m => { if(m.status==='recognizing text') $('#oc-prog', body).textContent = `第 ${idx}/${total} 张进度：${Math.round(m.progress*100)}%`; }
       });
       return res.data.text;
@@ -9514,6 +9519,15 @@ renderTools();
         nw.addEventListener('statechange', function () {
           if (nw.state === 'installed' && navigator.serviceWorker.controller) showUpdateToast();
         });
+      });
+      // 主动检查更新（部署后不需要等下次自然轮询）
+      if (reg.update) { try { reg.update().catch(function(){}); } catch (_) {} }
+      // 新 SW 接管后（controller 变化）自动刷新一次，确保 PWA 快捷方式拿到最新页面
+      var reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (reloading) return;
+        reloading = true;
+        location.reload();
       });
     }).catch(function () {});
   });
