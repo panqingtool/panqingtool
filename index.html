@@ -297,6 +297,14 @@ img{max-width:100%;}
 .filter-bar .tag:hover{border-color:var(--primary);color:var(--primary);}
 .filter-bar .tag.active{background:var(--primary);border-color:var(--primary);color:#fff;}
 .filter-bar .tag:active{transform:scale(0.95);}
+.filter-bar{cursor:grab;}
+.filter-bar.grabbing{cursor:grabbing;user-select:none;}
+.filter-bar.grabbing .tag{pointer-events:none;}
+
+/* ============ 在线 OCR 卡片布局 ============ */
+.ocr-card{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:16px;margin-bottom:14px;}
+.ocr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:12px;}
+.ocr-card .field-label{margin-bottom:6px;display:block;}
 
 /* ============ 工具网格 ============ */
 .tool-grid{
@@ -2035,8 +2043,8 @@ AppTools['img-matting-manual'] = {
               <option value="#2e6fd6">蓝底</option>
               <option value="custom">自定义颜色</option>
             </select>
-            <input type="color" class="inp" id="mm-bgc" value="#ffd700" style="display:none;margin-top:8px;vertical-align:middle;">
-            <input type="text" class="inp" id="mm-bgc-hex" value="#ffd700" maxlength="7" placeholder="#rrggbb" style="display:none;width:120px;margin-top:8px;vertical-align:middle;font-family:monospace;" aria-label="自定义背景色（十六进制）"></div>
+            <input type="color" class="inp" id="mm-bgc" value="#ffffff" style="display:none;margin-top:8px;vertical-align:middle;">
+            <input type="text" class="inp" id="mm-bgc-hex" value="#ffffff" maxlength="7" placeholder="#rrggbb" style="display:none;width:120px;margin-top:8px;vertical-align:middle;font-family:monospace;" aria-label="自定义背景色（十六进制）"></div>
           <div class="mb"><label class="field-label">画布操作</label>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
               <button class="btn btn-ghost" id="mm-undo" type="button" title="撤销上一步（Ctrl+Z）" disabled>↶ 撤销</button>
@@ -2705,7 +2713,7 @@ AppTools['img-matting-manual'] = {
       }catch(_){}
     };
     $('#mm-clear', body).onclick = () => { if(shape) pushHistory(); shape = null; drawAll(); $('#mm-download', body).disabled = true; $('#mm-preview', body).disabled = true; };
-    ['#mm-mode', '#mm-bg'].forEach(s => $(s, body).onchange = () => { if(shape && shape.closed && img) renderManualResult(); });
+    ['#mm-mode'].forEach(s => $(s, body).onchange = () => { if(shape && shape.closed && img) renderManualResult(); });
     $('#mm-shape', body).onchange = () => { currentShapeKind = $('#mm-shape', body).value; if(shape) pushHistory(); shape = null; $('#mm-download', body).disabled = true; $('#mm-preview', body).disabled = true; drawAll(); };
 
     // 初始绘制（显示提示文字）
@@ -4701,7 +4709,7 @@ AppTools['idphoto-bg'] = {
         const feather = +($('#bg-feather', body).value) || 0;
         // 单张处理函数（独立封装，便于并发）
         const processOne = async (f) => {
-          const fgBlob = await imglyRemove(removeBackground, f, { model:'isnet_fp16', output:{ format:'image/png' },
+          const fgBlob = await imglyRemove(removeBackground, f, { model:'isnet_quint8', output:{ format:'image/png' },
             progress:(k,c,t)=>{ if(t) prog(`第 ${items.length+1} 张 ${k}: ${Math.round(c/t*100)}%`); } });
           const fgImg = await fileToImage(fgBlob);
           const w = fgImg.naturalWidth, h = fgImg.naturalHeight;
@@ -5067,33 +5075,37 @@ AppTools['ocr'] = {
   build(body){
     body.innerHTML = `
       <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，引擎与语言模型加载更快更稳）</label>
-      <div class="mb"><label class="field-label">上传图片或 PDF 扫描件（可多选，批量识别）</label>
-        <input type="file" class="inp" id="oc-file" accept="image/*,application/pdf" multiple aria-label="上传图片或PDF"></div>
-      <div class="mb"><label class="field-label">识别语言</label>
-        <select class="sel" id="oc-lang" aria-label="识别语言">
-          <option value="chi_sim+eng">中文 + 英文</option>
-          <option value="chi_sim">仅中文</option>
-          <option value="eng">仅英文</option>
-          <option value="jpn">日语</option>
-          <option value="kor">韩语</option>
-          <option value="fra">法语</option>
-          <option value="deu">德语</option>
-          <option value="spa">西班牙语</option>
-          <option value="rus">俄语</option>
-          <option value="por">葡萄牙语</option>
-          <option value="ita">意大利语</option>
-          <option value="ara">阿拉伯语</option>
-        </select></div>
-      <div class="mb"><label class="field-label">图片预处理（提升识别率）</label>
-        <select class="sel" id="oc-pre" aria-label="图片预处理">
-          <option value="none">原图（不处理）</option>
-          <option value="gray" selected>灰度化</option>
-          <option value="contrast">增强对比度</option>
-          <option value="binary">二值化（黑白）</option>
-        </select></div>
-      <button class="btn" id="oc-run" disabled>开始识别</button>
-      <div id="oc-prog" class="hint"></div>
-      <div class="hint">🔒 全程本地离线识别（首次需从 CDN 下载语言模型，之后可离线），图片/PDF 不上传服务器；PDF 会自动按页栅格化后逐页识别。</div>
+      <div class="ocr-card">
+        <div class="mb"><label class="field-label">上传图片或 PDF 扫描件（可多选，批量识别）</label>
+          <input type="file" class="inp" id="oc-file" accept="image/*,application/pdf" multiple aria-label="上传图片或PDF"></div>
+        <div class="ocr-grid">
+          <div class="mb" style="margin-bottom:0"><label class="field-label">识别语言</label>
+            <select class="sel" id="oc-lang" style="width:100%" aria-label="识别语言">
+              <option value="chi_sim+eng">中文 + 英文</option>
+              <option value="chi_sim">仅中文</option>
+              <option value="eng">仅英文</option>
+              <option value="jpn">日语</option>
+              <option value="kor">韩语</option>
+              <option value="fra">法语</option>
+              <option value="deu">德语</option>
+              <option value="spa">西班牙语</option>
+              <option value="rus">俄语</option>
+              <option value="por">葡萄牙语</option>
+              <option value="ita">意大利语</option>
+              <option value="ara">阿拉伯语</option>
+            </select></div>
+          <div class="mb" style="margin-bottom:0"><label class="field-label">图片预处理（提升识别率）</label>
+            <select class="sel" id="oc-pre" style="width:100%" aria-label="图片预处理">
+              <option value="none">原图（不处理）</option>
+              <option value="gray" selected>灰度化</option>
+              <option value="contrast">增强对比度</option>
+              <option value="binary">二值化（黑白）</option>
+            </select></div>
+        </div>
+        <button class="btn" id="oc-run" disabled>开始识别</button>
+        <div id="oc-prog" class="hint"></div>
+        <div class="hint">🔒 全程本地离线识别（首次需从 CDN 下载语言模型，之后可离线），图片/PDF 不上传服务器；PDF 会自动按页栅格化后逐页识别。</div>
+      </div>
       <div id="oc-result"></div>`;
     // 批量处理核心：逐张识别，结果按文件归集，支持单张复制 + 全部导出 TXT(ZIP)
     setupNetToggle(body);
@@ -6344,6 +6356,35 @@ function goToFilter(cat){
   }
 }
 
+// 筛选栏：桌面端支持鼠标拖拽横向滑动 + 滚轮横向滑动（点击仍可正常切换）
+(function enableFilterBarDrag(){
+  if(!filterBar) return;
+  // 滚轮：竖向滚轮转为横向滚动（除非已按 Shift）
+  filterBar.addEventListener('wheel', (e)=>{
+    if(e.deltaY === 0) return;
+    if(e.shiftKey) return;
+    filterBar.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }, {passive:false});
+  let down=false, startX=0, startLeft=0, moved=false;
+  filterBar.addEventListener('mousedown', (e)=>{
+    if(e.button!==0) return;
+    down=true; moved=false; startX=e.pageX; startLeft=filterBar.scrollLeft;
+    filterBar.classList.add('grabbing');
+  });
+  window.addEventListener('mouseup', ()=>{ if(down){ down=false; filterBar.classList.remove('grabbing'); } });
+  filterBar.addEventListener('mousemove', (e)=>{
+    if(!down) return;
+    const dx = e.pageX - startX;
+    if(Math.abs(dx) > 4) moved=true;
+    filterBar.scrollLeft = startLeft - dx;
+  });
+  // 拖拽后拦截误触发的 click，避免切换分类
+  filterBar.addEventListener('click', (e)=>{
+    if(moved){ e.preventDefault(); e.stopPropagation(); moved=false; }
+  }, true);
+})();
+
 // 分类介绍区跳转 —— 点击「查看XX」后自动滚到全部工具，并将筛选栏对应按钮居中
 catGrid.addEventListener('click', (e)=>{
   const a = e.target.closest('[data-cat]'); if(!a) return;
@@ -7368,7 +7409,14 @@ async function fetchJSONviaProxy(target){
 // 模型（~44MB）已上传到本站 /imgly-data/1.5.5/dist/（国内可访问），使用 window.location.origin 适配所有部署
 async function imglyRemove(removeBackground, f, opts){
   const base = window.location.origin + '/imgly-data/1.5.5/dist/';
-  return await removeBackground(f, Object.assign({}, opts, { publicPath: base }));
+  let lastErr;
+  // 重试 3 次：并行下载 44MB 分块偶发中断时自动恢复；force-cache 让已下载分块跨重试复用
+  for(let attempt=1; attempt<=3; attempt++){
+    try{
+      return await removeBackground(f, Object.assign({}, opts, { publicPath: base, fetchArgs: { cache: 'force-cache' } }));
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr;
 }
 // 预热模型：让浏览器在后台并行下载默认模型的 11 个分块到 HTTP 缓存（不影响其它操作）
 // 用户首次点"开始抠图"时，多数分块已就位，秒进
