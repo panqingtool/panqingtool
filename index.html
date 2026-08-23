@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="托托工具箱·攀清科技出品。100+ 在线工具免费即用，本地处理保护隐私。图片压缩/PDF合并/AI抠图/OCR/二维码/JSON/Base64 等一站搞定，免登录免注册免下载。">
+<meta name="description" content="托托工具箱·攀清科技出品。100+ 在线工具免费即用，本地处理保护隐私。图片压缩/PDF合并/AI抠图/OCR/二维码/JSON/Base64 等一站搞定，免登录免注册。">
 <meta name="keywords" content="在线工具,免费工具,图片压缩,PDF处理,JSON格式化,二维码生成,单位换算,房贷计算器,文本工具">
 <title>托托工具箱 | 100+ 免费在线工具，安全便捷</title>
 
@@ -182,6 +182,8 @@ img{max-width:100%;}
   box-shadow:var(--shadow);transition:transform .2s ease,border-color .2s ease;
 }
 .popular .chip:hover{transform:translateY(-4px);border-color:var(--primary);color:var(--primary);}
+.pop-label{width:100%;text-align:center;font-size:13px;color:var(--text-2);margin:2px 0 -2px;}
+.pop-hint{width:100%;text-align:center;font-size:13px;color:var(--text-2);padding:8px 12px;line-height:1.6;}
 /* 搜索栏就近提示 */
 .search-hint{margin:12px auto 0;max-width:560px;text-align:center;font-size:13px;line-height:1.5;color:var(--text-2);background:var(--card);border:1px dashed var(--border);border-radius:14px;padding:9px 16px;box-shadow:var(--shadow);}
 .search-hint[hidden]{display:none;}
@@ -654,7 +656,6 @@ th{background:var(--bg);}
     <span>托托工具箱</span>
   </div>
   <div class="nav-links" id="navLinks">
-    <a href="#all-tools" data-nav="fav">⭐收藏</a>
     <a href="#all-tools" data-nav="all">全部工具</a>
     <a href="#all-tools" data-nav="image">图片工具</a>
     <a href="#all-tools" data-nav="doc">文档工具</a>
@@ -674,7 +675,7 @@ th{background:var(--bg);}
 <!-- ============ 头部 Hero / 搜索 ============ -->
 <header class="hero" id="top">
   <h1>托托工具箱 · 100+ 工具 · 即用即走</h1>
-  <p class="slogan">免登录 · 免注册 · 免下载 · 本地处理保护隐私 · 所有运算均在您的<span class="red-bold">浏览器</span>完成</p>
+  <p class="slogan">免登录 · 免注册 · 本地处理保护隐私 · 所有运算均在您的<span class="red-bold">浏览器</span>完成</p>
   <div class="search-wrap search-box">
     <span class="search-icon" aria-hidden="true">🔍</span>
     <input type="text" id="searchInput" placeholder="🔍 搜索工具（名称、简介都搜）：压缩、PDF、二维码、JSON、抠图… 支持批量" aria-label="搜索工具">
@@ -827,7 +828,7 @@ th{background:var(--bg);}
         </div>
 
         <div class="ig-platform" style="border:1px solid #e53935;margin-top:16px">
-          <p style="margin:0 0 8px;color:var(--text-2);font-size:13px;line-height:1.7">对于弹出下载标识但是无法使用或者之前下载了快捷方式但是不小心移除的两种情况导致的<span style="color:#e53935;font-weight:600">无法下载</span>的用户，需要清除电脑及手机浏览器全部数据：</p>
+          <p style="margin:0 0 8px;color:var(--text-2);font-size:13px;line-height:1.7">若因安装未生效或曾误删快捷方式导致无法使用，请先删除现有应用，并清理该网站在电脑与手机浏览器中的全部数据：</p>
 
           <b style="color:#e53935;display:block;margin-top:6px;font-size:15px">💻 电脑端</b>
           <ol style="margin:1px 0 0 18px;padding:0;line-height:1.2">
@@ -6134,11 +6135,12 @@ function toggleFav(id){
   try{ localStorage.setItem('pt_favorites', JSON.stringify([...set])); }catch(_){}
   const btn = toolGrid.querySelector(`[data-fav="${id}"]`);
   if(btn){ btn.classList.toggle('on', set.has(id)); btn.textContent = set.has(id)?'★':'☆'; }
+  renderPopular(); // 收藏变化实时同步搜索栏下方的「我的收藏」
   if(currentFilter==='fav') renderTools({scroll:false});
 }
 
 function renderFilterBar(){
-  const tabs = [{id:'fav',name:'⭐收藏'},{id:'all',name:'全部'}].concat(CATEGORIES.map(c=>({id:c.id,name:c.name})));
+  const tabs = [{id:'all',name:'全部'}].concat(CATEGORIES.map(c=>({id:c.id,name:c.name})));
   filterBar.innerHTML = tabs.map(t=>`<button class="tag ${t.id===currentFilter?'active':''}" data-cat="${t.id}">${t.name}</button>`).join('');
 }
 
@@ -6152,7 +6154,13 @@ function renderCategories(){
 }
 
 function renderPopular(){
-  popularTools.innerHTML = POPULAR.map(id=>{
+  const favSet = getFavSet();
+  const ids = [...favSet].filter(id => TOOLS.some(t=>t.id===id));
+  if(!ids.length){
+    popularTools.innerHTML = `<div class="pop-hint">★ 您收藏的工具会出现在这里。点击任意工具卡片右上角的 ☆ 即可收藏，常用工具一键直达。</div>`;
+    return;
+  }
+  popularTools.innerHTML = `<span class="pop-label">★ 我的收藏</span>` + ids.map(id=>{
     const t = TOOLS.find(x=>x.id===id);
     return `<button class="chip" data-id="${id}" aria-label="使用 ${t.name}"><span aria-hidden="true">${t.icon}</span>${t.name}</button>`;
   }).join('');
@@ -6322,10 +6330,16 @@ filterBar.addEventListener('click', (e)=>{
   currentFilter = b.dataset.cat; renderFilterBar(); renderTools({scroll:false});
 });
 
-// 分类介绍区跳转 —— 分类卡片点击也保持原位（不再滚动到首张卡）
+// 分类介绍区跳转 —— 点击「查看XX」后自动滚到全部工具，并将筛选栏对应按钮居中
 catGrid.addEventListener('click', (e)=>{
   const a = e.target.closest('[data-cat]'); if(!a) return;
   currentFilter = a.dataset.cat; renderFilterBar(); renderTools({scroll:false});
+  const sec = $('#all-tools'); if(sec) sec.scrollIntoView({behavior:'smooth', block:'start'});
+  const btn = filterBar.querySelector(`[data-cat="${currentFilter}"]`);
+  if(btn){
+    const target = btn.offsetLeft - (filterBar.clientWidth - btn.clientWidth) / 2;
+    filterBar.scrollTo({left: Math.max(0, target), behavior:'smooth'});
+  }
 });
 
 // 打开工具（事件委托到 document）
@@ -6634,11 +6648,10 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-22', items:[
-    '【文档与交互优化】「把工具箱装到主屏幕」板块放大排版，精简标点与行距；新增手机首次加载慢的温馨提示',
-    '【应用功能修复】移除「AI 自动抠图」（功能不可用）；「在线 OCR 识字」修复复制结果含空格问题，取消 ZIP 导出、改为导出 TXT 单文件；「联网搜索」修复链接无法在应用内打开、改为系统浏览器打开；「PDF 签章/签名」修复预览与下载位置不一致（统一坐标系）；修复所有应用"识别失败：undefined"错误',
-    '【PWA 与部署】停用 CloudStudio 部署链接，仅保留 pages.dev 单域名部署；修复 SW 更新机制（版本号变更后自动更新，用户无需手动清缓存）；修复电脑端「安装」按钮无响应；优化桌面快捷方式图标（圆角化）；设置 sw.js 的 Cache-Control: no-cache 确保每次获取最新版本；删除废弃文件与多余缓存',
-    '【UI 优化】对支持批量处理的应用（如 IP 归属查询、手机号归属）标注「批量」标识',
-    '【稳定性与性能】增强快捷方式稳定性与进入速度；调整 Service Worker 的 fetch 重定向逻辑修复 ERR_FAILED 报错；设置每次发布后首次访问需刷新一次、后续自动更新，不再需要手动清缓存',
+    '【交互焕新】重构「装到主屏幕」引导：放大排版、精简冗余信息，并新增移动端首启加载提示，安装体验更轻盈直观。',
+    '【体验修复】下线不可用的「AI 自动抠图」；OCR 导出改为纯净 TXT 单文件并修正复制空格；联网搜索改由系统浏览器外链打开；PDF 签章统一预览与下载坐标系；根除多处「识别失败：undefined」异常。',
+    '【部署与 PWA 升级】收敛为 pages.dev 单域名部署，重构 Service Worker 更新链路（版本变更自动生效、无需手动清缓存），修复桌面「安装」无响应与快捷方式图标圆角化，并清理废弃资源。',
+    '【细节打磨】为批量类工具（IP / 手机号归属等）增补「批量」标识；强化快捷方式稳定性与进入速度，修正 fetch 重定向导致的 ERR_FAILED，实现「发布后刷新一次、后续静默自更新」。',
   ]},
   { date:'2026-08-21', items:[
     '【AI 抠图 · 缺块补齐】模型分块缺失导致加载报错。修复：从官方数据 CDN 重下并校验，补齐全部默认分块与 isnet_fp16 / isnet 模型（共 92 个分块 / ~280MB），small / medium 均稳定加载',
