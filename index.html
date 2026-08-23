@@ -300,11 +300,6 @@ img{max-width:100%;}
 .filter-bar{cursor:grab;}
 .filter-bar.grabbing{cursor:grabbing;user-select:none;}
 
-/* ============ 在线 OCR 卡片布局 ============ */
-.ocr-card{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:16px;margin-bottom:14px;}
-.ocr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:12px;}
-.ocr-card .field-label{margin-bottom:6px;display:block;}
-
 /* ============ 工具网格 ============ */
 .tool-grid{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px;
@@ -3887,7 +3882,7 @@ AppTools['md5'] = {
       const boxes = names.map(n => `<div class="result-box"><b>${n==='md5'?'MD5':n==='sha1'?'SHA‑1':n==='sha256'?'SHA‑256':'SHA‑512'}（${escapeHtml(file.name)}）：</b><br><span class="mono">${CryptoJS[map[n]](wa).toString()}</span></div>`).join('');
       $('#md-result', body).innerHTML = boxes;
     }
-    $('#md-drop', body).onclick = () => $('#md-file', body).click();
+    $('#md-drop', body).onclick = () => triggerFileInput($('#md-file', body));
     $('#md-file', body).onchange = e => { if(e.target.files[0]) hashFile(e.target.files[0]); };
     const dz = $('#md-drop', body);
     dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.style.borderColor='var(--primary)'; });
@@ -5078,11 +5073,9 @@ AppTools['ocr'] = {
   build(body){
     body.innerHTML = `
       <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，引擎与语言模型加载更快更稳）</label>
-      <div class="ocr-card">
-        <div class="mb"><label class="field-label">上传图片或 PDF 扫描件（可多选，批量识别）</label>
-          <input type="file" class="inp" id="oc-file" accept="image/*,application/pdf" multiple aria-label="上传图片或PDF"></div>
-        <div class="ocr-grid">
-          <div class="mb" style="margin-bottom:0"><label class="field-label">识别语言</label>
+      <div class="mb"><label class="field-label">上传图片或 PDF 扫描件（可多选，批量识别）</label>
+        <input type="file" class="inp" id="oc-file" accept="image/*,application/pdf" multiple aria-label="上传图片或PDF"></div>
+      <div class="mb"><label class="field-label">识别语言</label>
             <select class="sel" id="oc-lang" style="width:100%" aria-label="识别语言">
               <option value="chi_sim+eng">中文 + 英文</option>
               <option value="chi_sim">仅中文</option>
@@ -5097,18 +5090,16 @@ AppTools['ocr'] = {
               <option value="ita">意大利语</option>
               <option value="ara">阿拉伯语</option>
             </select></div>
-          <div class="mb" style="margin-bottom:0"><label class="field-label">图片预处理（提升识别率）</label>
+          <div class="mb"><label class="field-label">图片预处理（提升识别率）</label>
             <select class="sel" id="oc-pre" style="width:100%" aria-label="图片预处理">
               <option value="none">原图（不处理）</option>
               <option value="gray" selected>灰度化</option>
               <option value="contrast">增强对比度</option>
               <option value="binary">二值化（黑白）</option>
             </select></div>
-        </div>
-        <button class="btn" id="oc-run" disabled>开始识别</button>
-        <div id="oc-prog" class="hint"></div>
-        <div class="hint">🔒 全程本地离线识别（首次需从 CDN 下载语言模型，之后可离线），图片/PDF 不上传服务器；PDF 会自动按页栅格化后逐页识别。</div>
-      </div>
+      <button class="btn" id="oc-run" disabled>开始识别</button>
+      <div id="oc-prog" class="hint"></div>
+      <div class="hint">🔒 全程本地离线识别（首次需从 CDN 下载语言模型，之后可离线），图片/PDF 不上传服务器；PDF 会自动按页栅格化后逐页识别。</div>
       <div id="oc-result"></div>`;
     // 批量处理核心：逐张识别，结果按文件归集，支持单张复制 + 全部导出 TXT(ZIP)
     setupNetToggle(body);
@@ -7413,10 +7404,10 @@ async function fetchJSONviaProxy(target){
 async function imglyRemove(removeBackground, f, opts){
   const base = window.location.origin + '/imgly-data/1.5.5/dist/';
   let lastErr;
-  // 重试 3 次：并行下载 44MB 分块偶发中断时自动恢复；force-cache 让已下载分块跨重试复用
+  // 重试 3 次：并行下载 44MB 分块偶发中断时自动恢复（不使用 force-cache，避免部分下载被缓存后每次重试都返回失败）
   for(let attempt=1; attempt<=3; attempt++){
     try{
-      return await removeBackground(f, Object.assign({}, opts, { publicPath: base, fetchArgs: { cache: 'force-cache' } }));
+      return await removeBackground(f, Object.assign({}, opts, { publicPath: base }));
     }catch(e){ lastErr = e; }
   }
   throw lastErr;
@@ -7428,14 +7419,14 @@ async function prefetchImglyModel(){
   if(__imglyPrefetchStarted) return; __imglyPrefetchStarted = true;
   try{
     const base = window.location.origin + '/imgly-data/1.5.5/dist/';
-    const r = await fetch(base + 'resources.json', { cache: 'force-cache' });
+    const r = await fetch(base + 'resources.json');
     if(!r.ok) return;
     const meta = await r.json();
     // 只预热 isnet_quint8（默认 ~44MB / 11 分块）
     const e = meta['/models/isnet_quint8'];
     if(!e || !e.chunks) return;
     // 并行预取（浏览器同源最多 6 并发）
-    const tasks = e.chunks.map(c => fetch(base + c.hash, { cache: 'force-cache' }).catch(() => null));
+    const tasks = e.chunks.map(c => fetch(base + c.hash).catch(() => null));
     await Promise.all(tasks);
   }catch(_){ /* 静默失败，不影响主流程 */ }
 }
@@ -8611,6 +8602,25 @@ AppTools['ideal-type'] = {
 function ntLoadImage(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=r.result; }; r.onerror=rej; r.readAsDataURL(file); }); }
 async function ntFilesToImages(list){ const out=[]; for(const f of list){ if(f && f.type && f.type.startsWith('image/')) out.push(await ntLoadImage(f)); } return out; }
 function ntDataURLtoBlob(u){ const a=u.split(','), m=a[0].match(/:(.*?);/)[1], b=atob(a[1]), n=b.length, d=new Uint8Array(n); for(let i=0;i<n;i++) d[i]=b.charCodeAt(i); return new Blob([d],{type:m}); }
+/* 统一触发文件选择：修复 Android Chrome 已知坑——position:fixed 祖先内的隐藏 file input
+   调用 .click() 无法唤起原生文件选择器；且 display:none 的 file input 在部分 Android 上也不弹窗。
+   这里临时把 input 移出 fixed 祖先并设为“渲染但透明”的 1px 元素再触发，选择后还原。桌面端同样可用。 */
+function triggerFileInput(input){
+  if(!input) return;
+  const inFixed = (function(){ let el=input.parentElement; while(el){ if(getComputedStyle(el).position==='fixed') return true; el=el.parentElement; } return false; })();
+  const origParent = input.parentElement, origNext = input.nextSibling, origCss = input.style.cssText;
+  const cleanup = () => { if(input.__tfCleanup){ try{ input.__tfCleanup(); }catch(_){} input.__tfCleanup=null; } };
+  if(inFixed) document.body.appendChild(input);
+  // 保证“已渲染但不可见”，避免 display:none / 0 尺寸导致 Android 不弹窗
+  input.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;border:0;';
+  input.__tfCleanup = () => {
+    input.style.cssText = origCss;
+    if(input.parentElement === document.body && origParent){ try{ origParent.insertBefore(input, origNext); }catch(_){ origParent.appendChild(input); } }
+  };
+  try{ input.click(); }catch(_){}
+  input.addEventListener('change', cleanup, { once:true });
+  setTimeout(cleanup, 2000);
+}
 /* 批量文件选择增强：隐藏原生 input，提供「＋ 选择 / 继续添加」按钮、张数提示与清空，
    累计多次选择的文件，onChange 回调返回全部已选文件。run 处理函数直接读取返回的数组即可。 */
 function ntBatchAddUI(body, inputId, onChange){
@@ -8621,7 +8631,7 @@ function ntBatchAddUI(body, inputId, onChange){
   row.innerHTML=`<button class="btn" id="${inputId}-add">＋ 选择 / 继续添加</button><button class="btn ghost" id="${inputId}-clear" disabled>清空</button><span class="mini-tag" id="${inputId}-cnt" style="align-self:center">0 张</span>`;
   wrap.appendChild(row);
   input._files=[];
-  $('#'+inputId+'-add', body).onclick=()=>input.click();
+  $('#'+inputId+'-add', body).onclick=()=>triggerFileInput(input);
   $('#'+inputId+'-clear', body).onclick=()=>{ input._files=[]; $('#'+inputId+'-clear', body).disabled=true; $('#'+inputId+'-cnt', body).textContent='0 张'; if(onChange) onChange([]); };
   input.onchange=(e)=>{ const more=Array.from(e.target.files||[]); if(more.length) input._files=input._files.concat(more); e.target.value=''; $('#'+inputId+'-clear', body).disabled=!input._files.length; $('#'+inputId+'-cnt', body).textContent=input._files.length+' 张'; if(onChange) onChange(input._files); };
   return { getFiles:()=>input._files };
@@ -8686,7 +8696,7 @@ AppTools['img-round'] = {
     let imgs=[];
     $('#ir-sep',body).onchange=()=>{ $('#ir-sepbox',body).style.display = $('#ir-sep',body).checked?'flex':'none'; };
     $('#ir-enable-crop',body).onchange=()=>{ $('#ir-crop-box',body).style.display = $('#ir-enable-crop',body).checked?'block':'none'; };
-    $('#ir-add',body).onclick=()=>$('#ir-files',body).click();
+    $('#ir-add',body).onclick=()=>triggerFileInput($('#ir-files',body));
     $('#ir-clear',body).onclick=()=>{ imgs=[]; $('#ir-run',body).disabled=true; $('#ir-zip',body).disabled=true; $('#ir-clear',body).disabled=true; $('#ir-count',body).textContent='0 张'; $('#ir-out',body).innerHTML='选择图片后预览（可继续添加更多）'; };
     $('#ir-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); $('#ir-run',body).disabled=false; $('#ir-zip',body).disabled=false; $('#ir-clear',body).disabled=false; $('#ir-count',body).textContent=imgs.length+' 张'; $('#ir-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成（可继续添加）'; // 自动设置默认裁剪宽高为第一张图
       if(imgs.length===1 && +$('#ir-cw',body).value===0){ const w=imgs[0].width, h=imgs[0].height; $('#ir-cw',body).value=w; $('#ir-ch',body).value=h; }
@@ -8736,7 +8746,7 @@ AppTools['img-base64'] = {
     let items=[];
     async function renderAll(){ const fmt=$('#ib-fmt',body).value; if(!items.length){ $('#ib-out',body).innerHTML='选择图片后自动生成（可继续添加更多）'; return; } $('#ib-out',body).innerHTML = items.map((it,i)=>{ const b64=it.du.split(',')[1]; const out=fmt==='raw'?b64:it.du; return `<div class="card-soft mb"><div class="mb-sm"><b>${escapeHtml(it.name)}</b>（${fmt==='raw'?'Base64':'Data URL'}）</div><img src="${it.du}" style="max-width:120px;max-height:120px;border-radius:6px"><textarea class="area" style="min-height:70px" readonly>${escapeHtml(out)}</textarea><button class="btn" id="ib-c${i}">复制</button></div>`; }).join(''); items.forEach((it,i)=>{ const b64=it.du.split(',')[1]; $('#ib-c'+i,body).onclick=()=>copyText(fmt==='raw'?b64:it.du); }); }
     async function addFiles(fileList){ const files=Array.from(fileList||[]); if(!files.length) return; for(const f of files){ items.push({name:f.name, du:await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(f); }) }); } $('#ib-clear',body).disabled=false; $('#ib-count',body).textContent=items.length+' 张'; renderAll(); }
-    $('#ib-add',body).onclick=()=>$('#ib-files',body).click();
+    $('#ib-add',body).onclick=()=>triggerFileInput($('#ib-files',body));
     $('#ib-clear',body).onclick=()=>{ items=[]; $('#ib-clear',body).disabled=true; $('#ib-count',body).textContent='0 张'; renderAll(); };
     $('#ib-files',body).onchange=async e=>{ await addFiles(e.target.files); e.target.value=''; };
     $('#ib-fmt',body).onchange=()=>renderAll();
@@ -8766,7 +8776,7 @@ AppTools['img-to-pdf'] = {
       <div id="ip-out" class="hint">选择图片后生成（可继续添加更多）</div>`;
     let imgs=[];
     function refreshIP(){ $('#ip-run',body).disabled=!imgs.length; $('#ip-clear',body).disabled=!imgs.length; $('#ip-count',body).textContent=imgs.length+' 张'; if(imgs.length) $('#ip-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成'; }
-    $('#ip-add',body).onclick=()=>$('#ip-files',body).click();
+    $('#ip-add',body).onclick=()=>triggerFileInput($('#ip-files',body));
     $('#ip-clear',body).onclick=()=>{ imgs=[]; $('#ip-out',body).innerHTML='选择图片后生成（可继续添加更多）'; refreshIP(); };
     $('#ip-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); refreshIP(); };
     $('#ip-run',body).onclick=async()=>{
@@ -8939,7 +8949,7 @@ AppTools['sensitive-word'] = {
     };
     $('#sw-clear',body).onclick=()=>{ const text=$('#sw-in',body).value; let out=text; dict().forEach(w=>{ out=out.split(w).join(''); }); $('#sw-in',body).value=out; toast('已移除敏感词'); };
     // 文档上传：读取本地文本类文档（.txt/.md/.csv/.json 等）载入文本框，保留粘贴入口
-    $('#sw-doc',body).onclick=()=>$('#sw-file',body).click();
+    $('#sw-doc',body).onclick=()=>triggerFileInput($('#sw-file',body));
     $('#sw-file',body).onchange=async e=>{
       const files=Array.from(e.target.files||[]); if(!files.length) return;
       const parts=[];
