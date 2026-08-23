@@ -6330,16 +6330,24 @@ filterBar.addEventListener('click', (e)=>{
   currentFilter = b.dataset.cat; renderFilterBar(); renderTools({scroll:false});
 });
 
-// 分类介绍区跳转 —— 点击「查看XX」后自动滚到全部工具，并将筛选栏对应按钮居中
-catGrid.addEventListener('click', (e)=>{
-  const a = e.target.closest('[data-cat]'); if(!a) return;
-  currentFilter = a.dataset.cat; renderFilterBar(); renderTools({scroll:false});
+// 统一入口：切到某分类后，滚动到「全部工具」并把筛选栏对应按钮水平居中
+// （筛选栏为 overflow-x:auto，按钮间可自由左右滑动或用点击切换）
+function goToFilter(cat){
+  currentFilter = cat;
+  renderFilterBar();
+  renderTools({scroll:false});
   const sec = $('#all-tools'); if(sec) sec.scrollIntoView({behavior:'smooth', block:'start'});
-  const btn = filterBar.querySelector(`[data-cat="${currentFilter}"]`);
+  const btn = filterBar.querySelector(`[data-cat="${cat}"]`);
   if(btn){
     const target = btn.offsetLeft - (filterBar.clientWidth - btn.clientWidth) / 2;
     filterBar.scrollTo({left: Math.max(0, target), behavior:'smooth'});
   }
+}
+
+// 分类介绍区跳转 —— 点击「查看XX」后自动滚到全部工具，并将筛选栏对应按钮居中
+catGrid.addEventListener('click', (e)=>{
+  const a = e.target.closest('[data-cat]'); if(!a) return;
+  goToFilter(a.dataset.cat);
 });
 
 // 打开工具（事件委托到 document）
@@ -6626,9 +6634,8 @@ navLinks.addEventListener('click', (e)=>{
   // 「更新日志」由专属处理器打开，不要当成分类筛选（否则会把 currentFilter 设为 'log' 导致下方全部工具显示「没找到」）
   if(nav === 'log'){ navLinks.classList.remove('open'); return; }
   if(nav === 'home'){ window.scrollTo({top:0, behavior:'smooth'}); navLinks.classList.remove('open'); return; }
-  currentFilter = nav; renderFilterBar(); renderTools({scroll:false});
-  if(nav === 'all'){ const sec = $('#all-tools'); if(sec) sec.scrollIntoView({behavior:'smooth', block:'start'}); }
   navLinks.classList.remove('open');
+  goToFilter(nav); // 顶部导航跳分类：滚动到全部工具并居中对应筛选按钮（与「查看XX」一致）
 });
 
 /* ---------- 暗色模式（localStorage 持久化） ---------- */
@@ -6652,6 +6659,9 @@ const CHANGELOG = [
     '【体验修复】下线不可用的「AI 自动抠图」；OCR 导出改为纯净 TXT 单文件并修正复制空格；联网搜索改由系统浏览器外链打开；PDF 签章统一预览与下载坐标系；根除多处「识别失败：undefined」异常。',
     '【部署与 PWA 升级】收敛为 pages.dev 单域名部署，重构 Service Worker 更新链路（版本变更自动生效、无需手动清缓存），修复桌面「安装」无响应与快捷方式图标圆角化，并清理废弃资源。',
     '【细节打磨】为批量类工具（IP / 手机号归属等）增补「批量」标识；强化快捷方式稳定性与进入速度，修正 fetch 重定向导致的 ERR_FAILED，实现「发布后刷新一次、后续静默自更新」。',
+    '【常用工具自定义】搜索栏下方改为展示你点 ☆ 收藏的「我的收藏」，可自由增删、实时同步；移除顶部与筛选栏的独立收藏入口，收藏存于本地、更新不丢失。',
+    '【分类联动】点击「六大工具分类」的「查看」或顶部导航，自动滚动并居中「全部工具」对应筛选按钮，板块间可自由左右滑动或点按切换。',
+    '【文案打磨】移除 slogan 与页面描述中的「免下载」；安装引导的清缓存说明改为更顺的指引文案。',
   ]},
   { date:'2026-08-21', items:[
     '【AI 抠图 · 缺块补齐】模型分块缺失导致加载报错。修复：从官方数据 CDN 重下并校验，补齐全部默认分块与 isnet_fp16 / isnet 模型（共 92 个分块 / ~280MB），small / medium 均稳定加载',
