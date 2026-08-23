@@ -1,4 +1,4 @@
-/* 托托工具箱 · Service Worker v14
+/* 托托工具箱 · Service Worker v15
  *
  * 目标：PWA 快捷方式「稳定可访问 + 自动更新 + 秒开」。
  *
@@ -16,7 +16,7 @@
  *
  * activate 阶段自动删除所有「不含当前 VERSION」的旧缓存 → 旧缓存被自动清理。
  */
-const VERSION = 'v14';
+const VERSION = 'v15';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const CDN_CACHE = 'cdn-' + VERSION;
@@ -39,11 +39,12 @@ const API_PATH_RE = /^\/(search|visit|weather|lookup|api)(\/|$|\?)/;
 const IMGLY_PATH_RE = /^\/imgly-data\//;
 
 // 导航请求的安全处理：永远返回合法 Response（网络 → 缓存 → 离线页），绝不抛错
+// 关键：网络可用时永远返回最新页（不返回缓存 HTML），避免 PWA standalone 跑旧 JS 导致功能失效
 async function safeNavigate(url) {
   const cacheKey = './index.html';
-  // 1) 网络优先
+  // 1) 网络优先（强制取最新 index.html，绝不返回缓存 HTML）
   try {
-    const net = await fetch(url.href, { redirect: 'follow', credentials: 'same-origin' });
+    const net = await fetch(url.href, { redirect: 'follow', credentials: 'same-origin', cache: 'no-cache' });
     if (net && net.ok) {
       const copy = net.clone();
       caches.open(RUNTIME_CACHE).then((cc) => cc.put(cacheKey, copy)).catch(() => {});
@@ -51,7 +52,7 @@ async function safeNavigate(url) {
     }
   } catch (_) { /* 网络失败，走下方缓存兜底 */ }
 
-  // 2) 缓存兜底（含 SHELL 与 RUNTIME 两个缓存空间）
+  // 2) 缓存兜底（含 SHELL 与 RUNTIME 两个缓存空间）——仅在离线时启用
   try {
     const cached =
       (await caches.match(cacheKey, { cacheName: RUNTIME_CACHE })) ||
