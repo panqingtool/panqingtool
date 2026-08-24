@@ -783,7 +783,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-i</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-j</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6680,6 +6680,7 @@ const CHANGELOG = [
     '【手机 PWA 文件选择 · 换真招】红米系统浏览器 standalone 不实现系统文件选择器（任何前端 hack 都无效），原「分享入口」不实用已淡化。改为页面内「📷 拍照」取图（getUserMedia，绕开文件选择器，standalone 可用）+ 长按粘贴兜底；并在 standalone 首启提示用 Google Chrome 重新「添加到主屏幕」安装即可恢复原生「选择文件」',
     '【拍照按钮 · 移动端全量显示】红米快捷方式 WebView 不报告 display-mode:standalone，导致上一版拍照按钮检测不到、不出现。改为移动触摸设备（触摸 + 移动 UA）一律注入「📷 拍照」按钮与粘贴提示，手机端任意浏览器打开图片工具都能看到，拍照取图不受系统文件选择器限制',
     '【网站缩小恢复 · 状态增强】除分类 / 最小化应用 / 滚动位置外，额外保存「当前打开的工具」及其已填写的文本内容；切后台或系统回收后回到应用，自动重新打开上次的工具并回填内容，实现"缩小后继续运行、除非关闭快捷方式"',
+    '【受限快捷方式 · 明确引导】实测确认：小米系统浏览器「快捷方式」内核禁用文件选择器与摄像头（同一手机普通浏览器网页完全正常），前端无解。新增受限环境检测（移动端无 getUserMedia API → 顶部黄色横幅）与拍照失败提示，均带「在浏览器中打开完整版」一键链接；文件框旁提示同步加入该引导。解决路径：用 Chrome / Edge / 夸克「添加到主屏幕」安装即完整可用，或直接在浏览器中打开本站',
   ]},
   { date:'2026-08-22', items:[
     '【交互焕新】重构「装到主屏幕」引导：放大排版、精简冗余信息，并新增移动端首启加载提示，安装体验更轻盈直观。',
@@ -8595,8 +8596,8 @@ function normalizeFileInputs(body){
       let hint = input.parentElement && input.parentElement.querySelector('.ft-hint');
       if(!hint){
         hint = document.createElement('div'); hint.className = 'ft-hint';
-        hint.style.cssText = 'font-size:12px;color:var(--text-2);margin-top:6px;line-height:1.6;';
-        hint.innerHTML = '📷 可直接点「拍照」获取图片；或在别处复制图片后到此长按粘贴。若需浏览本地文件，建议用 Google Chrome 重新「添加到主屏幕」安装，即可正常使用「选择文件」。';
+        hint.style.cssText = 'font-size:12px;color:var(--text-2);margin-top:6px;line-height:1.7;';
+        hint.innerHTML = '📷 可点「拍照」取图，或复制图片后到此长按粘贴。<br>⚠️ 若「选择文件」/「拍照」都没反应：当前快捷方式受系统浏览器限制，<a href="https://panqingtool.pages.dev" target="_blank" rel="noopener" style="color:var(--primary);font-weight:700;text-decoration:underline;">点此在浏览器中打开完整版 ↗</a>，或用 Chrome / Edge 重新「添加到主屏幕」安装（选择文件、拍照均正常）。';
         if(input.parentElement) input.parentElement.insertBefore(hint, input.nextSibling);
       }
     }
@@ -9509,7 +9510,9 @@ function openCameraCapture(onFile){
   const errEl = mask.querySelector('#__camErr');
   navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
     .then(stream => { __camStream = stream; video.srcObject = stream; video.play().catch(()=>{}); })
-    .catch(err => { errEl.textContent = '无法打开摄像头：' + (err && err.message ? err.message : err) + '。请检查权限，或改用「粘贴」/用 Chrome 安装本应用。'; });
+    .catch(err => {
+      errEl.innerHTML = '无法打开摄像头：' + escapeHtml(err && err.message ? err.message : String(err)) + '。<br>请检查摄像头权限；若当前是手机快捷方式，多半是系统浏览器限制——<a href="https://panqingtool.pages.dev" target="_blank" rel="noopener" style="color:#ffd479;font-weight:700;text-decoration:underline;">点此在浏览器中打开完整版 ↗</a>（浏览器内拍照与选择文件均正常）。';
+    });
   mask.querySelector('#__camShot').onclick = () => {
     try{
       const v = mask.querySelector('#__camVideo');
@@ -9642,6 +9645,25 @@ window.addEventListener('beforeunload', saveAppState);
     if(isMobileTouch() && !localStorage.getItem('pt_standalone_tip')){
       localStorage.setItem('pt_standalone_tip', '1');
       setTimeout(() => toast('若点「选择文件」没反应：可用工具里的「📷 拍照」或长按粘贴取图；想完整使用请改用 Google Chrome 打开并重新「添加到主屏幕」安装。', 'info'), 1400);
+    }
+  }catch(_){ }
+})();
+// 受限环境顶部横幅（v-j）：移动端且浏览器不提供摄像头 API（小米等系统浏览器「快捷方式」常见——文件选择器与摄像头都被禁用）
+// 显示一次性顶部提示条，引导在完整浏览器中打开；普通浏览器标签页有 getUserMedia，不会触发。
+(function(){
+  try{
+    const camApi = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    if(isMobileTouch() && !camApi && !localStorage.getItem('pt_env_banner')){
+      localStorage.setItem('pt_env_banner', '1');
+      const b = document.createElement('div');
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99995;background:#fff7e6;border-bottom:1px solid #ffd591;padding:10px 14px;font-size:13px;line-height:1.7;color:#8a5300;box-shadow:0 2px 8px rgba(0,0,0,.08);';
+      b.innerHTML = '⚠️ 当前快捷方式环境受限，「选择文件 / 拍照」不可用。'
+        + '<a href="https://panqingtool.pages.dev" target="_blank" rel="noopener" style="color:#d46b08;font-weight:700;text-decoration:underline;margin:0 4px;">点此在浏览器中打开完整版 ↗</a>'
+        + '<button type="button" id="ptEnvBannerClose" style="float:right;border:none;background:none;color:#8a5300;font-size:14px;cursor:pointer;padding:0 4px;line-height:1.7;">✕</button>';
+      document.body.appendChild(b);
+      b.querySelector('#ptEnvBannerClose').onclick = () => b.remove();
+      const main = document.querySelector('#main, .container, main');
+      if(main) main.style.paddingTop = '48px';
     }
   }catch(_){ }
 })();
