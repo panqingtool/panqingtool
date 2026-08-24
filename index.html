@@ -771,7 +771,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究</div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-a</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -5144,16 +5144,27 @@ AppTools['ocr'] = {
       return list;
     })();
     // Tesseract v4 的 worker 脚本 / 核心 wasm 也必须从同镜像拉，否则手机上 core 默认回官方源超时
+    // ⚠️ v4 的 tesseract-core.wasm.js 在独立的 tesseract.js-core 包里（tesseract.js/dist 下没有该文件，404 会直接导致 importScripts 失败）
     const OCR_WORKER_PATH = 'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/worker.min.js';
-    const OCR_CORE_PATH   = 'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract-core.wasm.js';
+    const OCR_CORE_PATHS = [
+      'https://cdn.jsdelivr.net/npm/tesseract.js-core@4.0.4/tesseract-core.wasm.js',
+      'https://unpkg.com/tesseract.js-core@4.0.4/tesseract-core.wasm.js',
+      'https://esm.sh/tesseract.js-core@4.0.4/tesseract-core.wasm.js'
+    ];
     async function recognizeCanvas(cv, lang, idx, total, langPath){
-      const res = await Tesseract.recognize(cv, lang, {
-        langPath: langPath,
-        workerPath: OCR_WORKER_PATH,
-        corePath: OCR_CORE_PATH,
-        logger: m => { if(m.status==='recognizing text') $('#oc-prog', body).textContent = `第 ${idx}/${total} 张进度：${Math.round(m.progress*100)}%`; }
-      });
-      return res.data.text;
+      let lastErr = null;
+      for(const corePath of OCR_CORE_PATHS){
+        try{
+          const res = await Tesseract.recognize(cv, lang, {
+            langPath: langPath,
+            workerPath: OCR_WORKER_PATH,
+            corePath: corePath,
+            logger: m => { if(m.status==='recognizing text') $('#oc-prog', body).textContent = `第 ${idx}/${total} 张进度：${Math.round(m.progress*100)}%`; }
+          });
+          return res.data.text;
+        }catch(e){ lastErr = e; }
+      }
+      throw lastErr;
     }
     $('#oc-run', body).onclick = async () => {
       if(!files.length) return;
@@ -9506,7 +9517,7 @@ renderTools();
     document.getElementById('pwa-reload').onclick = function () { location.reload(); };
   }
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./sw.js?v=15').then(function (reg) {
+    navigator.serviceWorker.register('./sw.js?v=16').then(function (reg) {
       if (reg.waiting) showUpdateToast();
       reg.addEventListener('updatefound', function () {
         var nw = reg.installing;
