@@ -783,7 +783,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-h</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-i</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6678,6 +6678,8 @@ const CHANGELOG = [
     '【应用最小化 · 状态持久化】当前分类、页面滚动位置与已最小化的应用写入 localStorage，被系统收起或杀死后回到应用自动恢复（受系统后台策略限制，仍尽力保留）',
     '【证件照换背景 · 下架】AI 抠图模型（@imgly）在国内环境加载失败（Failed to fetch），按用户要求彻底删除该工具及全部 imgly 关联代码与模型路由，清理 /imgly-data 资源',
     '【手机 PWA 文件选择 · 换真招】红米系统浏览器 standalone 不实现系统文件选择器（任何前端 hack 都无效），原「分享入口」不实用已淡化。改为页面内「📷 拍照」取图（getUserMedia，绕开文件选择器，standalone 可用）+ 长按粘贴兜底；并在 standalone 首启提示用 Google Chrome 重新「添加到主屏幕」安装即可恢复原生「选择文件」',
+    '【拍照按钮 · 移动端全量显示】红米快捷方式 WebView 不报告 display-mode:standalone，导致上一版拍照按钮检测不到、不出现。改为移动触摸设备（触摸 + 移动 UA）一律注入「📷 拍照」按钮与粘贴提示，手机端任意浏览器打开图片工具都能看到，拍照取图不受系统文件选择器限制',
+    '【网站缩小恢复 · 状态增强】除分类 / 最小化应用 / 滚动位置外，额外保存「当前打开的工具」及其已填写的文本内容；切后台或系统回收后回到应用，自动重新打开上次的工具并回填内容，实现"缩小后继续运行、除非关闭快捷方式"',
   ]},
   { date:'2026-08-22', items:[
     '【交互焕新】重构「装到主屏幕」引导：放大排版、精简冗余信息，并新增移动端首启加载提示，安装体验更轻盈直观。',
@@ -8572,8 +8574,10 @@ function normalizeFileInputs(body){
     if(!input.getAttribute('aria-label')){
       input.setAttribute('aria-label', input.multiple ? '选择或继续添加文件' : '选择文件');
     }
-    // standalone PWA（手机快捷方式）下系统文件选择器不可用 → 提供「拍照」(getUserMedia) + 「粘贴」两条可用旁路
-    if(isStandalonePWA()){
+    // 移动端（含手机快捷方式 standalone）：部分系统 WebView 不实现文件选择器 → 提供「拍照」(getUserMedia) + 「粘贴」两条可用旁路。
+    // 关键修正（v-i）：红米系统浏览器快捷方式 WebView 不报告 display-mode:standalone，isStandalonePWA() 会返回 false 导致按钮不出现；
+    // 故用 isStandalonePWA() || isMobileTouch() 双条件，移动端一律注入，确保按钮一定显示。
+    if(isStandalonePWA() || isMobileTouch()){
       const acc = (input.getAttribute('accept') || '').toLowerCase();
       const isImage = acc.indexOf('image') >= 0 || acc === '' || acc.indexOf('*/*') >= 0;
       // 图像类输入：新增「📷 拍照」按钮（不经过系统文件选择器，standalone 下可用）
@@ -9454,6 +9458,12 @@ AppTools['photo-count'] = { build(body){
 }};
 
 /* ============ 二十七修（2026-08-24-g）：standalone PWA 文件接入（Web Share Target + 粘贴兜底）+ 最小化状态持久化 ============ */
+// 移动触摸设备判断（v-i 新增）：红米系统浏览器快捷方式 WebView 不报告 display-mode:standalone，
+// 单独用 isStandalonePWA() 会漏判 → 拍照按钮不出现。移动端（触摸 + 移动 UA）一律视为需要旁路。
+function isMobileTouch(){
+  try{ return (('ontouchstart' in window) || (navigator.maxTouchPoints > 0)) && /Mobi|Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent || ''); }
+  catch(_){ return false; }
+}
 function isStandalonePWA(){
   try{ return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; }
   catch(_){ return false; }
@@ -9582,11 +9592,19 @@ async function consumeShare(){
     else if(rec.text || rec.url){ try{ if(navigator.clipboard) navigator.clipboard.writeText((rec.text||'') + (rec.url?('\n'+rec.url):'')); }catch(_){ } toast('已把分享的文字复制到剪贴板', 'ok'); }
   }catch(_){ }
 }
-// ============ 最小化状态持久化（应用被系统收起 / 杀死后，回来仍能恢复） ============
+// ============ 状态持久化（应用被系统收起 / 杀死后，回来仍能恢复） ============
+// v-i 增强：除分类 / 最小化应用 / 滚动位置外，还保存「当前打开的工具」及其文本输入，
+// 实现「网站缩小后回来还是原样」（用户诉求：缩小继续运行，除非关闭快捷方式）。
 const PT_STATE_KEY = 'pt_state_v1';
+const PT_TEXT_SEL = 'textarea, input[type=text], input[type=number], input[type=search], input[type=url], input[type=email], input[type=password], input[type=date], input[type=time], input:not([type])';
 function saveAppState(){
   try{
-    const s = { filter: (typeof currentFilter!=='undefined' ? currentFilter : 'all'), min: minimizedIds || [], scrollY: window.scrollY || 0 };
+    const s = { filter: (typeof currentFilter!=='undefined' ? currentFilter : 'all'), min: minimizedIds || [], scrollY: window.scrollY || 0, active: '', texts: {} };
+    if(activeTool && overlay.classList.contains('show')){
+      s.active = activeTool;
+      const inputs = modalBody.querySelectorAll(PT_TEXT_SEL);
+      inputs.forEach((el, i) => { if(el.value && String(el.value).trim()) s.texts[activeTool + '|' + i] = String(el.value); });
+    }
     localStorage.setItem(PT_STATE_KEY, JSON.stringify(s));
   }catch(_){ }
 }
@@ -9596,15 +9614,34 @@ function loadAppState(){ try{ return JSON.parse(localStorage.getItem(PT_STATE_KE
   if(s.filter && typeof s.filter === 'string'){ currentFilter = s.filter; }
   if(Array.isArray(s.min)){ minimizedIds = s.min.filter(id => TOOLS.some(t=>t.id===id)); }
   if(typeof s.scrollY === 'number'){ window.addEventListener('load', () => { try{ window.scrollTo(0, s.scrollY); }catch(_){ } }); }
+  // 恢复上次打开的工具（v-i：网站缩小 / 被系统回收后回来自动回到原状）；已最小化的工具走 dock 恢复，不重复弹窗
+  if(s.active && typeof s.active === 'string' && TOOLS.some(t=>t.id===s.active) && !minimizedIds.includes(s.active)){
+    const act = s.active, texts = s.texts || {};
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        try{
+          if(typeof openToolModal === 'function') openToolModal(act);
+          setTimeout(() => {
+            let i = 0;
+            modalBody.querySelectorAll(PT_TEXT_SEL).forEach(el => {
+              const k = act + '|' + i;
+              if(texts[k] && typeof el.value === 'string'){ el.value = texts[k]; el.dispatchEvent(new Event('input', { bubbles:true })); }
+              i++;
+            });
+          }, 150);
+        }catch(_){ }
+      }, 350);
+    });
+  }
 })();
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') saveAppState(); });
 window.addEventListener('beforeunload', saveAppState);
-// standalone 下系统文件选择器不可用：首次进入提示用 Chrome 重装以获得完整体验（仅提示一次）
+// 移动端首次进入提示：部分系统浏览器「选择文件」受限，可用「拍照 / 粘贴」取图，或用 Chrome 重装获得完整体验（仅提示一次）
 (function(){
   try{
-    if(isStandalonePWA() && !localStorage.getItem('pt_standalone_tip')){
+    if(isMobileTouch() && !localStorage.getItem('pt_standalone_tip')){
       localStorage.setItem('pt_standalone_tip', '1');
-      setTimeout(() => toast('当前快捷方式无法直接「选择文件」。可用「📷 拍照」或「粘贴」取图；想完整使用请改用 Google Chrome 重新「添加到主屏幕」安装。', 'info'), 1400);
+      setTimeout(() => toast('若点「选择文件」没反应：可用工具里的「📷 拍照」或长按粘贴取图；想完整使用请改用 Google Chrome 打开并重新「添加到主屏幕」安装。', 'info'), 1400);
     }
   }catch(_){ }
 })();
