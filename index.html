@@ -288,6 +288,7 @@ img{max-width:100%;}
 .filter-bar{
   display:flex;gap:10px;overflow-x:auto;padding:4px 2px 12px;margin-bottom:8px;
   scrollbar-width:thin;-webkit-overflow-scrolling:touch;
+  touch-action:pan-x;overscroll-behavior-x:contain;
 }
 .filter-bar .tag{
   flex:0 0 auto;padding:8px 18px;border-radius:20px;background:var(--card);
@@ -782,7 +783,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-e</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-g</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -4673,87 +4674,6 @@ AppTools['img-upscale'] = {
   }
 };
 
-// 证件照换背景（批量处理：多张证件照统一替换成同一背景色；纯色/绿幕背景 Canvas 重着色）
-AppTools['idphoto-bg'] = {
-  build(body){
-    body.innerHTML = `
-      <div class="mb"><label class="field-label">选择证件照（可多选，批量换背景）</label>
-        <input type="file" class="inp" id="bg-file" accept="image/*" multiple aria-label="选择证件照"></div>
-      <div class="mb"><label class="field-label">背景颜色（仅替换人物与衣物之外的空白区域）</label>
-        <div class="row">
-          <button class="chip" data-c="#ffffff">白底</button>
-          <button class="chip" data-c="#2e6fd6">蓝底</button>
-          <button class="chip" data-c="#d9001b">红底</button>
-          <input type="color" class="inp" id="bg-color" value="#2e6fd6" aria-label="自定义背景色">
-        </div></div>
-      <div class="mb"><label class="field-label">边缘羽化（让发丝/边缘更自然，消除硬边）：<b id="bg-feathv">1.5</b> px</label>
-        <input type="range" id="bg-feather" min="0" max="4" step="0.1" value="1.5" aria-label="边缘羽化"></div>
-      <button class="btn" id="bg-run" disabled>AI 换背景（保留人物与衣物原色）</button>
-      <div id="bg-prog" class="hint"></div>
-      <div class="hint">🔒 本地 AI 抠图蒙版：先把人物与衣物智能分离，只将背景区域替换为新颜色，<b>人物与衣服颜色保持原样、不模糊</b>。首次需下载约 40MB 模型（之后可离线）。</div>
-      <div id="bg-result"></div>`;
-    const colorInp = $('#bg-color', body);
-    body.querySelectorAll('[data-c]').forEach(b=> b.onclick = ()=>{ colorInp.value = b.dataset.c; });
-    $('#bg-feather', body).oninput = () => $('#bg-feathv', body).textContent = $('#bg-feather', body).value;
-    let files = [];
-    ntBatchAddUI(body,'bg-file',(all)=>{ files=all; $('#bg-run', body).disabled = !all.length; });
-    $('#bg-run', body).onclick = async () => {
-      if(!files.length) return;
-      const hex = colorInp.value;
-      const btn = $('#bg-run', body); btn.disabled = true;
-      btn.innerHTML = '<span class="loading"><span class="spinner"></span>加载模型中…</span>';
-      let removeBackground;
-      try{
-        let mod;
-        try{ mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm'); }
-        catch(_){ mod = await import('https://esm.sh/@imgly/background-removal@1.5.5'); }
-        removeBackground = mod.removeBackground;
-      }catch(err){
-        $('#bg-prog', body).innerHTML = '<span style="color:var(--error)">❌ AI 模型加载失败：' + escapeHtml(err.message || '网络异常') + '，请稍后重试。</span>';
-        btn.disabled = false; btn.textContent = 'AI 换背景（保留人物与衣物原色）'; return;
-      }
-      const items = [];
-      const prog = (txt) => { const el = $('#bg-prog', body); if(el) el.textContent = txt; };
-      try{
-        const feather = +($('#bg-feather', body).value) || 0;
-        // 单张处理函数（独立封装，便于并发）
-        const processOne = async (f) => {
-          const fgBlob = await imglyRemove(removeBackground, f, { model:'isnet_quint8', output:{ format:'image/png' },
-            progress:(k,c,t)=>{ if(t) prog(`第 ${items.length+1} 张 ${k}: ${Math.round(c/t*100)}%`); } });
-          const fgImg = await fileToImage(fgBlob);
-          const w = fgImg.naturalWidth, h = fgImg.naturalHeight;
-          const c = document.createElement('canvas'); c.width = w; c.height = h;
-          const cx = c.getContext('2d');
-          cx.fillStyle = hex; cx.fillRect(0,0,w,h);     // 先铺新背景
-          cx.drawImage(fgImg, 0, 0);                    // 再叠加人物（保留原色，衣物不被替换）
-          if(feather > 0){
-            // 边缘羽化：叠加模糊前景柔化硬边；再叠一层更宽模糊专治发丝，过渡更自然
-            cx.save(); cx.globalAlpha = 0.55; cx.filter = `blur(${feather}px)`; cx.drawImage(fgImg, 0, 0); cx.restore();
-            cx.save(); cx.globalAlpha = 0.35; cx.filter = `blur(${feather*2}px)`; cx.drawImage(fgImg, 0, 0); cx.restore();
-          }
-          const base = (f.name.replace(/\.[^.]+$/, '') || 'image');
-          // 背景已铺为不透明纯色，无需透明通道 → 输出 JPEG（体积约为 PNG 的 1/5~1/10，下载更快）
-          const blob = await new Promise(r => c.toBlob(b => r(b), 'image/jpeg', 0.93));
-          items.push({ name: `${base}_bg.jpg`, blob });
-        };
-        // 并发 2 张并行处理，显著提速（模型推理是主要耗时）
-        const CONC = 2;
-        for(let i=0;i<files.length;i+=CONC){
-          const batch = files.slice(i, i+CONC);
-          btn.innerHTML = `<span class="loading"><span class="spinner"></span>换背景 ${Math.min(i+CONC,files.length)}/${files.length}…</span>`;
-          prog(`正在处理第 ${i+1}-${Math.min(i+CONC,files.length)} 张（并发 2 张加速）…`);
-          await Promise.all(batch.map(processOne));
-        }
-        renderBatchResults($('#bg-result', body), items);
-        const el=$('#bg-prog', body); if(el) el.innerHTML = '<span style="color:var(--success)">✅ 换背景完成</span>';
-      }catch(err){
-        const el=$('#bg-prog', body); if(el) el.innerHTML = '<span style="color:var(--error)">处理失败：' + escapeHtml(errMsg(err)) + '</span>';
-      }
-      btn.disabled = false; btn.textContent = 'AI 换背景（保留人物与衣物原色）';
-    };
-  }
-};
-
 // 二维码解析（jsQR）
 AppTools['qr-decode'] = {
   build(body){
@@ -6055,7 +5975,6 @@ const TOOLS = [
   /* ============ 图片工具 ============ */
   {id:'ocr',          name:'在线 OCR 识字',      icon:'👁️', cat:'image', desc:'支持图片与 PDF 扫描件（自动按页栅格化）一键转文字，支持中文+英文 / 日语 / 韩语 / 法语 / 德语 / 西语 / 俄语 / 葡语 / 意语 / 阿语等多语言识别，灰度 / 对比度 / 二值化预处理，逐张复制或打包 ZIP 下载 TXT；模型首次下载后可离线缓存。', batch:true},
   {id:'img-matting-manual', name:'手动框选抠图',   icon:'✂️', cat:'image', desc:'手动框选抠图，支持矩形 / 多边形 / 套索任意形状，撤销重做、画布缩放平移，同一张图可多次框选不同对象并打包导出，无需联网。', batch:true},
-  {id:'idphoto-bg',   name:'证件照换背景',        icon:'🪪', cat:'image', desc:'AI 分割后蓝 / 白 / 红 / 自定义纯色换底，边缘羽化柔化发丝，支持批量；常用于证件照。', batch:true},
   {id:'img-idphoto',  name:'证件照裁剪',          icon:'🪪', cat:'image', desc:'一寸 / 二寸 / 小一寸 / 小二寸 / 大一寸 / 护照等常用证件尺寸预设，自动居中裁剪导出 PNG。'},
   {id:'img-upscale',  name:'图片放大',            icon:'🔍', cat:'image', desc:'按目标长边（原图 / 1080P / 2K / 4K / 8K）高质量重采样放大，支持批量；适合手机随拍 / 老照片放大（非 AI 超分，放大仍可能略糊）。', batch:true},
   {id:'img-compress', name:'图片压缩',            icon:'🗜️', cat:'image', desc:'调节质量与最大边长压缩图片体积，批量输出 JPG；画质与大小可取舍。', batch:true},
@@ -6203,6 +6122,7 @@ function toggleFav(id){
 function renderFilterBar(){
   const tabs = [{id:'all',name:'全部'}].concat(CATEGORIES.map(c=>({id:c.id,name:c.name})));
   filterBar.innerHTML = tabs.map(t=>`<button class="tag ${t.id===currentFilter?'active':''}" data-cat="${t.id}">${t.name}</button>`).join('');
+  saveAppState();
 }
 
 function renderCategories(){
@@ -6414,21 +6334,27 @@ function goToFilter(cat){
     if(e.deltaY === 0 || e.shiftKey) return;
     filterBar.scrollLeft += e.deltaY; e.preventDefault();
   }, {passive:false});
-  let down=false, sx=0, sl=0, dragged=false;
+  // 仅鼠标使用自定义拖拽；触摸端完全交给原生 overflow-x 横滑（CSS 已加 touch-action:pan-x，
+  // 保证横滑不会被浏览器抢成页面纵向滚动）。这样触摸横滑稳定，不受指针状态机干扰；鼠标拖拽用严格 pointerId 管理。
+  let down=false, sx=0, sl=0, dragged=false, pid=null;
   filterBar.addEventListener('pointerdown', (e)=>{
-    if(e.pointerType==='mouse' && e.button!==0) return;
-    down=true; dragged=false; sx=e.clientX; sl=filterBar.scrollLeft;
+    if(e.pointerType !== 'mouse' || e.button !== 0) return;
+    down=true; dragged=false; sx=e.clientX; sl=filterBar.scrollLeft; pid=e.pointerId;
     filterBar.classList.add('grabbing');
   });
   filterBar.addEventListener('pointermove', (e)=>{
-    if(!down || e.pointerType!=='mouse') return;
+    if(!down || pid === null || e.pointerId !== pid || e.pointerType !== 'mouse') return;
     const dx = e.clientX - sx;
     if(Math.abs(dx) > 6){ dragged=true; filterBar.scrollLeft = sl - dx; }
   });
-  const end = ()=>{ if(down){ down=false; filterBar.classList.remove('grabbing'); } };
+  const end = (e)=>{
+    if(down && (e === null || e === undefined || e.pointerId === pid || pid === null)){
+      down=false; pid=null; filterBar.classList.remove('grabbing');
+    }
+  };
   window.addEventListener('pointerup', end);
   window.addEventListener('pointercancel', end);
-  // 拖拽结束后吞掉误触发的分类切换 click（纯点击不受影响）
+  // 仅在真实拖拽后吞掉误触发的分类切换 click；纯点击不受影响（不影响点按切换板块）
   filterBar.addEventListener('click', (e)=>{
     if(dragged){ e.preventDefault(); e.stopPropagation(); dragged=false; }
   }, true);
@@ -6489,6 +6415,7 @@ function minimizeTool(){
   if(!minimizedIds.includes(activeTool)) minimizedIds.push(activeTool);
   overlay.classList.remove('show'); overlay.setAttribute('aria-hidden','true'); document.body.style.overflow = '';
   renderAppDock();
+  saveAppState();
   toast('已收起，可从右下角图标还原（最多 10 个）');
 }
 function restoreTool(id){
@@ -6509,6 +6436,7 @@ function restoreTool(id){
   }
   activeTool = target;
   overlay.classList.add('show'); overlay.setAttribute('aria-hidden','false'); document.body.style.overflow = 'hidden';
+  saveAppState();
   renderAppDock();
 }
 
@@ -6744,6 +6672,12 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
+  { date:'2026-08-24', items:[
+    '【手机 PWA 文件选择 · Web Share Target】standalone 下系统不弹文件选择器，新增「分享」入口：从相册 / 文件管理器「分享」文件到本应用，或用长按粘贴图片，自动弹出工具选择并注入文件；文件按钮下方同步提示兜底方式',
+    '【分类标签栏横滑修复】触摸端交回原生 overflow-x 横滑（加 touch-action:pan-x），鼠标拖拽改用严格 pointerId 管理并在抬起即复位，修复"滑几次就卡死、重启才恢复"的矛盾 bug，点按切换板块不受影响',
+    '【应用最小化 · 状态持久化】当前分类、页面滚动位置与已最小化的应用写入 localStorage，被系统收起或杀死后回到应用自动恢复（受系统后台策略限制，仍尽力保留）',
+    '【证件照换背景 · 下架】AI 抠图模型（@imgly）在国内环境加载失败（Failed to fetch），按用户要求彻底删除该工具及全部 imgly 关联代码与模型路由，清理 /imgly-data 资源',
+  ]},
   { date:'2026-08-22', items:[
     '【交互焕新】重构「装到主屏幕」引导：放大排版、精简冗余信息，并新增移动端首启加载提示，安装体验更轻盈直观。',
     '【体验修复】下线不可用的「AI 自动抠图」；OCR 导出改为纯净 TXT 单文件并修正复制空格；联网搜索改由系统浏览器外链打开；PDF 签章统一预览与下载坐标系；根除多处「识别失败：undefined」异常。',
@@ -7453,65 +7387,6 @@ async function fetchJSONviaProxy(target){
   const d = await fetch(target);
   if(!d.ok) throw new Error('HTTP ' + d.status);
   return await d.json();
-}
-// @imgly 抠图：publicPath 必须为绝对 URL（库内部用 new URL 解析）
-// 重构（v2026.08.24-e）：默认优先本站同源数据（/imgly-data/，已验证完整、国内直连、Cloudflare 边缘加速），
-// staticimgly.com 仅作兜底；彻底绕开官方 CDN 在国内的慢/不通导致的「卡在 91%」。SW v18 对模型数据纯透传不缓存。
-const IMGLY_CDN = 'https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/';
-const IMGLY_LOCAL = window.location.origin + '/imgly-data/1.5.5/dist/';
-let __imglyBase = null;
-// 优先本站同源数据（国内直连、已验证完整、Cloudflare 边缘加速），官方 CDN 仅作兜底。
-// 彻底绕开 staticimgly.com 在国内的慢/不通导致的「卡在 91%」。
-async function chooseImglyPublicPath(){
-  if(__imglyBase) return __imglyBase;
-  try{
-    const c = new AbortController(); const t = setTimeout(()=>c.abort(), 6000);
-    const r = await fetch(IMGLY_LOCAL + 'resources.json', { signal:c.signal, cache:'no-store' });
-    clearTimeout(t);
-    if(r.ok){ __imglyBase = IMGLY_LOCAL; return __imglyBase; }
-  }catch(_){ /* 本站不可达，走官方 */ }
-  __imglyBase = IMGLY_CDN; return __imglyBase;
-}
-async function imglyRemove(removeBackground, f, opts){
-  const base = await chooseImglyPublicPath();
-  let lastErr;
-  // 主源重试 3 次（并行分块偶发中断自动恢复；不使用 force-cache，避免部分下载被缓存后每次都失败）
-  for(let attempt=1; attempt<=3; attempt++){
-    try{ return await removeBackground(f, Object.assign({}, opts, { publicPath: base })); }
-    catch(e){ lastErr = e; }
-  }
-  // 主源失败，切换另一源再重试 3 次（官方 <-> 本站）
-  const alt = (__imglyBase === IMGLY_CDN) ? IMGLY_LOCAL : IMGLY_CDN;
-  __imglyBase = alt;
-  for(let attempt=1; attempt<=3; attempt++){
-    try{ return await removeBackground(f, Object.assign({}, opts, { publicPath: alt })); }
-    catch(e){ lastErr = e; }
-  }
-  throw lastErr;
-}
-// 预热模型：让浏览器在后台并行下载默认模型的 11 个分块到 HTTP 缓存（不影响其它操作）
-// 用户首次点"开始抠图"时，多数分块已就位，秒进
-let __imglyPrefetchStarted = false;
-async function prefetchImglyModel(){
-  if(__imglyPrefetchStarted) return; __imglyPrefetchStarted = true;
-  try{
-    const base = await chooseImglyPublicPath();
-    const r = await fetch(base + 'resources.json');
-    if(!r.ok) return;
-    const meta = await r.json();
-    // 只预热 isnet_quint8（默认 ~44MB / 11 分块）
-    const e = meta['/models/isnet_quint8'];
-    if(!e || !e.chunks) return;
-    // 并行预取（浏览器同源最多 6 并发）
-    const tasks = e.chunks.map(c => fetch(base + c.hash).catch(() => null));
-    await Promise.all(tasks);
-  }catch(_){ /* 静默失败，不影响主流程 */ }
-}
-// 在浏览器空闲时启动预热（约 2s 后），不阻塞首屏
-if(typeof requestIdleCallback === 'function'){
-  requestIdleCallback(() => setTimeout(prefetchImglyModel, 2000), { timeout: 8000 });
-} else {
-  setTimeout(prefetchImglyModel, 3000);
 }
 function loadScriptSrc(src){
   const inject = (u) => new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=u; s.crossOrigin='anonymous'; s.onload=res; s.onerror=()=>rej(new Error('load '+u)); document.head.appendChild(s); });
@@ -8696,6 +8571,16 @@ function normalizeFileInputs(body){
     if(!input.getAttribute('aria-label')){
       input.setAttribute('aria-label', input.multiple ? '选择或继续添加文件' : '选择文件');
     }
+    // standalone PWA（手机快捷方式）下系统可能不弹文件选择器 → 提示用「分享 / 粘贴」旁路兜底
+    if(isStandalonePWA()){
+      let hint = input.parentElement && input.parentElement.querySelector('.ft-hint');
+      if(!hint){
+        hint = document.createElement('div'); hint.className = 'ft-hint';
+        hint.style.cssText = 'font-size:12px;color:var(--text-2);margin-top:6px;line-height:1.6;';
+        hint.innerHTML = '📤 若点击没反应：从其它 App「分享」文件到本应用，或长按图片后在此处粘贴';
+        if(input.parentElement) input.parentElement.insertBefore(hint, input.nextSibling);
+      }
+    }
   });
 }
 /* 安全的工具构建：build 后统一修复文件选择（PWA 兼容） */
@@ -9553,11 +9438,115 @@ AppTools['photo-count'] = { build(body){
   };
 }};
 
+/* ============ 二十七修（2026-08-24-g）：standalone PWA 文件接入（Web Share Target + 粘贴兜底）+ 最小化状态持久化 ============ */
+function isStandalonePWA(){
+  try{ return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; }
+  catch(_){ return false; }
+}
+// 把 {name,type,size,buf[]} 还原成 File（Web Share Target 经 IndexedDB 传入）
+function rebuildSharedFiles(arr){
+  if(!arr || !arr.length) return [];
+  return arr.map(f => { try{ return new File([new Uint8Array(f.buf || [])], f.name || 'file', { type: f.type || '' }); }catch(_){ return null; } }).filter(Boolean);
+}
+// 用 DataTransfer 把文件写回 input[type=file] 并触发 change（Chromium 系 / standalone 可用）
+function setInputFiles(input, files){
+  try{
+    const dt = new DataTransfer();
+    files.forEach(f => { try{ dt.items.add(f); }catch(_){ } });
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles:true }));
+    return true;
+  }catch(_){ return false; }
+}
+function findToolFileInput(body){ return body ? body.querySelector('input[type=file]') : null; }
+// 文件兜底路由：当前正打开某工具且有文件框 → 直接注入；否则弹工具选择面板
+function routeSharedFiles(files){
+  if(!files || !files.length) return;
+  if(overlay && overlay.classList.contains('show') && activeTool){
+    const inp = findToolFileInput(modalBody);
+    if(inp){ if(setInputFiles(inp, files)) toast('已把 ' + files.length + ' 个文件送入当前工具', 'ok'); else toast('当前工具无法自动接收，请手动选择', 'info'); return; }
+  }
+  showShareIngestPanel(files);
+}
+let __sharePanel = null;
+function showShareIngestPanel(files){
+  if(__sharePanel) __sharePanel.remove();
+  const mask = document.createElement('div');
+  mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99990;display:flex;align-items:flex-end;justify-content:center;';
+  const panel = document.createElement('div');
+  panel.style.cssText = 'background:var(--card);width:100%;max-width:560px;max-height:78vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px 14px 22px;box-shadow:0 -8px 30px rgba(0,0,0,.25);';
+  panel.innerHTML = `<div style="font-size:15px;font-weight:700;color:var(--title);margin-bottom:4px;">收到 ${files.length} 个文件，选择要使用的工具</div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:12px;">从相册 / 文件管理器「分享」到本应用，或在此处长按粘贴图片，都会走到这里。</div>
+    <div id="spGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;"></div>
+    <button id="spClose" style="margin-top:14px;width:100%;padding:10px;border:none;border-radius:8px;background:var(--border);color:var(--text);font-size:14px;cursor:pointer;">取消</button>`;
+  mask.appendChild(panel); document.body.appendChild(mask);
+  __sharePanel = mask;
+  const grid = panel.querySelector('#spGrid');
+  grid.innerHTML = TOOLS.map(t => `<div class="chip" data-tid="${t.id}" style="display:flex;align-items:center;gap:6px;padding:10px;border:1px solid var(--border);border-radius:10px;cursor:pointer;font-size:13px;color:var(--title);">${t.icon} ${t.name}</div>`).join('');
+  grid.querySelectorAll('[data-tid]').forEach(el => el.onclick = () => {
+    const id = el.dataset.tid; closeSharePanel();
+    openToolModal(id);
+    setTimeout(() => {
+      const inp = findToolFileInput(modalBody);
+      const meta = TOOLS.find(t=>t.id===id) || {};
+      if(inp){ if(setInputFiles(inp, files)) toast('已把 ' + files.length + ' 个文件送入「' + meta.name + '」', 'ok'); else toast('该工具暂不支持自动接收，请手动选择', 'info'); }
+      else toast('「' + meta.name + '」不直接处理文件，请用其它工具', 'info');
+    }, 60);
+  });
+  panel.querySelector('#spClose').onclick = closeSharePanel;
+  mask.addEventListener('click', (e) => { if(e.target === mask) closeSharePanel(); });
+}
+function closeSharePanel(){ if(__sharePanel){ __sharePanel.remove(); __sharePanel = null; } }
+// 全局粘贴：从剪贴板接收图片 / 文件（standalone PWA 可用，作为文件选择兜底）
+window.addEventListener('paste', (e) => {
+  try{
+    const cd = e.clipboardData; if(!cd) return;
+    const files = [];
+    for(const it of cd.items){ if(it.kind === 'file'){ const f = it.getAsFile(); if(f) files.push(f); } }
+    if(files.length) routeSharedFiles(files);
+  }catch(_){ }
+});
+// 页面加载时消费 Web Share Target 存入 IndexedDB 的文件
+async function consumeShare(){
+  try{
+    if(!('indexedDB' in window)) return;
+    const dbp = new Promise((res, rej) => { const r = indexedDB.open('pt-share', 1); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    const db = await dbp;
+    const rec = await new Promise((res) => { const tx = db.transaction('kv','readonly'); const rq = tx.objectStore('kv').get('pendingShare'); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null); });
+    db.close();
+    if(!rec) return;
+    const db2 = await new Promise((res, rej) => { const r = indexedDB.open('pt-share', 1); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    await new Promise((res) => { const tx = db2.transaction('kv','readwrite'); tx.objectStore('kv').delete('pendingShare'); tx.oncomplete = res; tx.onerror = res; });
+    db2.close();
+    if(rec.files && rec.files.length){ showShareIngestPanel(rebuildSharedFiles(rec.files)); }
+    else if(rec.text || rec.url){ try{ if(navigator.clipboard) navigator.clipboard.writeText((rec.text||'') + (rec.url?('\n'+rec.url):'')); }catch(_){ } toast('已把分享的文字复制到剪贴板', 'ok'); }
+  }catch(_){ }
+}
+// ============ 最小化状态持久化（应用被系统收起 / 杀死后，回来仍能恢复） ============
+const PT_STATE_KEY = 'pt_state_v1';
+function saveAppState(){
+  try{
+    const s = { filter: (typeof currentFilter!=='undefined' ? currentFilter : 'all'), min: minimizedIds || [], scrollY: window.scrollY || 0 };
+    localStorage.setItem(PT_STATE_KEY, JSON.stringify(s));
+  }catch(_){ }
+}
+function loadAppState(){ try{ return JSON.parse(localStorage.getItem(PT_STATE_KEY)) || {}; }catch(_){ return {}; } }
+(function restoreState(){
+  const s = loadAppState();
+  if(s.filter && typeof s.filter === 'string'){ currentFilter = s.filter; }
+  if(Array.isArray(s.min)){ minimizedIds = s.min.filter(id => TOOLS.some(t=>t.id===id)); }
+  if(typeof s.scrollY === 'number'){ window.addEventListener('load', () => { try{ window.scrollTo(0, s.scrollY); }catch(_){ } }); }
+})();
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') saveAppState(); });
+window.addEventListener('beforeunload', saveAppState);
+
 /* ---------- 初始化 ---------- */
 renderFilterBar();
 renderCategories();
 renderPopular();
 renderTools();
+renderAppDock();
+consumeShare();
 </script>
 <!-- ============ PWA：注册 Service Worker + 新版本提示 ============ -->
 <script>
@@ -9573,7 +9562,7 @@ renderTools();
     document.getElementById('pwa-reload').onclick = function () { location.reload(); };
   }
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./sw.js?v=17').then(function (reg) {
+    navigator.serviceWorker.register('./sw.js?v=19').then(function (reg) {
       if (reg.waiting) showUpdateToast();
       reg.addEventListener('updatefound', function () {
         var nw = reg.installing;
