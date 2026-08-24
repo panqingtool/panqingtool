@@ -463,7 +463,10 @@ img{max-width:100%;}
 /* 文件选择 input：放置在屏幕外 1px 区域（绝不用 display:none / clip / visibility:hidden，
    否则 Android WebView / PWA standalone 会静默拒绝弹窗）。点击交由 JS 在按钮的 onclick
    里主动调用 input.click() 触发（用户手势触发的 click 在 WebView 中可靠弹窗）。 */
-.direct-input{position:absolute;left:-9999px;top:auto;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;margin:0;}
+/* 文件选择 input：绝对铺满触发容器（在视口内、非 display:none、非 clip、非 pointer-events:none），
+   透明但可被触摸命中（电脑/普通标签页直接命中）；同时各入口在按钮点击时主动 input.click() 兜底
+   （红米 standalone WebView 对屏幕外 / pointer-events:none 的 input 会拒绝弹窗，故保持在容器内可见区域）。 */
+.direct-input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;margin:0;}
 .row{display:flex;gap:12px;flex-wrap:wrap;}
 .row > *{flex:1;min-width:120px;}
 .btn{
@@ -771,7 +774,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-a</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-b</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -9528,7 +9531,7 @@ renderTools();
     document.getElementById('pwa-reload').onclick = function () { location.reload(); };
   }
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./sw.js?v=16').then(function (reg) {
+    navigator.serviceWorker.register('./sw.js?v=17').then(function (reg) {
       if (reg.waiting) showUpdateToast();
       reg.addEventListener('updatefound', function () {
         var nw = reg.installing;
