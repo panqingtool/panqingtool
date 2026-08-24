@@ -783,7 +783,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-g</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-h</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6677,6 +6677,7 @@ const CHANGELOG = [
     '【分类标签栏横滑修复】触摸端交回原生 overflow-x 横滑（加 touch-action:pan-x），鼠标拖拽改用严格 pointerId 管理并在抬起即复位，修复"滑几次就卡死、重启才恢复"的矛盾 bug，点按切换板块不受影响',
     '【应用最小化 · 状态持久化】当前分类、页面滚动位置与已最小化的应用写入 localStorage，被系统收起或杀死后回到应用自动恢复（受系统后台策略限制，仍尽力保留）',
     '【证件照换背景 · 下架】AI 抠图模型（@imgly）在国内环境加载失败（Failed to fetch），按用户要求彻底删除该工具及全部 imgly 关联代码与模型路由，清理 /imgly-data 资源',
+    '【手机 PWA 文件选择 · 换真招】红米系统浏览器 standalone 不实现系统文件选择器（任何前端 hack 都无效），原「分享入口」不实用已淡化。改为页面内「📷 拍照」取图（getUserMedia，绕开文件选择器，standalone 可用）+ 长按粘贴兜底；并在 standalone 首启提示用 Google Chrome 重新「添加到主屏幕」安装即可恢复原生「选择文件」',
   ]},
   { date:'2026-08-22', items:[
     '【交互焕新】重构「装到主屏幕」引导：放大排版、精简冗余信息，并新增移动端首启加载提示，安装体验更轻盈直观。',
@@ -8571,13 +8572,27 @@ function normalizeFileInputs(body){
     if(!input.getAttribute('aria-label')){
       input.setAttribute('aria-label', input.multiple ? '选择或继续添加文件' : '选择文件');
     }
-    // standalone PWA（手机快捷方式）下系统可能不弹文件选择器 → 提示用「分享 / 粘贴」旁路兜底
+    // standalone PWA（手机快捷方式）下系统文件选择器不可用 → 提供「拍照」(getUserMedia) + 「粘贴」两条可用旁路
     if(isStandalonePWA()){
+      const acc = (input.getAttribute('accept') || '').toLowerCase();
+      const isImage = acc.indexOf('image') >= 0 || acc === '' || acc.indexOf('*/*') >= 0;
+      // 图像类输入：新增「📷 拍照」按钮（不经过系统文件选择器，standalone 下可用）
+      if(isImage && input.parentElement && !input.parentElement.querySelector('.ft-cam')){
+        const camBtn = document.createElement('button');
+        camBtn.type = 'button'; camBtn.className = 'btn ghost ft-cam';
+        camBtn.textContent = '📷 拍照';
+        camBtn.style.marginTop = '6px';
+        camBtn.onclick = () => openCameraCapture((file) => {
+          if(setInputFiles(input, [file])) toast('已通过拍照获取图片', 'ok');
+          else toast('当前工具无法自动接收，请手动选择', 'info');
+        });
+        input.parentElement.insertBefore(camBtn, input.nextSibling);
+      }
       let hint = input.parentElement && input.parentElement.querySelector('.ft-hint');
       if(!hint){
         hint = document.createElement('div'); hint.className = 'ft-hint';
         hint.style.cssText = 'font-size:12px;color:var(--text-2);margin-top:6px;line-height:1.6;';
-        hint.innerHTML = '📤 若点击没反应：从其它 App「分享」文件到本应用，或长按图片后在此处粘贴';
+        hint.innerHTML = '📷 可直接点「拍照」获取图片；或在别处复制图片后到此长按粘贴。若需浏览本地文件，建议用 Google Chrome 重新「添加到主屏幕」安装，即可正常使用「选择文件」。';
         if(input.parentElement) input.parentElement.insertBefore(hint, input.nextSibling);
       }
     }
@@ -9458,6 +9473,51 @@ function setInputFiles(input, files){
     return true;
   }catch(_){ return false; }
 }
+/* 摄像头拍照获取图片（standalone PWA 下系统文件选择器不可用时的可用旁路；getUserMedia 在 standalone WebView 通常可用）。
+   这是与「文件选择器」完全无关的取图方式：直接在页面内打开摄像头 → 拍帧 → canvas → PNG，不经过系统文件选择器。 */
+let __camStream = null;
+function closeCameraModal(){
+  try{ if(__camStream){ __camStream.getTracks().forEach(t => t.stop()); __camStream = null; } }catch(_){ }
+  const m = document.getElementById('__camMask'); if(m) m.remove();
+}
+function openCameraCapture(onFile){
+  if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
+    toast('当前环境不支持调用摄像头，请改用「粘贴」或用 Chrome 重新安装本应用', 'info'); return;
+  }
+  closeCameraModal();
+  const mask = document.createElement('div'); mask.id = '__camMask';
+  mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99998;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:16px;';
+  mask.innerHTML = '<div style="color:#fff;font-size:15px;font-weight:700;margin-bottom:10px;">拍照获取图片</div>'
+    + '<video id="__camVideo" playsinline autoplay muted style="max-width:100%;max-height:60vh;border-radius:10px;background:#000;"></video>'
+    + '<div style="display:flex;gap:12px;margin-top:14px;">'
+    + '<button id="__camShot" style="padding:11px 26px;border:none;border-radius:10px;background:#1890ff;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">📷 拍摄</button>'
+    + '<button id="__camCancel" style="padding:11px 20px;border:none;border-radius:10px;background:#555;color:#fff;font-size:15px;cursor:pointer;">取消</button>'
+    + '</div>'
+    + '<div id="__camErr" style="color:#ffb4b4;font-size:12px;margin-top:12px;max-width:90%;text-align:center;"></div>';
+  document.body.appendChild(mask);
+  const video = mask.querySelector('#__camVideo');
+  const errEl = mask.querySelector('#__camErr');
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    .then(stream => { __camStream = stream; video.srcObject = stream; video.play().catch(()=>{}); })
+    .catch(err => { errEl.textContent = '无法打开摄像头：' + (err && err.message ? err.message : err) + '。请检查权限，或改用「粘贴」/用 Chrome 安装本应用。'; });
+  mask.querySelector('#__camShot').onclick = () => {
+    try{
+      const v = mask.querySelector('#__camVideo');
+      if(!v || !v.videoWidth){ errEl.textContent = '摄像头尚未就绪，请稍候或取消。'; return; }
+      const cw = v.videoWidth, ch = v.videoHeight;
+      const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch;
+      const ctx = canvas.getContext('2d'); ctx.drawImage(v, 0, 0, cw, ch);
+      canvas.toBlob(blob => {
+        if(!blob){ errEl.textContent = '拍摄失败，请重试。'; return; }
+        const file = new File([blob], 'camera_' + Date.now() + '.png', { type:'image/png' });
+        closeCameraModal();
+        if(onFile) onFile(file);
+      }, 'image/png');
+    }catch(e){ errEl.textContent = '拍摄出错：' + (e && e.message ? e.message : e); }
+  };
+  mask.querySelector('#__camCancel').onclick = closeCameraModal;
+  mask.addEventListener('click', e => { if(e.target === mask) closeCameraModal(); });
+}
 function findToolFileInput(body){ return body ? body.querySelector('input[type=file]') : null; }
 // 文件兜底路由：当前正打开某工具且有文件框 → 直接注入；否则弹工具选择面板
 function routeSharedFiles(files){
@@ -9539,6 +9599,15 @@ function loadAppState(){ try{ return JSON.parse(localStorage.getItem(PT_STATE_KE
 })();
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') saveAppState(); });
 window.addEventListener('beforeunload', saveAppState);
+// standalone 下系统文件选择器不可用：首次进入提示用 Chrome 重装以获得完整体验（仅提示一次）
+(function(){
+  try{
+    if(isStandalonePWA() && !localStorage.getItem('pt_standalone_tip')){
+      localStorage.setItem('pt_standalone_tip', '1');
+      setTimeout(() => toast('当前快捷方式无法直接「选择文件」。可用「📷 拍照」或「粘贴」取图；想完整使用请改用 Google Chrome 重新「添加到主屏幕」安装。', 'info'), 1400);
+    }
+  }catch(_){ }
+})();
 
 /* ---------- 初始化 ---------- */
 renderFilterBar();
