@@ -458,20 +458,12 @@ img{max-width:100%;}
 .txt{min-height:120px;resize:vertical;line-height:1.6;}
 /* 视觉隐藏但保留在布局中（iOS Safari 对 display:none 的 file input 调用 .click() 经常无法唤起选择器，改用此方式） */
 .vis-hide{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important;}
-/* 文件选择重构（v2026.08.24-d）：取消一切隐藏方案（display:none / clip / opacity:0 铺满 / 屏幕外 / pointer-events:none /
-   <label for> 包装）。直接让 <input type="file"> 本身可见，用 ::file-selector-button 把原生按钮样式化成设计按钮。
-   用户在安卓快捷方式里真实、直接触摸到这个原生 input 元素，绝不用 JS 调 input.click()。 */
-.vis-file-btn{
-  display:inline-flex;align-items:center;gap:10px;width:100%;max-width:420px;
-  font-size:14px;color:var(--text-2);cursor:pointer;
-}
-.vis-file-btn::file-selector-button{
-  flex:0 0 auto;min-height:44px;padding:10px 18px;border:0;border-radius:8px;
-  background:var(--primary);color:#fff;font-size:15px;font-weight:600;cursor:pointer;
-  transition:background .2s ease,transform .2s ease;
-}
-.vis-file-btn:hover::file-selector-button{background:var(--primary-hover);}
-.vis-file-btn:active::file-selector-button{transform:scale(0.97);}
+/* 文件选择（v2026.08.24-e 回归经典方案）：真实可见按钮 + 隐藏 input + button.click() 触发。
+   安卓 PWA standalone 下只有「真实按钮点击唤起隐藏 input」最稳（用户确认「前面都可以」）。
+   旧 .vis-file-btn 方案（input 本身可见 + ::file-selector-button）在红米系统浏览器 PWA 下会「按钮变淡 / 无反应」，已废弃。 */
+.hf{display:none!important;}
+/* 兼容历史 class：vis-file-btn 一律隐藏，避免任何残留可见 input 在 PWA 下无反应 */
+.vis-file-btn{display:none!important;}
 .row{display:flex;gap:12px;flex-wrap:wrap;}
 .row > *{flex:1;min-width:120px;}
 .btn{
@@ -779,7 +771,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-d</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-e</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -1801,7 +1793,8 @@ function mountFileQueue(opts){
   }
   function getItems(){ return state.map(s => ({ file:s.file, img:s.img||null })); }
   input.onchange = async (e) => { await addFiles(Array.from(e.target.files)); };
-  // mg/pm 的 input 已是可见 .vis-file-btn（原生按钮直接触摸），无需 JS click 兜底
+  // mg/pm 的 input 由 normalizeFileInputs 统一隐藏并生成触发按钮（安卓 PWA 最稳）
+  input.classList.add('hf'); input.style.display = 'none';
   return { getItems, addFiles, clear:()=>{ state.forEach(s=>{ if(s.url) URL.revokeObjectURL(s.url); }); state.length=0; render(); } };
 }
 
@@ -3895,7 +3888,7 @@ AppTools['md5'] = {
     }
     $('#md-file', body).onchange = e => { if(e.target.files[0]) hashFile(e.target.files[0]); };
     const dz = $('#md-drop', body);
-    // md-file 已是可见的 .vis-file-btn（原生按钮可直接触摸），无需 JS click 兜底
+    // md-file 由 normalizeFileInputs 统一隐藏并生成触发按钮（安卓 PWA 最稳，用户确认「前面都可以」）
     dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.style.borderColor='var(--primary)'; });
     dz.addEventListener('dragleave', ()=> dz.style.borderColor='');
     dz.addEventListener('drop', e=>{ e.preventDefault(); dz.style.borderColor=''; if(e.dataTransfer.files[0]) hashFile(e.dataTransfer.files[0]); });
@@ -5152,22 +5145,32 @@ AppTools['ocr'] = {
     })();
     // Tesseract v4 的 worker 脚本 / 核心 wasm 也必须从同镜像拉，否则手机上 core 默认回官方源超时
     // ⚠️ v4 的 tesseract-core.wasm.js 在独立的 tesseract.js-core 包里（tesseract.js/dist 下没有该文件，404 会直接导致 importScripts 失败）
-    const OCR_WORKER_PATH = 'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/worker.min.js';
+    const OCR_WORKER_PATHS = [
+      'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/worker.min.js',
+      'https://unpkg.com/tesseract.js@4.1.1/dist/worker.min.js',
+      'https://esm.sh/tesseract.js@4.1.1/dist/worker.min.js'
+    ];
     const OCR_CORE_PATHS = [
       'https://cdn.jsdelivr.net/npm/tesseract.js-core@4.0.4/tesseract-core.wasm.js',
       'https://unpkg.com/tesseract.js-core@4.0.4/tesseract-core.wasm.js',
       'https://esm.sh/tesseract.js-core@4.0.4/tesseract-core.wasm.js'
     ];
+    // worker × core 组合：首选 jsdelivr(worker)+三源(core)，其余 worker 各试首个 core；每轮 35s 超时防止弱网永久卡死
+    const OCR_TRIES = (() => {
+      const t = [];
+      OCR_WORKER_PATHS.forEach((w, wi) => OCR_CORE_PATHS.forEach((c, ci) => { if(wi === 0 || ci === 0) t.push({ workerPath: w, corePath: c }); }));
+      return t;
+    })();
     async function recognizeCanvas(cv, lang, idx, total, langPath){
       let lastErr = null;
-      for(const corePath of OCR_CORE_PATHS){
+      for(const tryCfg of OCR_TRIES){
         try{
-          const res = await Tesseract.recognize(cv, lang, {
+          const res = await withTimeout(Tesseract.recognize(cv, lang, {
             langPath: langPath,
-            workerPath: OCR_WORKER_PATH,
-            corePath: corePath,
+            workerPath: tryCfg.workerPath,
+            corePath: tryCfg.corePath,
             logger: m => { if(m.status==='recognizing text') $('#oc-prog', body).textContent = `第 ${idx}/${total} 张进度：${Math.round(m.progress*100)}%`; }
-          });
+          }), 35000, 'OCR 引擎加载');
           return res.data.text;
         }catch(e){ lastErr = e; }
       }
@@ -6476,7 +6479,7 @@ function restoreTool(id){
   // 还原缓存的真实 DOM（保留已填内容与事件监听）；无缓存则重新构建
   if(miniCache[target]){ modalBody.appendChild(miniCache[target]); delete miniCache[target]; }
   else if(AppTools[target]){
-    try{ AppTools[target].build(modalBody); }
+    try{ buildToolSafely(AppTools[target], modalBody); }
     catch(err){ modalBody.innerHTML = '<div class="result-box err">工具加载失败：'+escapeHtml(errMsg(err))+'</div>'; }
   }
   activeTool = target;
@@ -6505,7 +6508,7 @@ function openToolModal(id){
   activeTool = id;
   window.__toolCleanup = null;
   // 注：已最小化的应用保留在右下角 dock，不在此清空
-  try{ tool.build(modalBody); }
+  try{ buildToolSafely(tool, modalBody); }
   catch(err){ modalBody.innerHTML = '<div class="result-box err">工具加载失败：'+escapeHtml(errMsg(err))+'</div>'; }
   overlay.classList.add('show');
   overlay.setAttribute('aria-hidden','false');
@@ -7427,36 +7430,37 @@ async function fetchJSONviaProxy(target){
   return await d.json();
 }
 // @imgly 抠图：publicPath 必须为绝对 URL（库内部用 new URL 解析）
-// 重构（v2026.08.24-d）：直接走 imgly 官方数据 CDN（staticimgly.com，库内硬编码默认源，真实存在、CORS *），
-// 不再依赖本站 /imgly-data/（避免 Cloudflare Pages 中转大文件被吞 / SW 缓存坏响应）。
-// 国内 staticimgly 偶发不可达时，回退到本站同源 /imgly-data/（数据完整，作保险）。
+// 重构（v2026.08.24-e）：默认优先本站同源数据（/imgly-data/，已验证完整、国内直连、Cloudflare 边缘加速），
+// staticimgly.com 仅作兜底；彻底绕开官方 CDN 在国内的慢/不通导致的「卡在 91%」。SW v18 对模型数据纯透传不缓存。
 const IMGLY_CDN = 'https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/';
 const IMGLY_LOCAL = window.location.origin + '/imgly-data/1.5.5/dist/';
 let __imglyBase = null;
+// 优先本站同源数据（国内直连、已验证完整、Cloudflare 边缘加速），官方 CDN 仅作兜底。
+// 彻底绕开 staticimgly.com 在国内的慢/不通导致的「卡在 91%」。
 async function chooseImglyPublicPath(){
   if(__imglyBase) return __imglyBase;
-  // 探测官方 CDN 可达性（resources.json 是关键清单）
   try{
     const c = new AbortController(); const t = setTimeout(()=>c.abort(), 6000);
-    const r = await fetch(IMGLY_CDN + 'resources.json', { signal:c.signal, cache:'no-store' });
+    const r = await fetch(IMGLY_LOCAL + 'resources.json', { signal:c.signal, cache:'no-store' });
     clearTimeout(t);
-    if(r.ok){ __imglyBase = IMGLY_CDN; return __imglyBase; }
-  }catch(_){ /* 官方不可达，走兜底 */ }
-  __imglyBase = IMGLY_LOCAL; return __imglyBase;
+    if(r.ok){ __imglyBase = IMGLY_LOCAL; return __imglyBase; }
+  }catch(_){ /* 本站不可达，走官方 */ }
+  __imglyBase = IMGLY_CDN; return __imglyBase;
 }
 async function imglyRemove(removeBackground, f, opts){
   const base = await chooseImglyPublicPath();
   let lastErr;
-  // 重试 3 次：并行下载分块偶发中断时自动恢复（不使用 force-cache，避免部分下载被缓存后每次重试都返回失败）
+  // 主源重试 3 次（并行分块偶发中断自动恢复；不使用 force-cache，避免部分下载被缓存后每次都失败）
   for(let attempt=1; attempt<=3; attempt++){
-    try{
-      return await removeBackground(f, Object.assign({}, opts, { publicPath: base }));
-    }catch(e){ lastErr = e; }
+    try{ return await removeBackground(f, Object.assign({}, opts, { publicPath: base })); }
+    catch(e){ lastErr = e; }
   }
-  // 若官方源失败，强制切换兜底源再试一次
-  if(__imglyBase === IMGLY_CDN){
-    __imglyBase = IMGLY_LOCAL;
-    try{ return await removeBackground(f, Object.assign({}, opts, { publicPath: IMGLY_LOCAL })); }catch(e){ lastErr = e; }
+  // 主源失败，切换另一源再重试 3 次（官方 <-> 本站）
+  const alt = (__imglyBase === IMGLY_CDN) ? IMGLY_LOCAL : IMGLY_CDN;
+  __imglyBase = alt;
+  for(let attempt=1; attempt<=3; attempt++){
+    try{ return await removeBackground(f, Object.assign({}, opts, { publicPath: alt })); }
+    catch(e){ lastErr = e; }
   }
   throw lastErr;
 }
@@ -8650,14 +8654,43 @@ AppTools['ideal-type'] = {
 function ntLoadImage(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=r.result; }; r.onerror=rej; r.readAsDataURL(file); }); }
 async function ntFilesToImages(list){ const out=[]; for(const f of list){ if(f && f.type && f.type.startsWith('image/')) out.push(await ntLoadImage(f)); } return out; }
 function ntDataURLtoBlob(u){ const a=u.split(','), m=a[0].match(/:(.*?);/)[1], b=atob(a[1]), n=b.length, d=new Uint8Array(n); for(let i=0;i<n;i++) d[i]=b.charCodeAt(i); return new Blob([d],{type:m}); }
-/* 统一触发文件选择：修复 Android Chrome 已知坑——position:fixed 祖先内的隐藏 file input
-   调用 .click() 无法唤起原生文件选择器；且 display:none 的 file input 在部分 Android 上也不弹窗。
-/* 批量文件选择增强（v2026.08.24-d 重构）：取消隐藏方案，input 本身可见（.vis-file-btn），
-   原生按钮用户直接触摸触发；提供张数提示与清空。累计多次选择的文件，onChange 返回全部。 */
+/* 文件选择统一修复（v2026.08.24-e）：真实可见按钮 + 隐藏 input + button.click() 触发。
+   安卓 PWA standalone 下最稳，用户确认「前面都可以」。所有 <input type=file> 在 build 后由 normalizeFileInputs 统一处理。 */
+/* 给可能挂起的 Promise 加超时，避免 OCR / Tesseract core 在弱网下永久卡住（进度一直不动） */
+function withTimeout(promise, ms, label){
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error((label || '操作') + '超时（' + ms + 'ms）')), ms);
+    Promise.resolve(promise).then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+/* build 完成后统一把所有文件输入改为「真实按钮 + 隐藏 input」方案（覆盖全部工具，含 class=inp 的 pw-f/pw-img） */
+function normalizeFileInputs(body){
+  if(!body) return;
+  body.querySelectorAll('input[type=file]').forEach(input => {
+    if(input.dataset.ftWired) return;
+    input.dataset.ftWired = '1';
+    input.classList.add('hf'); input.style.display = 'none';
+    const label = input.multiple ? '选择 / 继续添加文件' : (input.getAttribute('aria-label') || '选择文件');
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn'; btn.textContent = label;
+    (input.parentElement || body).insertBefore(btn, input);
+    btn.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      try { input.click(); } catch(_) {}
+      return false;
+    });
+  });
+}
+/* 安全的工具构建：build 后统一修复文件选择（PWA 兼容） */
+function buildToolSafely(tool, body){
+  tool.build(body);
+  normalizeFileInputs(body);
+}
+/* 批量文件选择增强：输入由 normalizeFileInputs 统一隐藏并生成触发按钮；此处仅管理累计 + 张数 + 清空。onChange 返回全部。 */
 function ntBatchAddUI(body, inputId,  onChange){
   const input=$('#'+inputId, body); if(!input) return { getFiles:()=>[] };
-  // 重构：input 直接显示为可见原生文件按钮，绝不用 JS click / label 包装
-  input.className='vis-file-btn';
+  // 输入由 normalizeFileInputs 统一隐藏并生成触发按钮；此处仅先隐藏，避免未归一化时裸露
+  input.classList.add('hf'); input.style.display='none';
   const wrap=input.parentElement;
   const row=document.createElement('div'); row.className='btn-row'; row.style.marginTop='8px'; row.style.alignItems='center';
   const clearBtn=document.createElement('button'); clearBtn.className='btn ghost'; clearBtn.id=inputId+'-clear'; clearBtn.disabled=true; clearBtn.textContent='清空';
@@ -8724,7 +8757,7 @@ AppTools['img-round'] = {
     let imgs=[];
     $('#ir-sep',body).onchange=()=>{ $('#ir-sepbox',body).style.display = $('#ir-sep',body).checked?'flex':'none'; };
     $('#ir-enable-crop',body).onchange=()=>{ $('#ir-crop-box',body).style.display = $('#ir-enable-crop',body).checked?'block':'none'; };
-    // ir-files 已是可见 .vis-file-btn（原生按钮可直接触摸），无需 JS click 兜底
+    // ir-files 由 normalizeFileInputs 统一隐藏并生成触发按钮（安卓 PWA 最稳）
     $('#ir-clear',body).onclick=()=>{ imgs=[]; $('#ir-run',body).disabled=true; $('#ir-zip',body).disabled=true; $('#ir-clear',body).disabled=true; $('#ir-count',body).textContent='0 张'; $('#ir-out',body).innerHTML='选择图片后预览（可继续添加更多）'; };
     $('#ir-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); $('#ir-run',body).disabled=false; $('#ir-zip',body).disabled=false; $('#ir-clear',body).disabled=false; $('#ir-count',body).textContent=imgs.length+' 张'; $('#ir-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成（可继续添加）'; // 自动设置默认裁剪宽高为第一张图
       if(imgs.length===1 && +$('#ir-cw',body).value===0){ const w=imgs[0].width, h=imgs[0].height; $('#ir-cw',body).value=w; $('#ir-ch',body).value=h; }
@@ -8769,7 +8802,7 @@ AppTools['img-base64'] = {
     let items=[];
     async function renderAll(){ const fmt=$('#ib-fmt',body).value; if(!items.length){ $('#ib-out',body).innerHTML='选择图片后自动生成（可继续添加更多）'; return; } $('#ib-out',body).innerHTML = items.map((it,i)=>{ const b64=it.du.split(',')[1]; const out=fmt==='raw'?b64:it.du; return `<div class="card-soft mb"><div class="mb-sm"><b>${escapeHtml(it.name)}</b>（${fmt==='raw'?'Base64':'Data URL'}）</div><img src="${it.du}" style="max-width:120px;max-height:120px;border-radius:6px"><textarea class="area" style="min-height:70px" readonly>${escapeHtml(out)}</textarea><button class="btn" id="ib-c${i}">复制</button></div>`; }).join(''); items.forEach((it,i)=>{ const b64=it.du.split(',')[1]; $('#ib-c'+i,body).onclick=()=>copyText(fmt==='raw'?b64:it.du); }); }
     async function addFiles(fileList){ const files=Array.from(fileList||[]); if(!files.length) return; for(const f of files){ items.push({name:f.name, du:await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(f); }) }); } $('#ib-clear',body).disabled=false; $('#ib-count',body).textContent=items.length+' 张'; renderAll(); }
-    // ib-files 已是可见 .vis-file-btn（原生按钮可直接触摸），无需 JS click 兜底
+    // ib-files 由 normalizeFileInputs 统一隐藏并生成触发按钮（安卓 PWA 最稳）
     $('#ib-clear',body).onclick=()=>{ items=[]; $('#ib-clear',body).disabled=true; $('#ib-count',body).textContent='0 张'; renderAll(); };
     $('#ib-files',body).onchange=async e=>{ await addFiles(e.target.files); e.target.value=''; };
     $('#ib-fmt',body).onchange=()=>renderAll();
@@ -8794,7 +8827,7 @@ AppTools['img-to-pdf'] = {
       <div id="ip-out" class="hint">选择图片后生成（可继续添加更多）</div>`;
     let imgs=[];
     function refreshIP(){ $('#ip-run',body).disabled=!imgs.length; $('#ip-clear',body).disabled=!imgs.length; $('#ip-count',body).textContent=imgs.length+' 张'; if(imgs.length) $('#ip-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成'; }
-    // ip-files 已是可见 .vis-file-btn（原生按钮可直接触摸），无需 JS click 兜底
+    // ip-files 由 normalizeFileInputs 统一隐藏并生成触发按钮（安卓 PWA 最稳）
     $('#ip-clear',body).onclick=()=>{ imgs=[]; $('#ip-out',body).innerHTML='选择图片后生成（可继续添加更多）'; refreshIP(); };
     $('#ip-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); refreshIP(); };
     $('#ip-run',body).onclick=async()=>{
@@ -8966,7 +8999,7 @@ AppTools['sensitive-word'] = {
     };
     $('#sw-clear',body).onclick=()=>{ const text=$('#sw-in',body).value; let out=text; dict().forEach(w=>{ out=out.split(w).join(''); }); $('#sw-in',body).value=out; toast('已移除敏感词'); };
     // 文档上传：读取本地文本类文档（.txt/.md/.csv/.json 等）载入文本框，保留粘贴入口
-    // sw-file 已是可见 .vis-file-btn（原生按钮可直接触摸），无需 JS click 兜底
+    // sw-file 由 normalizeFileInputs 统一隐藏并生成触发按钮（安卓 PWA 最稳）
     $('#sw-file',body).onchange=async e=>{
       const files=Array.from(e.target.files||[]); if(!files.length) return;
       const parts=[];
