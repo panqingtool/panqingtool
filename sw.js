@@ -22,7 +22,7 @@
  *
  * activate 阶段自动删除所有「不含当前 VERSION」的旧缓存 → 旧缓存被自动清理。
  */
-const VERSION = 'v16';
+const VERSION = 'v17';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const CDN_CACHE = 'cdn-' + VERSION;
@@ -146,23 +146,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // imgly-data 模型分块：缓存命中且 ok 才用；网络成功才写缓存；网络失败回退缓存
+  // imgly-data 模型 / wasm：纯网络透传，不做任何缓存与 Response.error() 返回。
+  // 大模型分块（44MB）+ wasm（77MB）在手机弱网下，SW 缓存逻辑极易因网络抖动缓存坏响应
+  // 或返回 Response.error()，导致 imgly「Failed to fetch / no available backend」。
+  // 直接透传让浏览器原生 fetch 处理（imgly 自身有 3 次重试），彻底排除 SW 干扰。
   if (IMGLY_PATH_RE.test(url.pathname)) {
-    event.respondWith((async () => {
-      try {
-        const net = await fetch(req);
-        if (net && net.ok) {
-          const c = await caches.open(IMGLY_CACHE);
-          c.put(req, net.clone()).catch(() => {});
-          return net;
-        }
-        const cached = await caches.match(req);
-        return cached || net || Response.error();
-      } catch (_) {
-        const cached = await caches.match(req);
-        return cached || Response.error();
-      }
-    })());
+    event.respondWith(fetch(req));
     return;
   }
 
