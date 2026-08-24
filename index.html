@@ -16,7 +16,7 @@
 <meta name="format-detection" content="telephone=no">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- 冗余 CSP（与 _headers 保持一致；用于不支持 _headers 的部署平台） -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob: https://cdn.jsdelivr.net https://unpkg.com https://esm.sh; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob: https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <link rel="manifest" href="manifest.webmanifest?v=20260822">
 <link rel="icon" href="icons/icon-192.png?v=20260822" sizes="192x192" type="image/png">
@@ -458,13 +458,20 @@ img{max-width:100%;}
 .txt{min-height:120px;resize:vertical;line-height:1.6;}
 /* 视觉隐藏但保留在布局中（iOS Safari 对 display:none 的 file input 调用 .click() 经常无法唤起选择器，改用此方式） */
 .vis-hide{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important;}
-/* 文件选择触发标签：用 <label for> 原生关联隐藏 input，Android WebView / PWA standalone 下也能可靠唤起选择器。
-   同时保留 JS 在按钮 onclick 里主动 input.click() 兜底。 */
-.file-trigger{display:inline-block;cursor:pointer;position:relative;}
-/* 文件选择 input：放置在屏幕外 1px 区域（绝不用 display:none / clip / visibility:hidden / opacity:0 铺满覆盖层，
-   否则①Android WebView / PWA standalone 会静默拒绝弹窗；②铺满的透明 input 会盖死按钮导致触摸命中异常、
-   按钮视觉变淡）。屏幕外真实存在的元素在用户手势触发下（label 原生或 JS click）均能可靠弹窗。 */
-.direct-input{position:absolute;top:0;left:0;width:1px;height:1px;opacity:1;cursor:pointer;border:0;padding:0;margin:0;font-size:1px;}
+/* 文件选择重构（v2026.08.24-d）：取消一切隐藏方案（display:none / clip / opacity:0 铺满 / 屏幕外 / pointer-events:none /
+   <label for> 包装）。直接让 <input type="file"> 本身可见，用 ::file-selector-button 把原生按钮样式化成设计按钮。
+   用户在安卓快捷方式里真实、直接触摸到这个原生 input 元素，绝不用 JS 调 input.click()。 */
+.vis-file-btn{
+  display:inline-flex;align-items:center;gap:10px;width:100%;max-width:420px;
+  font-size:14px;color:var(--text-2);cursor:pointer;
+}
+.vis-file-btn::file-selector-button{
+  flex:0 0 auto;min-height:44px;padding:10px 18px;border:0;border-radius:8px;
+  background:var(--primary);color:#fff;font-size:15px;font-weight:600;cursor:pointer;
+  transition:background .2s ease,transform .2s ease;
+}
+.vis-file-btn:hover::file-selector-button{background:var(--primary-hover);}
+.vis-file-btn:active::file-selector-button{transform:scale(0.97);}
 .row{display:flex;gap:12px;flex-wrap:wrap;}
 .row > *{flex:1;min-width:120px;}
 .btn{
@@ -772,7 +779,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-c</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-d</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -1794,10 +1801,7 @@ function mountFileQueue(opts){
   }
   function getItems(){ return state.map(s => ({ file:s.file, img:s.img||null })); }
   input.onchange = async (e) => { await addFiles(Array.from(e.target.files)); };
-  // 关键修复（手机 PWA 文件选择无反应）：透明覆盖 input 在红米 standalone WebView 命中不稳定，
-  // 改用「真实可见按钮 + JS 主动 input.click()」——用户手势触发的 click 在 Android WebView 可靠弹窗。
-  const addBtn = $('#'+opts.addId, opts.body);
-  if(addBtn){ addBtn.onclick = () => { try{ input.click(); }catch(_){} }; }
+  // mg/pm 的 input 已是可见 .vis-file-btn（原生按钮直接触摸），无需 JS click 兜底
   return { getItems, addFiles, clear:()=>{ state.forEach(s=>{ if(s.url) URL.revokeObjectURL(s.url); }); state.length=0; render(); } };
 }
 
@@ -1805,8 +1809,7 @@ AppTools['img-merge'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（按顺序；可多次添加）</label>
-        <label class="btn file-trigger" for="mg-file" id="mg-add">＋ 选择 / 继续添加图片
-          <input type="file" class="direct-input" id="mg-file" accept="image/*" multiple aria-label="选择图片"></label>
+        <input type="file" class="vis-file-btn" id="mg-file" accept="image/*" multiple aria-label="选择图片">
       <div id="mg-list" class="fq-list"></div>
       <div class="mb"><label class="field-label">拼接方向</label>
         <select class="sel" id="mg-dir" aria-label="拼接方向">
@@ -2769,8 +2772,7 @@ AppTools['pdf-merge'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择多个 PDF（按列表顺序合并；可多次添加）</label>
-        <label class="btn file-trigger" for="pm-file" id="pm-add">＋ 选择 / 继续添加 PDF
-          <input type="file" class="direct-input" id="pm-file" accept="application/pdf" multiple aria-label="选择PDF"></label>
+        <input type="file" class="vis-file-btn" id="pm-file" accept="application/pdf" multiple aria-label="选择PDF">
       <div id="pm-list" class="fq-list"></div>
       <button class="btn" id="pm-run" disabled>合并 PDF</button>
       <div id="pm-result"></div>`;
@@ -3862,8 +3864,8 @@ AppTools['md5'] = {
         </div></div>
       <button class="btn" id="md-run">计算摘要</button>
       <div class="hint" style="margin-top:8px">⚠️ MD5 / SHA‑1 已被证实可人为制造碰撞，<b>不可用于密码存储、数字签名、完整性校验等安全场景</b>；建议改用 <b>SHA‑256 / SHA‑512</b>。也支持把文件拖到下方计算哈希。</div>
-      <div class="mb" style="margin-top:10px"><label id="md-drop" for="md-file" style="display:block;position:relative;border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;color:var(--text-2);cursor:pointer">把文件拖到这里，或点击此处选择文件（不联网、不上传）
-          <input type="file" id="md-file" class="direct-input" accept="*/*" aria-label="选择文件"></label></div>
+      <div class="mb" style="margin-top:10px"><div id="md-drop" style="display:block;position:relative;border:1.5px dashed var(--border);border-radius:8px;padding:14px;color:var(--text-2)">把文件拖到这里，或点击下方按钮选择文件（不联网、不上传）
+          <div style="margin-top:10px"><input type="file" id="md-file" class="vis-file-btn" accept="*/*" aria-label="选择文件"></div></div></div>
       <div id="md-result"></div>`;
     function hashText(v, name){
       const map = { md5:'MD5', sha1:'SHA1', sha256:'SHA256', sha512:'SHA512' };
@@ -3893,8 +3895,7 @@ AppTools['md5'] = {
     }
     $('#md-file', body).onchange = e => { if(e.target.files[0]) hashFile(e.target.files[0]); };
     const dz = $('#md-drop', body);
-    // md-drop 已是 <label for="md-file">，原生关联即可可靠唤起；此 onclick 仅作兜底
-    dz.onclick = () => { try{ $('#md-file', body).click(); }catch(_){} };
+    // md-file 已是可见的 .vis-file-btn（原生按钮可直接触摸），无需 JS click 兜底
     dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.style.borderColor='var(--primary)'; });
     dz.addEventListener('dragleave', ()=> dz.style.borderColor='');
     dz.addEventListener('drop', e=>{ e.preventDefault(); dz.style.borderColor=''; if(e.dataTransfer.files[0]) hashFile(e.dataTransfer.files[0]); });
@@ -7426,15 +7427,36 @@ async function fetchJSONviaProxy(target){
   return await d.json();
 }
 // @imgly 抠图：publicPath 必须为绝对 URL（库内部用 new URL 解析）
-// 模型（~44MB）已上传到本站 /imgly-data/1.5.5/dist/（国内可访问），使用 window.location.origin 适配所有部署
+// 重构（v2026.08.24-d）：直接走 imgly 官方数据 CDN（staticimgly.com，库内硬编码默认源，真实存在、CORS *），
+// 不再依赖本站 /imgly-data/（避免 Cloudflare Pages 中转大文件被吞 / SW 缓存坏响应）。
+// 国内 staticimgly 偶发不可达时，回退到本站同源 /imgly-data/（数据完整，作保险）。
+const IMGLY_CDN = 'https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/';
+const IMGLY_LOCAL = window.location.origin + '/imgly-data/1.5.5/dist/';
+let __imglyBase = null;
+async function chooseImglyPublicPath(){
+  if(__imglyBase) return __imglyBase;
+  // 探测官方 CDN 可达性（resources.json 是关键清单）
+  try{
+    const c = new AbortController(); const t = setTimeout(()=>c.abort(), 6000);
+    const r = await fetch(IMGLY_CDN + 'resources.json', { signal:c.signal, cache:'no-store' });
+    clearTimeout(t);
+    if(r.ok){ __imglyBase = IMGLY_CDN; return __imglyBase; }
+  }catch(_){ /* 官方不可达，走兜底 */ }
+  __imglyBase = IMGLY_LOCAL; return __imglyBase;
+}
 async function imglyRemove(removeBackground, f, opts){
-  const base = window.location.origin + '/imgly-data/1.5.5/dist/';
+  const base = await chooseImglyPublicPath();
   let lastErr;
-  // 重试 3 次：并行下载 44MB 分块偶发中断时自动恢复（不使用 force-cache，避免部分下载被缓存后每次重试都返回失败）
+  // 重试 3 次：并行下载分块偶发中断时自动恢复（不使用 force-cache，避免部分下载被缓存后每次重试都返回失败）
   for(let attempt=1; attempt<=3; attempt++){
     try{
       return await removeBackground(f, Object.assign({}, opts, { publicPath: base }));
     }catch(e){ lastErr = e; }
+  }
+  // 若官方源失败，强制切换兜底源再试一次
+  if(__imglyBase === IMGLY_CDN){
+    __imglyBase = IMGLY_LOCAL;
+    try{ return await removeBackground(f, Object.assign({}, opts, { publicPath: IMGLY_LOCAL })); }catch(e){ lastErr = e; }
   }
   throw lastErr;
 }
@@ -7444,7 +7466,7 @@ let __imglyPrefetchStarted = false;
 async function prefetchImglyModel(){
   if(__imglyPrefetchStarted) return; __imglyPrefetchStarted = true;
   try{
-    const base = window.location.origin + '/imgly-data/1.5.5/dist/';
+    const base = await chooseImglyPublicPath();
     const r = await fetch(base + 'resources.json');
     if(!r.ok) return;
     const meta = await r.json();
@@ -8630,39 +8652,17 @@ async function ntFilesToImages(list){ const out=[]; for(const f of list){ if(f &
 function ntDataURLtoBlob(u){ const a=u.split(','), m=a[0].match(/:(.*?);/)[1], b=atob(a[1]), n=b.length, d=new Uint8Array(n); for(let i=0;i<n;i++) d[i]=b.charCodeAt(i); return new Blob([d],{type:m}); }
 /* 统一触发文件选择：修复 Android Chrome 已知坑——position:fixed 祖先内的隐藏 file input
    调用 .click() 无法唤起原生文件选择器；且 display:none 的 file input 在部分 Android 上也不弹窗。
-   这里临时把 input 移出 fixed 祖先并设为“渲染但透明”的 1px 元素再触发，选择后还原。桌面端同样可用。 */
-function triggerFileInput(input){
-  if(!input) return;
-  const inFixed = (function(){ let el=input.parentElement; while(el){ if(getComputedStyle(el).position==='fixed') return true; el=el.parentElement; } return false; })();
-  const origParent = input.parentElement, origNext = input.nextSibling, origCss = input.style.cssText;
-  const cleanup = () => { if(input.__tfCleanup){ try{ input.__tfCleanup(); }catch(_){} input.__tfCleanup=null; } };
-  if(inFixed) document.body.appendChild(input);
-  // 保证“已渲染但不可见”，避免 display:none / 0 尺寸导致 Android 不弹窗
-  input.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;border:0;';
-  input.__tfCleanup = () => {
-    input.style.cssText = origCss;
-    if(input.parentElement === document.body && origParent){ try{ origParent.insertBefore(input, origNext); }catch(_){ origParent.appendChild(input); } }
-  };
-  try{ input.click(); }catch(_){}
-  input.addEventListener('change', cleanup, { once:true });
-  setTimeout(cleanup, 2000);
-}
-/* 批量文件选择增强：隐藏原生 input，提供「＋ 选择 / 继续添加」按钮、张数提示与清空，
-   累计多次选择的文件，onChange 回调返回全部已选文件。run 处理函数直接读取返回的数组即可。 */
+/* 批量文件选择增强（v2026.08.24-d 重构）：取消隐藏方案，input 本身可见（.vis-file-btn），
+   原生按钮用户直接触摸触发；提供张数提示与清空。累计多次选择的文件，onChange 返回全部。 */
 function ntBatchAddUI(body, inputId,  onChange){
   const input=$('#'+inputId, body); if(!input) return { getFiles:()=>[] };
-  // 经典可靠方案：用 <label for> 原生关联（浏览器原生机制，Android WebView / PWA standalone 全支持），
-  // input 为屏幕外 1px 真实元素（非 display:none/clip/opacity 铺满），同时保留 JS click 兜底。
-  input.className='direct-input';
+  // 重构：input 直接显示为可见原生文件按钮，绝不用 JS click / label 包装
+  input.className='vis-file-btn';
   const wrap=input.parentElement;
-  const row=document.createElement('div'); row.className='btn-row'; row.style.marginTop='8px'; row.style.position='relative';
-  const box=document.createElement('label'); box.className='btn file-trigger'; box.id=inputId+'-add'; box.setAttribute('for', inputId);
-  box.textContent='＋  选择 / 继续添加';
-  box.appendChild(input); // input 置于屏幕外，label 原生关联唤起，JS click 兜底
-  box.onclick = () => { try{ input.click(); }catch(_){} };
+  const row=document.createElement('div'); row.className='btn-row'; row.style.marginTop='8px'; row.style.alignItems='center';
   const clearBtn=document.createElement('button'); clearBtn.className='btn ghost'; clearBtn.id=inputId+'-clear'; clearBtn.disabled=true; clearBtn.textContent='清空';
   const cnt=document.createElement('span'); cnt.className='mini-tag'; cnt.id=inputId+'-cnt'; cnt.style.alignSelf='center'; cnt.textContent='0 张';
-  row.appendChild(box); row.appendChild(clearBtn); row.appendChild(cnt);
+  row.appendChild(clearBtn); row.appendChild(cnt);
   wrap.appendChild(row);
   input._files=[];
   $('#'+inputId+'-clear', body).onclick=()=>{ input._files=[]; $('#'+inputId+'-clear', body).disabled=true; $('#'+inputId+'-cnt', body).textContent='0 张'; if(onChange) onChange([]); };
@@ -8689,8 +8689,7 @@ AppTools['img-round'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
-        <label class="btn file-trigger" for="ir-files">＋ 选择 / 继续添加图片</label>
-        <input type="file" class="direct-input" id="ir-files" accept="image/*" multiple>
+        <input type="file" class="vis-file-btn" id="ir-files" accept="image/*" multiple>
       </div>
       <div class="mb">
         <label class="field-label"><input type="checkbox" id="ir-enable-crop"> 启用裁剪（先裁剪再圆角）</label>
@@ -8725,8 +8724,7 @@ AppTools['img-round'] = {
     let imgs=[];
     $('#ir-sep',body).onchange=()=>{ $('#ir-sepbox',body).style.display = $('#ir-sep',body).checked?'flex':'none'; };
     $('#ir-enable-crop',body).onchange=()=>{ $('#ir-crop-box',body).style.display = $('#ir-enable-crop',body).checked?'block':'none'; };
-    // ir-files 已由可见 <label for="ir-files"> 原生关联唤起；此兜底仅防止个别 WebView 异常
-    const irLabel=$('#ir-files',body).parentElement; if(irLabel){ irLabel.addEventListener('click',(ev)=>{ if(ev.target!==$('#ir-files',body)){ try{ $('#ir-files',body).click(); }catch(_){} } }, true); }
+    // ir-files 已是可见 .vis-file-btn（原生按钮可直接触摸），无需 JS click 兜底
     $('#ir-clear',body).onclick=()=>{ imgs=[]; $('#ir-run',body).disabled=true; $('#ir-zip',body).disabled=true; $('#ir-clear',body).disabled=true; $('#ir-count',body).textContent='0 张'; $('#ir-out',body).innerHTML='选择图片后预览（可继续添加更多）'; };
     $('#ir-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); $('#ir-run',body).disabled=false; $('#ir-zip',body).disabled=false; $('#ir-clear',body).disabled=false; $('#ir-count',body).textContent=imgs.length+' 张'; $('#ir-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成（可继续添加）'; // 自动设置默认裁剪宽高为第一张图
       if(imgs.length===1 && +$('#ir-cw',body).value===0){ const w=imgs[0].width, h=imgs[0].height; $('#ir-cw',body).value=w; $('#ir-ch',body).value=h; }
@@ -8764,16 +8762,14 @@ AppTools['img-base64'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
-        <label class="btn file-trigger" for="ib-files">＋ 选择 / 继续添加图片</label>
-        <input type="file" class="direct-input" id="ib-files" accept="image/*" multiple>
+        <input type="file" class="vis-file-btn" id="ib-files" accept="image/*" multiple>
       </div>
       <div class="mb"><label class="field-label">输出格式</label><select class="sel" id="ib-fmt"><option value="dataurl">Data URL（可直接用于 &lt;img src&gt;）</option><option value="raw">仅 Base64 字符串</option></select></div>
       <div id="ib-out" class="hint">选择图片后自动生成（可继续添加更多）</div>`;
     let items=[];
     async function renderAll(){ const fmt=$('#ib-fmt',body).value; if(!items.length){ $('#ib-out',body).innerHTML='选择图片后自动生成（可继续添加更多）'; return; } $('#ib-out',body).innerHTML = items.map((it,i)=>{ const b64=it.du.split(',')[1]; const out=fmt==='raw'?b64:it.du; return `<div class="card-soft mb"><div class="mb-sm"><b>${escapeHtml(it.name)}</b>（${fmt==='raw'?'Base64':'Data URL'}）</div><img src="${it.du}" style="max-width:120px;max-height:120px;border-radius:6px"><textarea class="area" style="min-height:70px" readonly>${escapeHtml(out)}</textarea><button class="btn" id="ib-c${i}">复制</button></div>`; }).join(''); items.forEach((it,i)=>{ const b64=it.du.split(',')[1]; $('#ib-c'+i,body).onclick=()=>copyText(fmt==='raw'?b64:it.du); }); }
     async function addFiles(fileList){ const files=Array.from(fileList||[]); if(!files.length) return; for(const f of files){ items.push({name:f.name, du:await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(f); }) }); } $('#ib-clear',body).disabled=false; $('#ib-count',body).textContent=items.length+' 张'; renderAll(); }
-    // ib-files 已由可见 <label for="ib-files"> 原生关联唤起；此兜底仅防止个别 WebView 异常
-    const ibLabel=$('#ib-files',body).parentElement; if(ibLabel){ ibLabel.addEventListener('click',(ev)=>{ if(ev.target!==$('#ib-files',body)){ try{ $('#ib-files',body).click(); }catch(_){} } }, true); }
+    // ib-files 已是可见 .vis-file-btn（原生按钮可直接触摸），无需 JS click 兜底
     $('#ib-clear',body).onclick=()=>{ items=[]; $('#ib-clear',body).disabled=true; $('#ib-count',body).textContent='0 张'; renderAll(); };
     $('#ib-files',body).onchange=async e=>{ await addFiles(e.target.files); e.target.value=''; };
     $('#ib-fmt',body).onchange=()=>renderAll();
@@ -8786,8 +8782,7 @@ AppTools['img-to-pdf'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，按顺序排列，可多次继续添加）</label>
-        <label class="btn file-trigger" for="ip-files">＋ 选择 / 继续添加图片</label>
-        <input type="file" class="direct-input" id="ip-files" accept="image/*" multiple>
+        <input type="file" class="vis-file-btn" id="ip-files" accept="image/*" multiple>
       </div>
       <div class="row mb">
         <div><label class="field-label">纸张</label><select class="sel" id="ip-size"><option value="a4">A4</option><option value="a3">A3</option><option value="letter">Letter</option><option value="fit">适应图片</option></select></div>
@@ -8799,8 +8794,7 @@ AppTools['img-to-pdf'] = {
       <div id="ip-out" class="hint">选择图片后生成（可继续添加更多）</div>`;
     let imgs=[];
     function refreshIP(){ $('#ip-run',body).disabled=!imgs.length; $('#ip-clear',body).disabled=!imgs.length; $('#ip-count',body).textContent=imgs.length+' 张'; if(imgs.length) $('#ip-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成'; }
-    // ip-files 已由可见 <label for="ip-files"> 原生关联唤起；此兜底仅防止个别 WebView 异常
-    const ipLabel=$('#ip-files',body).parentElement; if(ipLabel){ ipLabel.addEventListener('click',(ev)=>{ if(ev.target!==$('#ip-files',body)){ try{ $('#ip-files',body).click(); }catch(_){} } }, true); }
+    // ip-files 已是可见 .vis-file-btn（原生按钮可直接触摸），无需 JS click 兜底
     $('#ip-clear',body).onclick=()=>{ imgs=[]; $('#ip-out',body).innerHTML='选择图片后生成（可继续添加更多）'; refreshIP(); };
     $('#ip-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); refreshIP(); };
     $('#ip-run',body).onclick=async()=>{
@@ -8951,8 +8945,7 @@ AppTools['sensitive-word'] = {
     body.innerHTML = `
       <div class="mb"><label class="field-label">待检测文本（可直接粘贴，或选择本地文档）</label><textarea class="txt" id="sw-in" style="min-height:150px" placeholder="粘贴需要检测的文本，或点击下方按钮选择文档…"></textarea>
         <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <label class="btn ghost file-trigger" for="sw-file" id="sw-doc">📄 选择文档
-            <input type="file" id="sw-file" class="direct-input" accept=".txt,.md,.csv,.json,.text,text/plain,text/*" multiple></label>
+          <div style="margin-top:8px"><input type="file" id="sw-file" class="vis-file-btn" accept=".txt,.md,.csv,.json,.text,text/plain,text/*" multiple aria-label="选择文档"></div>
           <span class="mini-tag" id="sw-docinfo">支持 .txt / .md / .csv / .json / .text</span>
         </div></div>
       <div class="mb"><label class="field-label">自定义敏感词（空格分隔，叠加在默认词库上）</label><input type="text" class="inp" id="sw-extra" value=""></div>
@@ -8973,8 +8966,7 @@ AppTools['sensitive-word'] = {
     };
     $('#sw-clear',body).onclick=()=>{ const text=$('#sw-in',body).value; let out=text; dict().forEach(w=>{ out=out.split(w).join(''); }); $('#sw-in',body).value=out; toast('已移除敏感词'); };
     // 文档上传：读取本地文本类文档（.txt/.md/.csv/.json 等）载入文本框，保留粘贴入口
-    // sw-doc 已是 <label for="sw-file">，原生关联即可可靠唤起；此 onclick 仅作兜底
-    const swDoc=$('#sw-doc',body); if(swDoc){ swDoc.onclick=()=>{ try{ $('#sw-file',body).click(); }catch(_){} }; }
+    // sw-file 已是可见 .vis-file-btn（原生按钮可直接触摸），无需 JS click 兜底
     $('#sw-file',body).onchange=async e=>{
       const files=Array.from(e.target.files||[]); if(!files.length) return;
       const parts=[];
