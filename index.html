@@ -16,7 +16,7 @@
 <meta name="format-detection" content="telephone=no">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- 冗余 CSP（与 _headers 保持一致；用于不支持 _headers 的部署平台） -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob: https://cdn.jsdelivr.net https://unpkg.com https://esm.sh; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <link rel="manifest" href="manifest.webmanifest?v=20260822">
 <link rel="icon" href="icons/icon-192.png?v=20260822" sizes="192x192" type="image/png">
@@ -458,6 +458,9 @@ img{max-width:100%;}
 .txt{min-height:120px;resize:vertical;line-height:1.6;}
 /* 视觉隐藏但保留在布局中（iOS Safari 对 display:none 的 file input 调用 .click() 经常无法唤起选择器，改用此方式） */
 .vis-hide{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important;}
+/* 文件选择触发标签：用 <label for> 原生关联隐藏 input，Android WebView / PWA standalone 下也能可靠唤起选择器 */
+.file-trigger{display:inline-block;cursor:pointer;}
+.file-trigger input{position:absolute;width:100%;height:100%;opacity:0;font-size:0;cursor:pointer;}
 .row{display:flex;gap:12px;flex-wrap:wrap;}
 .row > *{flex:1;min-width:120px;}
 .btn{
@@ -1787,8 +1790,7 @@ function mountFileQueue(opts){
   }
   function getItems(){ return state.map(s => ({ file:s.file, img:s.img||null })); }
   input.onchange = async (e) => { await addFiles(Array.from(e.target.files)); };
-  const addBtn = $('#'+opts.addId, opts.body);
-  if(addBtn) addBtn.onclick = () => input.click();
+  // 不再 JS 程序化 .click()（Android WebView / PWA standalone 不可靠）；改为 <label for> 原生关联
   return { getItems, addFiles, clear:()=>{ state.forEach(s=>{ if(s.url) URL.revokeObjectURL(s.url); }); state.length=0; render(); } };
 }
 
@@ -1797,7 +1799,7 @@ AppTools['img-merge'] = {
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（按顺序；可多次添加）</label>
         <input type="file" class="inp vis-hide" id="mg-file" accept="image/*" multiple aria-label="选择图片">
-        <button class="btn" id="mg-add">＋ 选择 / 继续添加图片</button></div>
+        <label class="btn file-trigger" id="mg-add" for="mg-file">＋ 选择 / 继续添加图片</label></div>
       <div id="mg-list" class="fq-list"></div>
       <div class="mb"><label class="field-label">拼接方向</label>
         <select class="sel" id="mg-dir" aria-label="拼接方向">
@@ -3853,7 +3855,7 @@ AppTools['md5'] = {
         </div></div>
       <button class="btn" id="md-run">计算摘要</button>
       <div class="hint" style="margin-top:8px">⚠️ MD5 / SHA‑1 已被证实可人为制造碰撞，<b>不可用于密码存储、数字签名、完整性校验等安全场景</b>；建议改用 <b>SHA‑256 / SHA‑512</b>。也支持把文件拖到下方计算哈希。</div>
-      <div class="mb" style="margin-top:10px"><div id="md-drop" style="border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;color:var(--text-2)">把文件拖到这里计算哈希（不联网、不上传）</div>
+      <div class="mb" style="margin-top:10px"><label id="md-drop" for="md-file" style="display:block;border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;color:var(--text-2);cursor:pointer">把文件拖到这里，或点击此处选择文件（不联网、不上传）</label>
         <input type="file" id="md-file" class="vis-hide" aria-label="选择文件"></div>
       <div id="md-result"></div>`;
     function hashText(v, name){
@@ -3882,7 +3884,6 @@ AppTools['md5'] = {
       const boxes = names.map(n => `<div class="result-box"><b>${n==='md5'?'MD5':n==='sha1'?'SHA‑1':n==='sha256'?'SHA‑256':'SHA‑512'}（${escapeHtml(file.name)}）：</b><br><span class="mono">${CryptoJS[map[n]](wa).toString()}</span></div>`).join('');
       $('#md-result', body).innerHTML = boxes;
     }
-    $('#md-drop', body).onclick = () => triggerFileInput($('#md-file', body));
     $('#md-file', body).onchange = e => { if(e.target.files[0]) hashFile(e.target.files[0]); };
     const dz = $('#md-drop', body);
     dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.style.borderColor='var(--primary)'; });
@@ -8630,13 +8631,12 @@ function triggerFileInput(input){
    累计多次选择的文件，onChange 回调返回全部已选文件。run 处理函数直接读取返回的数组即可。 */
 function ntBatchAddUI(body, inputId, onChange){
   const input=$('#'+inputId, body); if(!input) return { getFiles:()=>[] };
-  input.style.display='none';
+  input.classList.remove('vis-hide'); // 移除 display:none；用 label 关联唤起，WebView 更可靠
   const wrap=input.parentElement;
-  const row=document.createElement('div'); row.className='btn-row'; row.style.marginTop='8px';
-  row.innerHTML=`<button class="btn" id="${inputId}-add">＋ 选择 / 继续添加</button><button class="btn ghost" id="${inputId}-clear" disabled>清空</button><span class="mini-tag" id="${inputId}-cnt" style="align-self:center">0 张</span>`;
+  const row=document.createElement('div'); row.className='btn-row'; row.style.marginTop='8px'; row.style.position='relative';
+  row.innerHTML=`<label class="btn file-trigger" id="${inputId}-add" for="${inputId}">＋ 选择 / 继续添加</label><button class="btn ghost" id="${inputId}-clear" disabled>清空</button><span class="mini-tag" id="${inputId}-cnt" style="align-self:center">0 张</span>`;
   wrap.appendChild(row);
   input._files=[];
-  $('#'+inputId+'-add', body).onclick=()=>triggerFileInput(input);
   $('#'+inputId+'-clear', body).onclick=()=>{ input._files=[]; $('#'+inputId+'-clear', body).disabled=true; $('#'+inputId+'-cnt', body).textContent='0 张'; if(onChange) onChange([]); };
   input.onchange=(e)=>{ const more=Array.from(e.target.files||[]); if(more.length) input._files=input._files.concat(more); e.target.value=''; $('#'+inputId+'-clear', body).disabled=!input._files.length; $('#'+inputId+'-cnt', body).textContent=input._files.length+' 张'; if(onChange) onChange(input._files); };
   return { getFiles:()=>input._files };
@@ -8663,7 +8663,7 @@ AppTools['img-round'] = {
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
         <input type="file" class="inp vis-hide" id="ir-files" accept="image/*" multiple>
         <div class="btn-row" style="margin-top:8px">
-          <button class="btn" id="ir-add">＋ 选择 / 继续添加图片</button>
+          <label class="btn file-trigger" id="ir-add" for="ir-files">＋ 选择 / 继续添加图片</label>
           <button class="btn ghost" id="ir-clear" disabled>清空</button>
           <span class="mini-tag" id="ir-count" style="align-self:center">0 张</span>
         </div>
@@ -8701,7 +8701,7 @@ AppTools['img-round'] = {
     let imgs=[];
     $('#ir-sep',body).onchange=()=>{ $('#ir-sepbox',body).style.display = $('#ir-sep',body).checked?'flex':'none'; };
     $('#ir-enable-crop',body).onchange=()=>{ $('#ir-crop-box',body).style.display = $('#ir-enable-crop',body).checked?'block':'none'; };
-    $('#ir-add',body).onclick=()=>triggerFileInput($('#ir-files',body));
+    // ir-add 已改为 <label for="ir-files"> 原生唤起，无需 JS 触发
     $('#ir-clear',body).onclick=()=>{ imgs=[]; $('#ir-run',body).disabled=true; $('#ir-zip',body).disabled=true; $('#ir-clear',body).disabled=true; $('#ir-count',body).textContent='0 张'; $('#ir-out',body).innerHTML='选择图片后预览（可继续添加更多）'; };
     $('#ir-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); $('#ir-run',body).disabled=false; $('#ir-zip',body).disabled=false; $('#ir-clear',body).disabled=false; $('#ir-count',body).textContent=imgs.length+' 张'; $('#ir-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成（可继续添加）'; // 自动设置默认裁剪宽高为第一张图
       if(imgs.length===1 && +$('#ir-cw',body).value===0){ const w=imgs[0].width, h=imgs[0].height; $('#ir-cw',body).value=w; $('#ir-ch',body).value=h; }
@@ -8741,7 +8741,7 @@ AppTools['img-base64'] = {
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
         <input type="file" class="inp vis-hide" id="ib-files" accept="image/*" multiple>
         <div class="btn-row" style="margin-top:8px">
-          <button class="btn" id="ib-add">＋ 选择 / 继续添加图片</button>
+          <label class="btn file-trigger" id="ib-add" for="ib-files">＋ 选择 / 继续添加图片</label>
           <button class="btn ghost" id="ib-clear" disabled>清空</button>
           <span class="mini-tag" id="ib-count" style="align-self:center">0 张</span>
         </div>
@@ -8751,7 +8751,7 @@ AppTools['img-base64'] = {
     let items=[];
     async function renderAll(){ const fmt=$('#ib-fmt',body).value; if(!items.length){ $('#ib-out',body).innerHTML='选择图片后自动生成（可继续添加更多）'; return; } $('#ib-out',body).innerHTML = items.map((it,i)=>{ const b64=it.du.split(',')[1]; const out=fmt==='raw'?b64:it.du; return `<div class="card-soft mb"><div class="mb-sm"><b>${escapeHtml(it.name)}</b>（${fmt==='raw'?'Base64':'Data URL'}）</div><img src="${it.du}" style="max-width:120px;max-height:120px;border-radius:6px"><textarea class="area" style="min-height:70px" readonly>${escapeHtml(out)}</textarea><button class="btn" id="ib-c${i}">复制</button></div>`; }).join(''); items.forEach((it,i)=>{ const b64=it.du.split(',')[1]; $('#ib-c'+i,body).onclick=()=>copyText(fmt==='raw'?b64:it.du); }); }
     async function addFiles(fileList){ const files=Array.from(fileList||[]); if(!files.length) return; for(const f of files){ items.push({name:f.name, du:await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(f); }) }); } $('#ib-clear',body).disabled=false; $('#ib-count',body).textContent=items.length+' 张'; renderAll(); }
-    $('#ib-add',body).onclick=()=>triggerFileInput($('#ib-files',body));
+    // ib-add 已改为 <label for="ib-files"> 原生唤起
     $('#ib-clear',body).onclick=()=>{ items=[]; $('#ib-clear',body).disabled=true; $('#ib-count',body).textContent='0 张'; renderAll(); };
     $('#ib-files',body).onchange=async e=>{ await addFiles(e.target.files); e.target.value=''; };
     $('#ib-fmt',body).onchange=()=>renderAll();
@@ -8766,7 +8766,7 @@ AppTools['img-to-pdf'] = {
       <div class="mb"><label class="field-label">选择图片（可多选，按顺序排列，可多次继续添加）</label>
         <input type="file" class="inp vis-hide" id="ip-files" accept="image/*" multiple>
         <div class="btn-row" style="margin-top:8px">
-          <button class="btn" id="ip-add">＋ 选择 / 继续添加图片</button>
+          <label class="btn file-trigger" id="ip-add" for="ip-files">＋ 选择 / 继续添加图片</label>
           <button class="btn ghost" id="ip-clear" disabled>清空</button>
           <span class="mini-tag" id="ip-count" style="align-self:center">0 张</span>
         </div>
@@ -8781,7 +8781,7 @@ AppTools['img-to-pdf'] = {
       <div id="ip-out" class="hint">选择图片后生成（可继续添加更多）</div>`;
     let imgs=[];
     function refreshIP(){ $('#ip-run',body).disabled=!imgs.length; $('#ip-clear',body).disabled=!imgs.length; $('#ip-count',body).textContent=imgs.length+' 张'; if(imgs.length) $('#ip-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成'; }
-    $('#ip-add',body).onclick=()=>triggerFileInput($('#ip-files',body));
+    // ip-add 已改为 <label for="ip-files"> 原生唤起
     $('#ip-clear',body).onclick=()=>{ imgs=[]; $('#ip-out',body).innerHTML='选择图片后生成（可继续添加更多）'; refreshIP(); };
     $('#ip-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); refreshIP(); };
     $('#ip-run',body).onclick=async()=>{
@@ -8932,7 +8932,7 @@ AppTools['sensitive-word'] = {
     body.innerHTML = `
       <div class="mb"><label class="field-label">待检测文本（可直接粘贴，或选择本地文档）</label><textarea class="txt" id="sw-in" style="min-height:150px" placeholder="粘贴需要检测的文本，或点击下方按钮选择文档…"></textarea>
         <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <button class="btn ghost" id="sw-doc" type="button">📄 选择文档</button>
+          <label class="btn ghost file-trigger" id="sw-doc" for="sw-file">📄 选择文档</label>
           <span class="mini-tag" id="sw-docinfo">支持 .txt / .md / .csv / .json / .text</span>
           <input type="file" id="sw-file" class="vis-hide" accept=".txt,.md,.csv,.json,.text,text/plain,text/*" multiple>
         </div></div>
@@ -8954,7 +8954,7 @@ AppTools['sensitive-word'] = {
     };
     $('#sw-clear',body).onclick=()=>{ const text=$('#sw-in',body).value; let out=text; dict().forEach(w=>{ out=out.split(w).join(''); }); $('#sw-in',body).value=out; toast('已移除敏感词'); };
     // 文档上传：读取本地文本类文档（.txt/.md/.csv/.json 等）载入文本框，保留粘贴入口
-    $('#sw-doc',body).onclick=()=>triggerFileInput($('#sw-file',body));
+    // sw-doc 已改为 <label for="sw-file"> 原生唤起
     $('#sw-file',body).onchange=async e=>{
       const files=Array.from(e.target.files||[]); if(!files.length) return;
       const parts=[];
