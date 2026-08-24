@@ -459,8 +459,11 @@ img{max-width:100%;}
 /* 视觉隐藏但保留在布局中（iOS Safari 对 display:none 的 file input 调用 .click() 经常无法唤起选择器，改用此方式） */
 .vis-hide{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important;}
 /* 文件选择触发标签：用 <label for> 原生关联隐藏 input，Android WebView / PWA standalone 下也能可靠唤起选择器 */
-.file-trigger{display:inline-block;cursor:pointer;}
-.file-trigger input{position:absolute;width:100%;height:100%;opacity:0;font-size:0;cursor:pointer;}
+.file-trigger{display:inline-block;cursor:pointer;position:relative;}
+/* 覆盖式隐藏 input：视觉隐藏但真实可点击——opacity:0 + 绝对定位铺满触发区 + 盖在上方，
+   用户的触摸是真实物理事件（真实用户手势），能可靠触发文件选择器；绝不用 display:none / clip 隐藏，
+   否则部分老版本 WebView 会静默失败（方案 B 改良版）。 */
+.overlay-input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;font-size:0;cursor:pointer;z-index:10;border:0;padding:0;margin:0;}
 .row{display:flex;gap:12px;flex-wrap:wrap;}
 .row > *{flex:1;min-width:120px;}
 .btn{
@@ -1798,8 +1801,8 @@ AppTools['img-merge'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（按顺序；可多次添加）</label>
-        <input type="file" class="inp vis-hide" id="mg-file" accept="image/*" multiple aria-label="选择图片">
-        <label class="btn file-trigger" id="mg-add" for="mg-file">＋ 选择 / 继续添加图片</label></div>
+        <label class="btn file-trigger" id="mg-add" for="mg-file" style="position:relative;overflow:hidden">＋ 选择 / 继续添加图片
+          <input type="file" class="overlay-input" id="mg-file" accept="image/*" multiple aria-label="选择图片"></label></div>
       <div id="mg-list" class="fq-list"></div>
       <div class="mb"><label class="field-label">拼接方向</label>
         <select class="sel" id="mg-dir" aria-label="拼接方向">
@@ -2762,8 +2765,8 @@ AppTools['pdf-merge'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择多个 PDF（按列表顺序合并；可多次添加）</label>
-        <input type="file" class="inp vis-hide" id="pm-file" accept="application/pdf" multiple aria-label="选择PDF">
-        <button class="btn" id="pm-add">＋ 选择 / 继续添加 PDF</button></div>
+        <label class="btn" id="pm-add" style="position:relative;overflow:hidden">＋ 选择 / 继续添加 PDF
+          <input type="file" class="overlay-input" id="pm-file" accept="application/pdf" multiple aria-label="选择PDF"></label></div>
       <div id="pm-list" class="fq-list"></div>
       <button class="btn" id="pm-run" disabled>合并 PDF</button>
       <div id="pm-result"></div>`;
@@ -3855,8 +3858,8 @@ AppTools['md5'] = {
         </div></div>
       <button class="btn" id="md-run">计算摘要</button>
       <div class="hint" style="margin-top:8px">⚠️ MD5 / SHA‑1 已被证实可人为制造碰撞，<b>不可用于密码存储、数字签名、完整性校验等安全场景</b>；建议改用 <b>SHA‑256 / SHA‑512</b>。也支持把文件拖到下方计算哈希。</div>
-      <div class="mb" style="margin-top:10px"><label id="md-drop" for="md-file" style="display:block;border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;color:var(--text-2);cursor:pointer">把文件拖到这里，或点击此处选择文件（不联网、不上传）</label>
-        <input type="file" id="md-file" class="vis-hide" aria-label="选择文件"></div>
+      <div class="mb" style="margin-top:10px"><label id="md-drop" for="md-file" style="display:block;position:relative;overflow:hidden;border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;color:var(--text-2);cursor:pointer">把文件拖到这里，或点击此处选择文件（不联网、不上传）
+          <input type="file" id="md-file" class="overlay-input" aria-label="选择文件"></label></div>
       <div id="md-result"></div>`;
     function hashText(v, name){
       const map = { md5:'MD5', sha1:'SHA1', sha256:'SHA256', sha512:'SHA512' };
@@ -8629,12 +8632,18 @@ function triggerFileInput(input){
 }
 /* 批量文件选择增强：隐藏原生 input，提供「＋ 选择 / 继续添加」按钮、张数提示与清空，
    累计多次选择的文件，onChange 回调返回全部已选文件。run 处理函数直接读取返回的数组即可。 */
-function ntBatchAddUI(body, inputId, onChange){
+function ntBatchAddUI(body, inputId,  onChange){
   const input=$('#'+inputId, body); if(!input) return { getFiles:()=>[] };
-  input.classList.remove('vis-hide'); // 移除 display:none；用 label 关联唤起，WebView 更可靠
+  // input 移入 label 内部，label 设 relative+overflow:hidden，input 用 overlay-input 铺满 label；
+  // 用户的触摸真实落在 input 上（真实用户手势），可靠触发选择器；绝不用 display:none / clip 隐藏，避免老 WebView 静默失败。
   const wrap=input.parentElement;
   const row=document.createElement('div'); row.className='btn-row'; row.style.marginTop='8px'; row.style.position='relative';
-  row.innerHTML=`<label class="btn file-trigger" id="${inputId}-add" for="${inputId}">＋ 选择 / 继续添加</label><button class="btn ghost" id="${inputId}-clear" disabled>清空</button><span class="mini-tag" id="${inputId}-cnt" style="align-self:center">0 张</span>`;
+  const label=document.createElement('label'); label.className='btn file-trigger'; label.id=inputId+'-add'; label.setAttribute('for', inputId); label.style.position='relative'; label.style.overflow='hidden';
+  label.innerHTML='＋ 选择 / 继续添加';
+  label.appendChild(input); // input 进 label，overlay 铺满 label，仅覆盖按钮区域
+  const clearBtn=document.createElement('button'); clearBtn.className='btn ghost'; clearBtn.id=inputId+'-clear'; clearBtn.disabled=true; clearBtn.textContent='清空';
+  const cnt=document.createElement('span'); cnt.className='mini-tag'; cnt.id=inputId+'-cnt'; cnt.style.alignSelf='center'; cnt.textContent='0 张';
+  row.appendChild(label); row.appendChild(clearBtn); row.appendChild(cnt);
   wrap.appendChild(row);
   input._files=[];
   $('#'+inputId+'-clear', body).onclick=()=>{ input._files=[]; $('#'+inputId+'-clear', body).disabled=true; $('#'+inputId+'-cnt', body).textContent='0 张'; if(onChange) onChange([]); };
@@ -8661,7 +8670,7 @@ AppTools['img-round'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
-        <input type="file" class="inp vis-hide" id="ir-files" accept="image/*" multiple>
+        <input type="file" class="overlay-input" id="ir-files" accept="image/*" multiple>
         <div class="btn-row" style="margin-top:8px">
           <label class="btn file-trigger" id="ir-add" for="ir-files">＋ 选择 / 继续添加图片</label>
           <button class="btn ghost" id="ir-clear" disabled>清空</button>
@@ -8739,7 +8748,7 @@ AppTools['img-base64'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
-        <input type="file" class="inp vis-hide" id="ib-files" accept="image/*" multiple>
+        <input type="file" class="overlay-input" id="ib-files" accept="image/*" multiple>
         <div class="btn-row" style="margin-top:8px">
           <label class="btn file-trigger" id="ib-add" for="ib-files">＋ 选择 / 继续添加图片</label>
           <button class="btn ghost" id="ib-clear" disabled>清空</button>
@@ -8764,7 +8773,7 @@ AppTools['img-to-pdf'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，按顺序排列，可多次继续添加）</label>
-        <input type="file" class="inp vis-hide" id="ip-files" accept="image/*" multiple>
+        <input type="file" class="overlay-input" id="ip-files" accept="image/*" multiple>
         <div class="btn-row" style="margin-top:8px">
           <label class="btn file-trigger" id="ip-add" for="ip-files">＋ 选择 / 继续添加图片</label>
           <button class="btn ghost" id="ip-clear" disabled>清空</button>
@@ -8932,9 +8941,9 @@ AppTools['sensitive-word'] = {
     body.innerHTML = `
       <div class="mb"><label class="field-label">待检测文本（可直接粘贴，或选择本地文档）</label><textarea class="txt" id="sw-in" style="min-height:150px" placeholder="粘贴需要检测的文本，或点击下方按钮选择文档…"></textarea>
         <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <label class="btn ghost file-trigger" id="sw-doc" for="sw-file">📄 选择文档</label>
+          <label class="btn ghost file-trigger" id="sw-doc" for="sw-file" style="position:relative;overflow:hidden">📄 选择文档
+            <input type="file" id="sw-file" class="overlay-input" accept=".txt,.md,.csv,.json,.text,text/plain,text/*" multiple></label>
           <span class="mini-tag" id="sw-docinfo">支持 .txt / .md / .csv / .json / .text</span>
-          <input type="file" id="sw-file" class="vis-hide" accept=".txt,.md,.csv,.json,.text,text/plain,text/*" multiple>
         </div></div>
       <div class="mb"><label class="field-label">自定义敏感词（空格分隔，叠加在默认词库上）</label><input type="text" class="inp" id="sw-extra" value=""></div>
       <div class="btn-row"><button class="btn" id="sw-run">检测</button><button class="btn ghost" id="sw-clear">去除敏感词</button></div>
