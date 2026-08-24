@@ -706,6 +706,7 @@ th{background:var(--bg);}
     <button class="search-clear" id="searchClear" type="button" aria-label="清空搜索" hidden>×</button>
   </div>
   <div class="search-hint" id="searchHint" hidden aria-live="polite"></div>
+  <div style="max-width:560px;margin:10px auto 0;padding:7px 12px;border:1px solid #e53935;border-radius:8px;background:rgba(229,57,53,.06);font-size:12.5px;color:#c62828;line-height:1.6;text-align:center">📱 <b>手机装到主屏幕 / 选文件、拍照请用 Edge 或 Chrome（应用商店可下载，Edge 可用电脑账号登录）；小米等系统浏览器快捷方式受限，选文件会无响应。</b></div>
   <div class="popular" id="popularTools"><!-- 热门工具由 JS 注入 --></div>
 </header>
 
@@ -783,7 +784,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-l</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-m</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -825,15 +826,16 @@ th{background:var(--bg);}
             <li style="margin:2px 0">返回桌面即可看到「托托工具箱」图标</li>
           </ol>
         </div>
-        <div class="ig-platform">
-          <b>🤖 安卓手机（Chrome / 华为 / 小米浏览器）</b>
+        <div class="ig-platform" style="border:1px solid #e53935;background:rgba(229,57,53,.04)">
+          <b style="color:#e53935">🤖 安卓手机（<span style="color:#e53935">⚠️ 强烈推荐用 Edge 或 Chrome</span>）</b>
           <ol style="margin:2px 0 0 20px;padding:0;line-height:1.35">
+            <li style="margin:2px 0"><b style="color:#e53935">先在应用商店下载 Microsoft Edge 或 Google Chrome</b>（Edge 可用电脑上的微软账号登录，书签同步）</li>
+            <li style="margin:2px 0">用 Edge / Chrome 打开本网站 <b>panqingtool.pages.dev</b></li>
             <li style="margin:2px 0">点右上角「⋮」菜单（或地址栏右侧「安装」）</li>
-            <li style="margin:2px 0">选「安装应用 / 添加到主屏幕」</li>
-            <li style="margin:2px 0">弹窗里点「安装」即可</li>
-            <li style="margin:2px 0">没看到菜单项就先刷新一下页面</li>
+            <li style="margin:2px 0">选「安装应用 / 添加到主屏幕」→ 弹窗点「安装」</li>
+            <li style="margin:2px 0">新装的快捷方式选文件、拍照全部正常</li>
           </ol>
-          <div style="margin-top:4px;padding:5px 9px;background:rgba(24,144,255,.08);border-radius:6px;color:var(--text-2);font-size:12.5px;line-height:1.45">💡 建议用手机自带 Chrome 或系统浏览器，第三方 App 内置浏览器可能拦截安装步骤。</div>
+          <div style="margin-top:6px;padding:6px 10px;background:rgba(229,57,53,.08);border-radius:6px;color:#c62828;font-size:12.5px;line-height:1.5">⚠️ <b>不要</b>用小米/红米系统浏览器自带的「添加到主屏幕」——它生成的快捷方式会禁用「选择文件 / 拍照」，文件类工具全部无响应。夸克也没有该入口。认准 Edge / Chrome。</div>
         </div>
         <div class="ig-platform">
           <b>💻 电脑（Chrome / Edge）</b>
@@ -5040,6 +5042,7 @@ AppTools['ocr'] = {
       <button class="btn" id="oc-run" disabled>开始识别</button>
       <div id="oc-prog" class="hint"></div>
       <div class="hint">🔒 全程本地离线识别（首次需从 CDN 下载语言模型，之后可离线），图片/PDF 不上传服务器；PDF 会自动按页栅格化后逐页识别。</div>
+      <div class="hint" style="margin-top:6px;padding:6px 10px;border:1px solid #e53935;background:rgba(229,57,53,.06);color:#c62828;line-height:1.6">💻 <b>建议用电脑端使用本工具：</b>手机端 OCR 加载语言模型慢、识别耗时长、易卡顿；电脑端速度快且稳定。手机上若选文件无响应，请改用 Edge / Chrome 浏览器或电脑访问。</div>
       <div id="oc-result"></div>`;
     // 批量处理核心：逐张识别，结果按文件归集，支持单张复制 + 全部导出 TXT(ZIP)
     let files = [];
@@ -6683,6 +6686,7 @@ const CHANGELOG = [
     '【受限快捷方式 · 明确引导】实测确认：小米系统浏览器「快捷方式」内核禁用文件选择器与摄像头（同一手机普通浏览器网页完全正常），前端无解。新增受限环境检测（移动端无 getUserMedia API → 顶部黄色横幅）与拍照失败提示，均带「在浏览器中打开完整版」一键链接；文件框旁提示同步加入该引导。解决路径：用 Chrome / Edge / 夸克「添加到主屏幕」安装即完整可用，或直接在浏览器中打开本站',
     '【受限环境 · 跳转修正】实测「点此在浏览器中打开」链接在受限快捷方式 WebView 内被吞、无法跳出（外链跳转也被禁）。改为教用户用系统级跳转：点网页右上角「⋮」→「在浏览器中打开」（最快），或长按链接选「在浏览器中打开」；横幅 / 文件框提示 / 拍照失败提示三处文案同步更新',
     '【受限环境 · 务实化】实测手机快捷方式连「⋮」菜单都没有（裸 WebView），夸克无「添加主屏幕」功能。放弃跳转依赖：横幅改为「① 长按粘贴取图（唯一可用方式）；② 用 UC / QQ浏览器 / Edge 重装快捷方式；③ 网址可长按复制」。拍照按钮/文件框提示仅移动端显示（电脑 PWA 功能完整不再误导）',
+    '【推荐浏览器 · 明示】用户实测手机 Edge / Chrome 快捷方式「选择文件 / 拍照」正常（小米系统浏览器快捷方式受限无响应）。搜索栏下方新增红色提示条推荐用 Edge / Chrome 装到主屏幕；「装到主屏幕」安卓卡片改为红色标注「强烈推荐 Edge / Chrome」（Edge 可登电脑账号同步）、并警告勿用小米系统浏览器快捷方式；OCR 工具新增「建议用电脑（手机慢易卡顿）」红色批注',
   ]},
   { date:'2026-08-22', items:[
     '【交互焕新】重构「装到主屏幕」引导：放大排版、精简冗余信息，并新增移动端首启加载提示，安装体验更轻盈直观。',
