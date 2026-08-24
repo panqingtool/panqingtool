@@ -458,12 +458,23 @@ img{max-width:100%;}
 .txt{min-height:120px;resize:vertical;line-height:1.6;}
 /* 视觉隐藏但保留在布局中（iOS Safari 对 display:none 的 file input 调用 .click() 经常无法唤起选择器，改用此方式） */
 .vis-hide{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important;}
-/* 文件选择（v2026.08.24-e 回归经典方案）：真实可见按钮 + 隐藏 input + button.click() 触发。
-   安卓 PWA standalone 下只有「真实按钮点击唤起隐藏 input」最稳（用户确认「前面都可以」）。
-   旧 .vis-file-btn 方案（input 本身可见 + ::file-selector-button）在红米系统浏览器 PWA 下会「按钮变淡 / 无反应」，已废弃。 */
+/* 文件选择（v2026.08.24-f 修复）：原生 file input 直接可见、用户直接点击唤起系统选择器。
+   红米系统浏览器 / 安卓 standalone PWA WebView 下，display:none + 程序化 input.click() 会静默失败
+   （表现为「按钮变淡、点了没反应」）；改回「input 本身可见可点」最稳（用户确认此前此方案可用）。 */
 .hf{display:none!important;}
-/* 兼容历史 class：vis-file-btn 一律隐藏，避免任何残留可见 input 在 PWA 下无反应 */
 .vis-file-btn{display:none!important;}
+/* 经归一化后可见的文件输入：原生可点，::file-selector-button 样式化为科技蓝主按钮 */
+.file-inp{
+  display:inline-block!important;
+  font-family:inherit;font-size:14px;color:var(--text);
+  background:var(--card);border:1px dashed var(--primary);
+  border-radius:8px;padding:6px 10px;cursor:pointer;max-width:100%;
+}
+.file-inp::file-selector-button{
+  font-family:inherit;font-size:14px;color:#fff;background:var(--primary);
+  border:0;border-radius:6px;padding:7px 14px;margin-right:10px;cursor:pointer;
+}
+.file-inp:hover{border-color:var(--primary);}
 .row{display:flex;gap:12px;flex-wrap:wrap;}
 .row > *{flex:1;min-width:120px;}
 .btn{
@@ -1793,8 +1804,8 @@ function mountFileQueue(opts){
   }
   function getItems(){ return state.map(s => ({ file:s.file, img:s.img||null })); }
   input.onchange = async (e) => { await addFiles(Array.from(e.target.files)); };
-  // mg/pm 的 input 由 normalizeFileInputs 统一隐藏并生成触发按钮（安卓 PWA 最稳）
-  input.classList.add('hf'); input.style.display = 'none';
+  // mg/pm 的 input 由 normalizeFileInputs 统一改为原生可见可点（安卓 PWA 最稳，不依赖 JS.click）
+  input.classList.remove('hf','vis-file-btn'); input.classList.add('file-inp'); input.style.display = '';
   return { getItems, addFiles, clear:()=>{ state.forEach(s=>{ if(s.url) URL.revokeObjectURL(s.url); }); state.length=0; render(); } };
 }
 
@@ -2921,7 +2932,6 @@ AppTools['office-to-pdf'] = {
     async function ensureMammoth(){ if(typeof mammoth!=='undefined') return mammoth; const urls=['https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js','https://unpkg.com/mammoth@1.9.0/mammoth.browser.min.js','https://esm.sh/mammoth@1.9.0/mammoth.browser.min.js']; for(const u of urls){ try{ await loadScriptSrc(u); if(window.mammoth) return window.mammoth; }catch(_){ } } throw new Error('Word 解析库加载失败，请联网后重试'); }
     async function ensureHtml2canvas(){ if(typeof html2canvas!=='undefined') return html2canvas; const urls=['https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js','https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js','https://esm.sh/html2canvas@1.4.1/dist/html2canvas.min.js']; for(const u of urls){ try{ await loadScriptSrc(u); if(window.html2canvas) return window.html2canvas; }catch(_){ } } throw new Error('截图库加载失败，请联网后重试'); }
     body.innerHTML = `
-      <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，解析库加载更快更稳）</label>
       <div class="mb"><label class="field-label">选择 Word / Excel 文件（.docx / .xlsx，.doc / .xls / .ppt 等老格式暂不支持）</label>
         <input type="file" class="inp" id="of-file" accept=".docx,.xlsx,.doc,.xls,.ppt,.pptx" aria-label="选择文件"></div>
       <div class="hint">🔒 全程本地转换：Word 用内置解析器还原内容、Excel 转为表格，再渲染成 PDF 直接下载（无需弹打印框，不再依赖“另存为 PDF”）。老版 .doc/.xls/.ppt 请先用 Office/WPS 另存为新格式。</div>
@@ -2952,7 +2962,6 @@ AppTools['office-to-pdf'] = {
         } else { renderPreview('<div class="result-box err">不支持的文件类型</div>'); $('#of-run', body).disabled = true; }
       }catch(err){ renderPreview(`<div class="result-box err">预览失败：${escapeHtml(errMsg(err))}</div>`); }
     };
-    setupNetToggle(body);
     $('#of-run', body).onclick = async () => {
       if(!file) return;
       const btn=$('#of-run', body); btn.disabled=true; btn.innerHTML='<span class="loading"><span class="spinner"></span>转换中…</span>';
@@ -4668,7 +4677,6 @@ AppTools['img-upscale'] = {
 AppTools['idphoto-bg'] = {
   build(body){
     body.innerHTML = `
-      <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，模型加载更快更稳）</label>
       <div class="mb"><label class="field-label">选择证件照（可多选，批量换背景）</label>
         <input type="file" class="inp" id="bg-file" accept="image/*" multiple aria-label="选择证件照"></div>
       <div class="mb"><label class="field-label">背景颜色（仅替换人物与衣物之外的空白区域）</label>
@@ -4684,7 +4692,6 @@ AppTools['idphoto-bg'] = {
       <div id="bg-prog" class="hint"></div>
       <div class="hint">🔒 本地 AI 抠图蒙版：先把人物与衣物智能分离，只将背景区域替换为新颜色，<b>人物与衣服颜色保持原样、不模糊</b>。首次需下载约 40MB 模型（之后可离线）。</div>
       <div id="bg-result"></div>`;
-    setupNetToggle(body);
     const colorInp = $('#bg-color', body);
     body.querySelectorAll('[data-c]').forEach(b=> b.onclick = ()=>{ colorInp.value = b.dataset.c; });
     $('#bg-feather', body).oninput = () => $('#bg-feathv', body).textContent = $('#bg-feather', body).value;
@@ -5076,7 +5083,6 @@ function cleanOcrText(t){
 AppTools['ocr'] = {
   build(body){
     body.innerHTML = `
-      <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，引擎与语言模型加载更快更稳）</label>
       <div class="mb"><label class="field-label">上传图片或 PDF 扫描件（可多选，批量识别）</label>
         <input type="file" class="inp" id="oc-file" accept="image/*,application/pdf" multiple aria-label="上传图片或PDF"></div>
       <div class="mb"><label class="field-label">识别语言</label>
@@ -5101,24 +5107,43 @@ AppTools['ocr'] = {
               <option value="contrast">增强对比度</option>
               <option value="binary">二值化（黑白）</option>
             </select></div>
+          <div class="mb"><label class="field-label">版面模式（按需选择）</label>
+            <select class="sel" id="oc-psm" style="width:100%" aria-label="版面模式">
+              <option value="3" selected>自动（默认，混排/多栏）</option>
+              <option value="6">单栏文本块</option>
+              <option value="4">单栏竖排文本</option>
+              <option value="7">单行文本</option>
+              <option value="8">单个单词/数字</option>
+              <option value="11">稀疏文本 / 图中文字</option>
+            </select></div>
+      <div class="hint" style="margin:4px 0 2px;line-height:1.7">💡 <b>提高准确率小贴士：</b>① 用<b>清晰正拍、光线均匀</b>的图，避免阴影/反光/模糊；② 选对语言（中文图用「中文+英文」）；③ 扫描件/打印体选<b>二值化</b>，照片选<b>增强对比度</b>；④ 倾斜图先摆正；⑤ 手写体、艺术字、表格密集的图机器易错，请核对关键数字与姓名。</div>
       <button class="btn" id="oc-run" disabled>开始识别</button>
       <div id="oc-prog" class="hint"></div>
       <div class="hint">🔒 全程本地离线识别（首次需从 CDN 下载语言模型，之后可离线），图片/PDF 不上传服务器；PDF 会自动按页栅格化后逐页识别。</div>
       <div id="oc-result"></div>`;
     // 批量处理核心：逐张识别，结果按文件归集，支持单张复制 + 全部导出 TXT(ZIP)
-    setupNetToggle(body);
     let files = [];
     ntBatchAddUI(body,'oc-file',(all)=>{ files=all; $('#oc-run', body).disabled = !all.length; });
     function preprocess(img){
       const pre = $('#oc-pre', body).value;
-      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
-      const cx = c.getContext('2d');
-      if(pre === 'none'){ cx.drawImage(img, 0, 0); return c; }
-      if(pre === 'gray'){ cx.filter = 'grayscale(1)'; cx.drawImage(img, 0, 0); return c; }
-      if(pre === 'contrast'){ cx.filter = 'grayscale(1) contrast(160%)'; cx.drawImage(img, 0, 0); return c; }
-      cx.filter = 'grayscale(1)'; cx.drawImage(img, 0, 0);
-      const d = cx.getImageData(0,0,c.width,c.height); const px = d.data;
-      for(let i=0;i<px.length;i+=4){ const v = px[i] > 128 ? 255 : 0; px[i]=px[i+1]=px[i+2]=v; }
+      // 小图放大（最多 2 倍，目标宽约 1600px）提升小字识别率；仅重采样，不改变内容
+      let scale = 1; const target = 1600;
+      const iw = img.naturalWidth || img.width || 1, ih = img.naturalHeight || img.height || 1;
+      if(iw < target) scale = Math.min(2, target / iw);
+      const w = Math.max(1, Math.round(iw * scale)), h = Math.max(1, Math.round(ih * scale));
+      const src = document.createElement('canvas'); src.width = w; src.height = h;
+      const sc = src.getContext('2d'); sc.imageSmoothingQuality = 'high'; sc.drawImage(img, 0, 0, w, h);
+      if(pre === 'none') return src;
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const cx = c.getContext('2d'); cx.drawImage(src, 0, 0);
+      if(pre !== 'binary'){
+        cx.filter = (pre === 'contrast') ? 'grayscale(1) contrast(170%)' : 'grayscale(1)';
+        cx.drawImage(c, 0, 0); cx.filter = 'none';
+        return c;
+      }
+      cx.filter = 'grayscale(1)'; cx.drawImage(c, 0, 0); cx.filter = 'none';
+      const d = cx.getImageData(0,0,w,h); const px = d.data;
+      for(let i=0;i<px.length;i+=4){ const v = px[i] > 140 ? 255 : 0; px[i]=px[i+1]=px[i+2]=v; }
       cx.putImageData(d, 0, 0);
       return c;
     }
@@ -5162,6 +5187,7 @@ AppTools['ocr'] = {
       return t;
     })();
     async function recognizeCanvas(cv, lang, idx, total, langPath){
+      const psm = parseInt($('#oc-psm', body).value || '3', 10);
       let lastErr = null;
       for(const tryCfg of OCR_TRIES){
         try{
@@ -5169,6 +5195,7 @@ AppTools['ocr'] = {
             langPath: langPath,
             workerPath: tryCfg.workerPath,
             corePath: tryCfg.corePath,
+            tessedit_pageseg_mode: psm,
             logger: m => { if(m.status==='recognizing text') $('#oc-prog', body).textContent = `第 ${idx}/${total} 张进度：${Math.round(m.progress*100)}%`; }
           }), 35000, 'OCR 引擎加载');
           return res.data.text;
@@ -5346,7 +5373,6 @@ AppTools['pdf-sign'] = {
         #ps-preview .pg-cv{display:block;width:100%;height:auto;max-width:100%}
         #ps-preview .stamp{position:absolute;z-index:6;cursor:move;touch-action:none;border:1px dashed rgba(200,16,46,.4);background-repeat:no-repeat;background-position:center;background-size:contain}
       </style>
-      <label class="net-proxy-chk-wrap" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:2px 0 10px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="net-proxy-chk"> 🌐 联网处理（云端代理加速，解析库加载更快更稳）</label>
       <div class="mb"><label class="field-label">选择文档（PDF / Word(.docx) / Excel(.xlsx)）</label>
         <input type="file" class="inp" id="ps-file" accept=".pdf,.docx,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="选择文档"></div>
       <div class="mb"><label class="field-label">签章方式</label>
@@ -5380,7 +5406,6 @@ AppTools['pdf-sign'] = {
       <div id="ps-result"></div>
       <div class="hint">🔒 全程本地处理，文件不上传。PDF 直接写入签名 / 印章；Word / Excel 导出为「带章 PDF」（保留原文与印章）。</div>`;
 
-    setupNetToggle(body);
     const stamp = { x:0.72, y:0.82, scale:1 };   // 相对坐标 0~1，大小随滑块+scale
     let docType = '', pageCount = 0, currentFile = null;
 
@@ -7488,12 +7513,6 @@ if(typeof requestIdleCallback === 'function'){
 } else {
   setTimeout(prefetchImglyModel, 3000);
 }
-// 各工具顶部的「联网处理」开关（共享同一设置）
-function setupNetToggle(body){
-  const chk = body.querySelector('.net-proxy-chk'); if(!chk) return;
-  chk.checked = netProxyEnabled();
-  chk.addEventListener('change', () => { try{ localStorage.setItem('panqing_net_proxy', chk.checked?'1':'0'); }catch(_){ } toast(chk.checked?'已开启联网处理（云端代理加速）':'已关闭联网处理'); });
-}
 function loadScriptSrc(src){
   const inject = (u) => new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=u; s.crossOrigin='anonymous'; s.onload=res; s.onerror=()=>rej(new Error('load '+u)); document.head.appendChild(s); });
   return inject(src).catch(() => { const p = viaProxy(src); if(p && p!==src) return inject(p); throw new Error('load '+src); });
@@ -8654,8 +8673,9 @@ AppTools['ideal-type'] = {
 function ntLoadImage(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=r.result; }; r.onerror=rej; r.readAsDataURL(file); }); }
 async function ntFilesToImages(list){ const out=[]; for(const f of list){ if(f && f.type && f.type.startsWith('image/')) out.push(await ntLoadImage(f)); } return out; }
 function ntDataURLtoBlob(u){ const a=u.split(','), m=a[0].match(/:(.*?);/)[1], b=atob(a[1]), n=b.length, d=new Uint8Array(n); for(let i=0;i<n;i++) d[i]=b.charCodeAt(i); return new Blob([d],{type:m}); }
-/* 文件选择统一修复（v2026.08.24-e）：真实可见按钮 + 隐藏 input + button.click() 触发。
-   安卓 PWA standalone 下最稳，用户确认「前面都可以」。所有 <input type=file> 在 build 后由 normalizeFileInputs 统一处理。 */
+/* 文件选择统一修复（v2026.08.24-f）：原生 file input 直接可见、用户直接点击唤起系统选择器。
+   红米系统浏览器 / 安卓 standalone PWA WebView 下，display:none + 程序化 input.click() 会静默失败（按钮变淡无反应）；
+   故所有 <input type=file> 在 build 后由 normalizeFileInputs 统一改为可见可点，绝不隐藏、绝不 JS.click。 */
 /* 给可能挂起的 Promise 加超时，避免 OCR / Tesseract core 在弱网下永久卡住（进度一直不动） */
 function withTimeout(promise, ms, label){
   return new Promise((resolve, reject) => {
@@ -8663,22 +8683,19 @@ function withTimeout(promise, ms, label){
     Promise.resolve(promise).then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
   });
 }
-/* build 完成后统一把所有文件输入改为「真实按钮 + 隐藏 input」方案（覆盖全部工具，含 class=inp 的 pw-f/pw-img） */
+/* build 完成后统一把所有文件输入改为「原生可见可点」方案（覆盖全部工具，含 class=inp 的 pw-f/pw-img） */
 function normalizeFileInputs(body){
   if(!body) return;
   body.querySelectorAll('input[type=file]').forEach(input => {
     if(input.dataset.ftWired) return;
     input.dataset.ftWired = '1';
-    input.classList.add('hf'); input.style.display = 'none';
-    const label = input.multiple ? '选择 / 继续添加文件' : (input.getAttribute('aria-label') || '选择文件');
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.className = 'btn'; btn.textContent = label;
-    (input.parentElement || body).insertBefore(btn, input);
-    btn.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      try { input.click(); } catch(_) {}
-      return false;
-    });
+    // v2026.08.24-f：不再隐藏、不再 JS.click()。原生 input 直接可见可点，安卓 PWA WebView 下最稳。
+    input.classList.remove('hf','vis-file-btn');
+    input.classList.add('file-inp');
+    input.style.display = '';
+    if(!input.getAttribute('aria-label')){
+      input.setAttribute('aria-label', input.multiple ? '选择或继续添加文件' : '选择文件');
+    }
   });
 }
 /* 安全的工具构建：build 后统一修复文件选择（PWA 兼容） */
@@ -8689,8 +8706,8 @@ function buildToolSafely(tool, body){
 /* 批量文件选择增强：输入由 normalizeFileInputs 统一隐藏并生成触发按钮；此处仅管理累计 + 张数 + 清空。onChange 返回全部。 */
 function ntBatchAddUI(body, inputId,  onChange){
   const input=$('#'+inputId, body); if(!input) return { getFiles:()=>[] };
-  // 输入由 normalizeFileInputs 统一隐藏并生成触发按钮；此处仅先隐藏，避免未归一化时裸露
-  input.classList.add('hf'); input.style.display='none';
+  // 输入由 normalizeFileInputs 统一改为原生可见可点；此处同步移除隐藏，避免遮挡
+  input.classList.remove('hf','vis-file-btn'); input.classList.add('file-inp'); input.style.display='';
   const wrap=input.parentElement;
   const row=document.createElement('div'); row.className='btn-row'; row.style.marginTop='8px'; row.style.alignItems='center';
   const clearBtn=document.createElement('button'); clearBtn.className='btn ghost'; clearBtn.id=inputId+'-clear'; clearBtn.disabled=true; clearBtn.textContent='清空';
