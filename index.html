@@ -3859,7 +3859,7 @@ AppTools['md5'] = {
       <button class="btn" id="md-run">计算摘要</button>
       <div class="hint" style="margin-top:8px">⚠️ MD5 / SHA‑1 已被证实可人为制造碰撞，<b>不可用于密码存储、数字签名、完整性校验等安全场景</b>；建议改用 <b>SHA‑256 / SHA‑512</b>。也支持把文件拖到下方计算哈希。</div>
       <div class="mb" style="margin-top:10px"><div id="md-drop" style="display:block;position:relative;overflow:hidden;border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;color:var(--text-2);cursor:pointer">把文件拖到这里，或点击此处选择文件（不联网、不上传）
-          <input type="file" id="md-file" class="direct-input" aria-label="选择文件"></div></div>
+          <input type="file" id="md-file" class="direct-input" accept="*/*" aria-label="选择文件"></div></div>
       <div id="md-result"></div>`;
     function hashText(v, name){
       const map = { md5:'MD5', sha1:'SHA1', sha256:'SHA256', sha512:'SHA512' };
