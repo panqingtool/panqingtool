@@ -460,10 +460,10 @@ img{max-width:100%;}
 .vis-hide{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important;}
 /* 文件选择触发标签：用 <label for> 原生关联隐藏 input，Android WebView / PWA standalone 下也能可靠唤起选择器 */
 .file-trigger{display:inline-block;cursor:pointer;position:relative;overflow:hidden;}
-/* 直接覆盖式 input：作为按钮容器的直接子元素，绝对铺满并盖在最上层（z-index:9999），
-   用户的触摸真实落在 input 上（不依赖 label 的点击冒泡/for 关联），能可靠触发文件选择器；
-   绝不用 display:none / clip 隐藏，否则老 WebView 会静默失败。明确无 pointer-events:none。 */
-.direct-input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;z-index:9999;cursor:pointer;border:0;padding:0;margin:0;}
+/* 文件选择 input：放置在屏幕外 1px 区域（绝不用 display:none / clip / visibility:hidden，
+   否则 Android WebView / PWA standalone 会静默拒绝弹窗）。点击交由 JS 在按钮的 onclick
+   里主动调用 input.click() 触发（用户手势触发的 click 在 WebView 中可靠弹窗）。 */
+.direct-input{position:absolute;left:-9999px;top:auto;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;margin:0;}
 .row{display:flex;gap:12px;flex-wrap:wrap;}
 .row > *{flex:1;min-width:120px;}
 .btn{
@@ -1793,7 +1793,10 @@ function mountFileQueue(opts){
   }
   function getItems(){ return state.map(s => ({ file:s.file, img:s.img||null })); }
   input.onchange = async (e) => { await addFiles(Array.from(e.target.files)); };
-  // 不再 JS 程序化 .click()（Android WebView / PWA standalone 不可靠）；改为 <label for> 原生关联
+  // 关键修复（手机 PWA 文件选择无反应）：透明覆盖 input 在红米 standalone WebView 命中不稳定，
+  // 改用「真实可见按钮 + JS 主动 input.click()」——用户手势触发的 click 在 Android WebView 可靠弹窗。
+  const addBtn = $('#'+opts.addId, opts.body);
+  if(addBtn){ addBtn.onclick = () => { try{ input.click(); }catch(_){} }; }
   return { getItems, addFiles, clear:()=>{ state.forEach(s=>{ if(s.url) URL.revokeObjectURL(s.url); }); state.length=0; render(); } };
 }
 
@@ -3889,6 +3892,7 @@ AppTools['md5'] = {
     }
     $('#md-file', body).onchange = e => { if(e.target.files[0]) hashFile(e.target.files[0]); };
     const dz = $('#md-drop', body);
+    dz.onclick = () => { try{ $('#md-file', body).click(); }catch(_){} }; // 关键修复（手机 PWA 文件选择无反应）：主动触发
     dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.style.borderColor='var(--primary)'; });
     dz.addEventListener('dragleave', ()=> dz.style.borderColor='');
     dz.addEventListener('drop', e=>{ e.preventDefault(); dz.style.borderColor=''; if(e.dataTransfer.files[0]) hashFile(e.dataTransfer.files[0]); });
@@ -8652,7 +8656,10 @@ function ntBatchAddUI(body, inputId,  onChange){
   const row=document.createElement('div'); row.className='btn-row'; row.style.marginTop='8px'; row.style.position='relative';
   const box=document.createElement('div'); box.className='btn file-trigger'; box.id=inputId+'-add';
   box.textContent='＋  选择 / 继续添加';
-  box.appendChild(input); // input 直接进按钮容器，direct-input 铺满覆盖
+  box.appendChild(input); // input 置于屏幕外，点击由 box 的 onclick 主动 input.click() 触发
+  // 关键修复：手机 PWA（红米系统浏览器 standalone）下，透明覆盖 input 的命中测试不稳定，
+  // 改用「真实可见按钮 + JS 主动 click」——用户手势调用的 click 在 Android WebView 中可靠弹窗。
+  box.onclick = () => { try{ input.click(); }catch(_){} };
   const clearBtn=document.createElement('button'); clearBtn.className='btn ghost'; clearBtn.id=inputId+'-clear'; clearBtn.disabled=true; clearBtn.textContent='清空';
   const cnt=document.createElement('span'); cnt.className='mini-tag'; cnt.id=inputId+'-cnt'; cnt.style.alignSelf='center'; cnt.textContent='0 张';
   row.appendChild(box); row.appendChild(clearBtn); row.appendChild(cnt);
@@ -8717,7 +8724,8 @@ AppTools['img-round'] = {
     let imgs=[];
     $('#ir-sep',body).onchange=()=>{ $('#ir-sepbox',body).style.display = $('#ir-sep',body).checked?'flex':'none'; };
     $('#ir-enable-crop',body).onchange=()=>{ $('#ir-crop-box',body).style.display = $('#ir-enable-crop',body).checked?'block':'none'; };
-    // ir-add 容器用 direct-input 覆盖式 input 直接唤起，无需 JS 触发
+    // 关键修复（手机 PWA 文件选择无反应）：ir-files 的父 label 为可见区域，点击时主动 input.click()
+    const irLabel=$('#ir-files',body).parentElement; if(irLabel){ irLabel.onclick=(ev)=>{ if(ev.target!==$('#ir-files',body)){ try{ $('#ir-files',body).click(); }catch(_){} } }; }
     $('#ir-clear',body).onclick=()=>{ imgs=[]; $('#ir-run',body).disabled=true; $('#ir-zip',body).disabled=true; $('#ir-clear',body).disabled=true; $('#ir-count',body).textContent='0 张'; $('#ir-out',body).innerHTML='选择图片后预览（可继续添加更多）'; };
     $('#ir-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); $('#ir-run',body).disabled=false; $('#ir-zip',body).disabled=false; $('#ir-clear',body).disabled=false; $('#ir-count',body).textContent=imgs.length+' 张'; $('#ir-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成（可继续添加）'; // 自动设置默认裁剪宽高为第一张图
       if(imgs.length===1 && +$('#ir-cw',body).value===0){ const w=imgs[0].width, h=imgs[0].height; $('#ir-cw',body).value=w; $('#ir-ch',body).value=h; }
@@ -8762,7 +8770,8 @@ AppTools['img-base64'] = {
     let items=[];
     async function renderAll(){ const fmt=$('#ib-fmt',body).value; if(!items.length){ $('#ib-out',body).innerHTML='选择图片后自动生成（可继续添加更多）'; return; } $('#ib-out',body).innerHTML = items.map((it,i)=>{ const b64=it.du.split(',')[1]; const out=fmt==='raw'?b64:it.du; return `<div class="card-soft mb"><div class="mb-sm"><b>${escapeHtml(it.name)}</b>（${fmt==='raw'?'Base64':'Data URL'}）</div><img src="${it.du}" style="max-width:120px;max-height:120px;border-radius:6px"><textarea class="area" style="min-height:70px" readonly>${escapeHtml(out)}</textarea><button class="btn" id="ib-c${i}">复制</button></div>`; }).join(''); items.forEach((it,i)=>{ const b64=it.du.split(',')[1]; $('#ib-c'+i,body).onclick=()=>copyText(fmt==='raw'?b64:it.du); }); }
     async function addFiles(fileList){ const files=Array.from(fileList||[]); if(!files.length) return; for(const f of files){ items.push({name:f.name, du:await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(f); }) }); } $('#ib-clear',body).disabled=false; $('#ib-count',body).textContent=items.length+' 张'; renderAll(); }
-    // ib-add 容器用 direct-input 覆盖式 input 直接唤起，无需 JS 触发
+    // 关键修复（手机 PWA 文件选择无反应）：ib-files 的父 label 点击时主动 input.click()
+    const ibLabel=$('#ib-files',body).parentElement; if(ibLabel){ ibLabel.onclick=(ev)=>{ if(ev.target!==$('#ib-files',body)){ try{ $('#ib-files',body).click(); }catch(_){} } }; }
     $('#ib-clear',body).onclick=()=>{ items=[]; $('#ib-clear',body).disabled=true; $('#ib-count',body).textContent='0 张'; renderAll(); };
     $('#ib-files',body).onchange=async e=>{ await addFiles(e.target.files); e.target.value=''; };
     $('#ib-fmt',body).onchange=()=>renderAll();
@@ -8787,7 +8796,8 @@ AppTools['img-to-pdf'] = {
       <div id="ip-out" class="hint">选择图片后生成（可继续添加更多）</div>`;
     let imgs=[];
     function refreshIP(){ $('#ip-run',body).disabled=!imgs.length; $('#ip-clear',body).disabled=!imgs.length; $('#ip-count',body).textContent=imgs.length+' 张'; if(imgs.length) $('#ip-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成'; }
-    // ip-add 容器用 direct-input 覆盖式 input 直接唤起，无需 JS 触发
+    // 关键修复（手机 PWA 文件选择无反应）：ip-files 的父 label 点击时主动 input.click()
+    const ipLabel=$('#ip-files',body).parentElement; if(ipLabel){ ipLabel.onclick=(ev)=>{ if(ev.target!==$('#ip-files',body)){ try{ $('#ip-files',body).click(); }catch(_){} } }; }
     $('#ip-clear',body).onclick=()=>{ imgs=[]; $('#ip-out',body).innerHTML='选择图片后生成（可继续添加更多）'; refreshIP(); };
     $('#ip-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); refreshIP(); };
     $('#ip-run',body).onclick=async()=>{
@@ -8960,7 +8970,8 @@ AppTools['sensitive-word'] = {
     };
     $('#sw-clear',body).onclick=()=>{ const text=$('#sw-in',body).value; let out=text; dict().forEach(w=>{ out=out.split(w).join(''); }); $('#sw-in',body).value=out; toast('已移除敏感词'); };
     // 文档上传：读取本地文本类文档（.txt/.md/.csv/.json 等）载入文本框，保留粘贴入口
-    // sw-doc 容器用 direct-input 覆盖式 input 直接唤起，无需 JS 触发
+    // 关键修复（手机 PWA 文件选择无反应）：sw-doc 为真实可见按钮，点击时主动 input.click()
+    const swDoc=$('#sw-doc',body); if(swDoc){ swDoc.onclick=()=>{ try{ $('#sw-file',body).click(); }catch(_){} }; }
     $('#sw-file',body).onchange=async e=>{
       const files=Array.from(e.target.files||[]); if(!files.length) return;
       const parts=[];
