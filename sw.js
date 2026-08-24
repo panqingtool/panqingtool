@@ -1,4 +1,4 @@
-/* 托托工具箱 · Service Worker v15
+/* 托托工具箱 · Service Worker v16
  *
  * 目标：PWA 快捷方式「稳定可访问 + 自动更新 + 秒开」。
  *
@@ -14,9 +14,15 @@
  *   后台对 SW 自身做静默刷新：fetch('/sw.js') 写入 sw 缓存，配合 _headers 的 no-cache 与
  *   activate 时 skipWaiting + clients.claim，新版本下次打开自动生效，用户无需重装/清缓存。
  *
+ * v15 导航网络优先 + 缓存兜底 + 离线页兜底。
+ * v16 关键加固：CDN / imgly 模型分块的缓存策略从「命中即用」改为
+ *   「缓存命中且响应 ok 才用；网络请求仅当成功（ok）才写缓存；网络失败回退缓存」，
+ *   避免首次请求因网络抖动缓存了坏/不完整响应（如 tesseract-core.wasm.js、ONNX 分块），
+ *   导致 OCR / 证件照换背景在手机 PWA 上永久 Failed to fetch。
+ *
  * activate 阶段自动删除所有「不含当前 VERSION」的旧缓存 → 旧缓存被自动清理。
  */
-const VERSION = 'v15';
+const VERSION = 'v16';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const CDN_CACHE = 'cdn-' + VERSION;
@@ -119,36 +125,41 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 第三方 CDN：cache-first
+  // 第三方 CDN：缓存命中且 ok 才用；网络成功才写缓存；网络失败回退缓存
+  // （v16 加固：避免把网络抖动产生的坏/不完整响应写进缓存，导致 OCR core 等永久失败）
   if (CDN_HOSTS.includes(url.hostname)) {
     event.respondWith((async () => {
-      const cached = await caches.match(req);
-      if (cached) return cached;
       try {
         const net = await fetch(req);
-        const c = await caches.open(CDN_CACHE);
-        c.put(req, net.clone());
-        return net;
+        if (net && net.ok) {
+          const c = await caches.open(CDN_CACHE);
+          c.put(req, net.clone()).catch(() => {});
+          return net;
+        }
+        const cached = await caches.match(req);
+        return cached || net || Response.error();
       } catch (_) {
+        const cached = await caches.match(req);
         return cached || Response.error();
       }
     })());
     return;
   }
 
-  // imgly-data 模型分块：cache-first（首次拉取较慢，二次秒开）
+  // imgly-data 模型分块：缓存命中且 ok 才用；网络成功才写缓存；网络失败回退缓存
   if (IMGLY_PATH_RE.test(url.pathname)) {
     event.respondWith((async () => {
-      const cached = await caches.match(req);
-      if (cached) return cached;
       try {
         const net = await fetch(req);
         if (net && net.ok) {
           const c = await caches.open(IMGLY_CACHE);
           c.put(req, net.clone()).catch(() => {});
+          return net;
         }
-        return net;
+        const cached = await caches.match(req);
+        return cached || net || Response.error();
       } catch (_) {
+        const cached = await caches.match(req);
         return cached || Response.error();
       }
     })());
