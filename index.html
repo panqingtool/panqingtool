@@ -783,7 +783,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-k</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-l</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6682,6 +6682,7 @@ const CHANGELOG = [
     '【网站缩小恢复 · 状态增强】除分类 / 最小化应用 / 滚动位置外，额外保存「当前打开的工具」及其已填写的文本内容；切后台或系统回收后回到应用，自动重新打开上次的工具并回填内容，实现"缩小后继续运行、除非关闭快捷方式"',
     '【受限快捷方式 · 明确引导】实测确认：小米系统浏览器「快捷方式」内核禁用文件选择器与摄像头（同一手机普通浏览器网页完全正常），前端无解。新增受限环境检测（移动端无 getUserMedia API → 顶部黄色横幅）与拍照失败提示，均带「在浏览器中打开完整版」一键链接；文件框旁提示同步加入该引导。解决路径：用 Chrome / Edge / 夸克「添加到主屏幕」安装即完整可用，或直接在浏览器中打开本站',
     '【受限环境 · 跳转修正】实测「点此在浏览器中打开」链接在受限快捷方式 WebView 内被吞、无法跳出（外链跳转也被禁）。改为教用户用系统级跳转：点网页右上角「⋮」→「在浏览器中打开」（最快），或长按链接选「在浏览器中打开」；横幅 / 文件框提示 / 拍照失败提示三处文案同步更新',
+    '【受限环境 · 务实化】实测手机快捷方式连「⋮」菜单都没有（裸 WebView），夸克无「添加主屏幕」功能。放弃跳转依赖：横幅改为「① 长按粘贴取图（唯一可用方式）；② 用 UC / QQ浏览器 / Edge 重装快捷方式；③ 网址可长按复制」。拍照按钮/文件框提示仅移动端显示（电脑 PWA 功能完整不再误导）',
   ]},
   { date:'2026-08-22', items:[
     '【交互焕新】重构「装到主屏幕」引导：放大排版、精简冗余信息，并新增移动端首启加载提示，安装体验更轻盈直观。',
@@ -8576,13 +8577,13 @@ function normalizeFileInputs(body){
     if(!input.getAttribute('aria-label')){
       input.setAttribute('aria-label', input.multiple ? '选择或继续添加文件' : '选择文件');
     }
-    // 移动端（含手机快捷方式 standalone）：部分系统 WebView 不实现文件选择器 → 提供「拍照」(getUserMedia) + 「粘贴」两条可用旁路。
-    // 关键修正（v-i）：红米系统浏览器快捷方式 WebView 不报告 display-mode:standalone，isStandalonePWA() 会返回 false 导致按钮不出现；
-    // 故用 isStandalonePWA() || isMobileTouch() 双条件，移动端一律注入，确保按钮一定显示。
-    if(isStandalonePWA() || isMobileTouch()){
+    // 移动端（含手机快捷方式）：部分系统 WebView 不实现文件选择器 → 提供「拍照」(getUserMedia) + 「粘贴」旁路。
+    // v-l 修正：仅移动端注入（isMobileTouch）。电脑 PWA 功能完整（文件选择正常），不再显示拍照按钮/提示，
+    // 避免误导与多余链接（电脑上点「在浏览器中打开」只会再开一个 PWA 窗口）。
+    if(isMobileTouch()){
       const acc = (input.getAttribute('accept') || '').toLowerCase();
       const isImage = acc.indexOf('image') >= 0 || acc === '' || acc.indexOf('*/*') >= 0;
-      // 图像类输入：新增「📷 拍照」按钮（不经过系统文件选择器，standalone 下可用）
+      // 图像类输入：新增「📷 拍照」按钮（不经过系统文件选择器）
       if(isImage && input.parentElement && !input.parentElement.querySelector('.ft-cam')){
         const camBtn = document.createElement('button');
         camBtn.type = 'button'; camBtn.className = 'btn ghost ft-cam';
@@ -8598,7 +8599,7 @@ function normalizeFileInputs(body){
       if(!hint){
         hint = document.createElement('div'); hint.className = 'ft-hint';
         hint.style.cssText = 'font-size:12px;color:var(--text-2);margin-top:6px;line-height:1.7;';
-        hint.innerHTML = '📷 可点「拍照」取图，或复制图片后到此长按粘贴。<br>⚠️ 若「选择文件」/「拍照」都没反应：当前快捷方式受系统浏览器限制——<b>点网页右上角「⋮」→「在浏览器中打开」</b>即可用完整版；或用 Chrome / Edge 重新「添加到主屏幕」安装（选择文件、拍照均正常）。';
+        hint.innerHTML = '📷 可点「拍照」取图；若按钮没反应（快捷方式环境受限），请在相册 / 微信<b>长按图片 → 复制</b>，再回到此处<b>长按 → 粘贴</b>。';
         if(input.parentElement) input.parentElement.insertBefore(hint, input.nextSibling);
       }
     }
@@ -9649,9 +9650,8 @@ window.addEventListener('beforeunload', saveAppState);
     }
   }catch(_){ }
 })();
-// 受限环境顶部横幅（v-j/k）：移动端且浏览器不提供摄像头 API（小米等系统浏览器「快捷方式」常见——文件选择器与摄像头都被禁用）
-// 显示一次性顶部提示条，引导到完整浏览器；普通浏览器标签页有 getUserMedia，不会触发。
-// v-k 修正：页面内 <a target=_blank> 链接在受限 WebView 里可能被吞（用户实测跳不出去），优先教用户用「右上角 ⋮ → 在浏览器中打开」。
+// 受限环境顶部横幅（v-j/k/l）：移动端且浏览器不提供摄像头 API（小米等系统浏览器「快捷方式」常见——文件选择器、摄像头、外链跳转全部被禁）
+// v-k 已确认页面内链接在受限 WebView 被吞、无「⋮」菜单可跳；v-l 改为务实引导：长按粘贴取图 + 可复制网址 + 换浏览器（UC/QQ/Edge）重装。
 (function(){
   try{
     const camApi = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
@@ -9659,14 +9659,15 @@ window.addEventListener('beforeunload', saveAppState);
       localStorage.setItem('pt_env_banner', '1');
       const b = document.createElement('div');
       b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99995;background:#fff7e6;border-bottom:1px solid #ffd591;padding:10px 14px;font-size:13px;line-height:1.8;color:#8a5300;box-shadow:0 2px 8px rgba(0,0,0,.08);';
-      b.innerHTML = '⚠️ 当前快捷方式环境受限，「选择文件 / 拍照」不可用。'
-        + '<br>① 点网页右上角「⋮」→ <b>在浏览器中打开</b>（最快）；'
-        + '② 或<a href="https://panqingtool.pages.dev" target="_blank" rel="noopener" style="color:#d46b08;font-weight:700;text-decoration:underline;margin:0 4px;">长按此链接在浏览器中打开 ↗</a>'
+      b.innerHTML = '⚠️ 当前快捷方式环境受限（系统浏览器限制），「选择文件 / 拍照」不可用。'
+        + '<br>① 取图：在相册 / 微信<b>长按图片 → 复制</b>，回到此处<b>长按 → 粘贴</b>即可。'
+        + '<br>② 完整体验：用 <b>UC / QQ浏览器 / Edge</b> 打开本站后「添加到主屏幕」重装（夸克无此功能）。'
+        + '<br>③ 本站网址：<b>panqingtool.pages.dev</b>（可长按选择复制，粘贴到浏览器打开）。'
         + '<button type="button" id="ptEnvBannerClose" style="float:right;border:none;background:none;color:#8a5300;font-size:14px;cursor:pointer;padding:0 4px;line-height:1.7;">✕</button>';
       document.body.appendChild(b);
       b.querySelector('#ptEnvBannerClose').onclick = () => b.remove();
       const main = document.querySelector('#main, .container, main');
-      if(main) main.style.paddingTop = '64px';
+      if(main) main.style.paddingTop = '96px';
     }
   }catch(_){ }
 })();
