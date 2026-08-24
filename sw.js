@@ -1,32 +1,27 @@
-/* 托托工具箱 · Service Worker v16
+/* 托托工具箱 · Service Worker v18
  *
  * 目标：PWA 快捷方式「稳定可访问 + 自动更新 + 秒开」。
  *
  * v12 修复 standalone 打开崩溃（导航请求永远用 fetch(url,{redirect:'follow'}) 非 navigate 模式取资源）。
- * v13 改为缓存优先，但出现手机 PWA 打开「无法访问」的问题（opaque 响应 / 后台刷新笔误）。
- * v14 采用最稳妥策略，彻底解决：
- *   导航请求 = 网络优先 + 缓存兜底 + 离线页兜底，全程包在 try/catch 内，
- *   任何异常都返回合法 Response（缓存 → 离线页），绝不抛错、绝不返回 Response.error()
- *   到 event.respondWith（那会直接触发浏览器「网站无法访问」）。
- *   - 网络成功：返回最新页，并写入缓存（下次离线/秒开可用）；
- *   - 网络失败：返回缓存页（合法 Response，用户照常用）；
- *   - 都失败：返回离线页（合法 503 HTML）。
- *   后台对 SW 自身做静默刷新：fetch('/sw.js') 写入 sw 缓存，配合 _headers 的 no-cache 与
- *   activate 时 skipWaiting + clients.claim，新版本下次打开自动生效，用户无需重装/清缓存。
+ * v14 采用最稳妥策略：导航 = 网络优先 + 缓存兜底 + 离线页兜底，全程 try/catch，绝不返回 Response.error()。
+ * v16 加固 CDN / imgly 模型分块的缓存策略，避免把网络抖动产生的坏/不完整响应写进缓存。
+ * v18 关键修复（根治 2026-08-24 三类回归）：
+ *   ① 手机 PWA「选择/添加文件按钮无反应、按钮变淡」——根因是弱网下导航回退到【旧缓存壳】（旧版 opacity 覆盖层），
+ *      现改为：导航永远优先取【最新 HTML】，仅当完全离线才回退缓存壳 / 离线页；activate 删除全部旧缓存，杜绝旧壳。
+ *   ② 在线 OCR「进度一直不动」——根因是 SW 对跨域 CDN（jsdelivr 等）做了 cache-first，弱网命中后缓存了不完整/
+ *      挂起的响应，或直接返回 Response.error() 导致 Tesseract core/worker 永久卡死。现改为：跨域 CDN **纯网络透传、
+ *      不缓存、绝不返回 Response.error()**，把控制权完全交还浏览器原生 fetch（OCR 自身另有超时与多源兜底）。
+ *   ③ 证件照换背景「卡在 91%」——同②的跨域缓存干扰；且本版主站 /imgly-data/ 已验证完整，改为前端优先用同源数据，
+ *      SW 对 /imgly-data/ 同样纯透传不缓存。
  *
- * v15 导航网络优先 + 缓存兜底 + 离线页兜底。
- * v16 关键加固：CDN / imgly 模型分块的缓存策略从「命中即用」改为
- *   「缓存命中且响应 ok 才用；网络请求仅当成功（ok）才写缓存；网络失败回退缓存」，
- *   避免首次请求因网络抖动缓存了坏/不完整响应（如 tesseract-core.wasm.js、ONNX 分块），
- *   导致 OCR / 证件照换背景在手机 PWA 上永久 Failed to fetch。
+ * 原则：跨域资源（CDN / imgly 官方 / 本站 imgly 数据）一律纯透传，SW 不参与缓存，避免任何坏缓存；
+ *      仅同源静态外壳走 cache-first 加速；任何分支失败都返回合法 Response，绝不把 Response.error() 交给 event.respondWith。
  *
- * activate 阶段自动删除所有「不含当前 VERSION」的旧缓存 → 旧缓存被自动清理。
+ * activate 阶段自动删除所有「不含当前 VERSION」的旧缓存 → 旧缓存（含坏缓存壳）被自动清理。
  */
-const VERSION = 'v17';
+const VERSION = 'v18';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
-const CDN_CACHE = 'cdn-' + VERSION;
-const IMGLY_CACHE = 'imgly-' + VERSION;
 
 const APP_SHELL = [
   './',
@@ -40,15 +35,14 @@ const APP_SHELL = [
   './icons/apple-touch-icon.png'
 ];
 
-const CDN_HOSTS = ['cdn.jsdelivr.net', 'unpkg.com', 'esm.sh'];
 const API_PATH_RE = /^\/(search|visit|weather|lookup|api)(\/|$|\?)/;
 const IMGLY_PATH_RE = /^\/imgly-data\//;
 
-// 导航请求的安全处理：永远返回合法 Response（网络 → 缓存 → 离线页），绝不抛错
-// 关键：网络可用时永远返回最新页（不返回缓存 HTML），避免 PWA standalone 跑旧 JS 导致功能失效
+// 导航请求：永远优先取【最新 HTML】。仅当完全离线（网络与缓存都失败）才回退离线页。
+// 绝不返回旧缓存壳（旧壳可能含坏 JS / opacity 覆盖层导致「按钮变淡、无反应」）。
 async function safeNavigate(url) {
   const cacheKey = './index.html';
-  // 1) 网络优先（强制取最新 index.html，绝不返回缓存 HTML）
+  // 1) 网络优先（强制取最新 index.html）
   try {
     const net = await fetch(url.href, { redirect: 'follow', credentials: 'same-origin', cache: 'no-cache' });
     if (net && net.ok) {
@@ -58,20 +52,19 @@ async function safeNavigate(url) {
     }
   } catch (_) { /* 网络失败，走下方缓存兜底 */ }
 
-  // 2) 缓存兜底（含 SHELL 与 RUNTIME 两个缓存空间）——仅在离线时启用
+  // 2) 缓存兜底（仅用于完全离线的合法回退，缓存内容为本版本外壳，无坏 JS）
   try {
     const cached =
       (await caches.match(cacheKey, { cacheName: RUNTIME_CACHE })) ||
       (await caches.match(cacheKey, { cacheName: SHELL_CACHE })) ||
       (await caches.match('./'));
-    if (cached) return cached;   // 合法 Response，用户照常用
+    if (cached) return cached;
   } catch (_) { /* 缓存读取失败，走离线页 */ }
 
-  // 3) 离线页兜底（仍为合法 503 HTML，绝不返回 Response.error()）
+  // 3) 离线页兜底（永远合法 503 HTML，绝不 Response.error()）
   return offlineResponse();
 }
 
-// 离线兜底页（永远返回合法 HTML，绝不抛错 / Response.error）
 const OFFLINE_HTML =
   '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">' +
   '<meta name="viewport" content="width=device-width,initial-scale=1">' +
@@ -93,7 +86,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil((async () => {
     const c = await caches.open(SHELL_CACHE);
-    // 预缓存外壳（个别失败也不影响整体）
     await Promise.all(APP_SHELL.map((u) => c.add(u).catch(() => {})));
   })());
 });
@@ -101,6 +93,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
+    // 删除所有不含当前 VERSION 的旧缓存（含 v17 及更早的坏缓存壳 / 跨域坏缓存）
     await Promise.all(
       keys.filter((k) => !k.includes(VERSION)).map((k) => caches.delete(k))
     );
@@ -117,45 +110,28 @@ self.addEventListener('fetch', (event) => {
   if (API_PATH_RE.test(url.pathname)) return;
 
   // 页面导航：网络优先 + 缓存兜底 + 离线页兜底（最稳妥，杜绝「网站无法访问」）
-  // 关键修复：绝不对 navigate 模式请求直接 fetch(req)/caches.match(req)（会抛 TypeError）；
-  // 改用 fetch(url.href, {redirect:'follow'})（cors 模式，合法且能拿到 HTML）。
-  // 整段包 try/catch，任何异常都返回合法 Response，绝不把 Response.error() 交给 event.respondWith。
   if (req.mode === 'navigate') {
     event.respondWith(safeNavigate(url));
     return;
   }
 
-  // 第三方 CDN：缓存命中且 ok 才用；网络成功才写缓存；网络失败回退缓存
-  // （v16 加固：避免把网络抖动产生的坏/不完整响应写进缓存，导致 OCR core 等永久失败）
-  if (CDN_HOSTS.includes(url.hostname)) {
-    event.respondWith((async () => {
-      try {
-        const net = await fetch(req);
-        if (net && net.ok) {
-          const c = await caches.open(CDN_CACHE);
-          c.put(req, net.clone()).catch(() => {});
-          return net;
-        }
-        const cached = await caches.match(req);
-        return cached || net || Response.error();
-      } catch (_) {
-        const cached = await caches.match(req);
-        return cached || Response.error();
-      }
-    })());
-    return;
-  }
-
-  // imgly-data 模型 / wasm：纯网络透传，不做任何缓存与 Response.error() 返回。
-  // 大模型分块（44MB）+ wasm（77MB）在手机弱网下，SW 缓存逻辑极易因网络抖动缓存坏响应
-  // 或返回 Response.error()，导致 imgly「Failed to fetch / no available backend」。
-  // 直接透传让浏览器原生 fetch 处理（imgly 自身有 3 次重试），彻底排除 SW 干扰。
-  if (IMGLY_PATH_RE.test(url.pathname)) {
+  // 跨域 CDN（jsdelivr / unpkg / esm.sh）：【纯网络透传，不缓存，绝不返回 Response.error()】。
+  // v17 曾对这里 cache-first，弱网把挂起/不完整的 tesseract core、worker、库脚本缓存成坏响应，
+  // 或直接返回 Response.error()，导致 OCR「进度一直不动」、各类 CDN 工具偶发失败。
+  // 现改为完全透传，交还浏览器原生 fetch（OCR 自身另有多源 + 超时兜底）。
+  if (['cdn.jsdelivr.net', 'unpkg.com', 'esm.sh'].includes(url.hostname)) {
     event.respondWith(fetch(req));
     return;
   }
 
-  // 同源静态：cache-first + 后台静默刷新
+  // imgly 模型 / 数据（官方 staticimgly 或本站 /imgly-data/）：纯网络透传，不缓存。
+  // 大模型分块 + wasm 在手机弱网下绝不能被 SW 缓存坏响应，直接透传让浏览器原生处理。
+  if (IMGLY_PATH_RE.test(url.pathname) || url.hostname === 'staticimgly.com') {
+    event.respondWith(fetch(req));
+    return;
+  }
+
+  // 同源静态：cache-first + 后台静默刷新（仅用于外壳加速；失败回退缓存或原生错误，不主动制造坏响应）
   if (url.origin === self.location.origin) {
     event.respondWith((async () => {
       const cached = await caches.match(req);
