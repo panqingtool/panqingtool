@@ -13,11 +13,6 @@
   Cross-Origin-Resource-Policy: cross-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 
-# imgly 模型 / wasm 分块：文件无扩展名，Cloudflare 默认按 text/html 发送，会导致 WebAssembly 实例化失败
-# （报 "Failed to fetch / no available backend found"）。强制按 application/wasm 发送即可修复。
-/imgly-data/*
-  Content-Type: application/wasm
-
 # /functions/* 的安全头（MIME 嗅探等由 functions/_middleware.js 处理）
 /functions/*
   X-Content-Type-Options: nosniff
