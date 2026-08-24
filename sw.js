@@ -16,10 +16,12 @@
  *
  * 原则：跨域资源（CDN / imgly 官方 / 本站 imgly 数据）一律纯透传，SW 不参与缓存，避免任何坏缓存；
  *      仅同源静态外壳走 cache-first 加速；任何分支失败都返回合法 Response，绝不把 Response.error() 交给 event.respondWith。
+ * v19 关键变更（2026-08-24-g）：① 新增 Web Share Target——拦截 POST /_share，把分享进来的文件存入 IndexedDB 后 303 回首页，
+ *      页面读取后注入目标工具，彻底解决 standalone PWA 下「选择 / 添加文件按钮无反应」；② 删除 imgly 模型路由（证件照换背景已下架）。
  *
  * activate 阶段自动删除所有「不含当前 VERSION」的旧缓存 → 旧缓存（含坏缓存壳）被自动清理。
  */
-const VERSION = 'v18';
+const VERSION = 'v19';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 
@@ -36,7 +38,6 @@ const APP_SHELL = [
 ];
 
 const API_PATH_RE = /^\/(search|visit|weather|lookup|api)(\/|$|\?)/;
-const IMGLY_PATH_RE = /^\/imgly-data\//;
 
 // 导航请求：永远优先取【最新 HTML】。仅当完全离线（网络与缓存都失败）才回退离线页。
 // 绝不返回旧缓存壳（旧壳可能含坏 JS / opacity 覆盖层导致「按钮变淡、无反应」）。
@@ -82,6 +83,49 @@ function offlineResponse() {
   });
 }
 
+// Web Share Target：把分享进来的文件存入 IndexedDB（含二进制），随后 303 重定向回首页
+// 页面加载时读取该记录，弹出「选择要使用的工具」面板，把文件注入对应工具。
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('pt-share', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function handleShare(req) {
+  let target = './?shared=1';
+  try {
+    const fd = await req.formData();
+    const files = [];
+    const raw = fd.getAll('file');
+    for (const f of raw) {
+      if (f && typeof f === 'object' && 'arrayBuffer' in f) {
+        files.push({ name: f.name || 'file', type: f.type || '', size: f.size || 0, buf: Array.from(new Uint8Array(await f.arrayBuffer())) });
+      }
+    }
+    const value = {
+      ts: Date.now(),
+      title: fd.get('title') || '',
+      text: fd.get('text') || '',
+      url: fd.get('url') || '',
+      files
+    };
+    const db = await idbOpen();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put(value, 'pendingShare');
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch (e) { /* 存储失败也不阻塞重定向 */ }
+  return Response.redirect(target, 303);
+}
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil((async () => {
@@ -103,8 +147,16 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  if (req.method !== 'GET') return;
   const url = new URL(req.url);
+
+  // Web Share Target：分享进来的文件存入 IndexedDB 后 303 回首页（页面读取后注入目标工具）
+  if (req.method === 'POST' && url.pathname.endsWith('/_share')) {
+    event.respondWith(handleShare(req));
+    return;
+  }
+
+  // 其余非 GET（如 Functions 之外的 POST）走浏览器原生处理
+  if (req.method !== 'GET') return;
 
   // Functions API：不缓存、永远走网络
   if (API_PATH_RE.test(url.pathname)) return;
@@ -120,13 +172,6 @@ self.addEventListener('fetch', (event) => {
   // 或直接返回 Response.error()，导致 OCR「进度一直不动」、各类 CDN 工具偶发失败。
   // 现改为完全透传，交还浏览器原生 fetch（OCR 自身另有多源 + 超时兜底）。
   if (['cdn.jsdelivr.net', 'unpkg.com', 'esm.sh'].includes(url.hostname)) {
-    event.respondWith(fetch(req));
-    return;
-  }
-
-  // imgly 模型 / 数据（官方 staticimgly 或本站 /imgly-data/）：纯网络透传，不缓存。
-  // 大模型分块 + wasm 在手机弱网下绝不能被 SW 缓存坏响应，直接透传让浏览器原生处理。
-  if (IMGLY_PATH_RE.test(url.pathname) || url.hostname === 'staticimgly.com') {
     event.respondWith(fetch(req));
     return;
   }
