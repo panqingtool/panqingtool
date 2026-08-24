@@ -459,11 +459,11 @@ img{max-width:100%;}
 /* 视觉隐藏但保留在布局中（iOS Safari 对 display:none 的 file input 调用 .click() 经常无法唤起选择器，改用此方式） */
 .vis-hide{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important;}
 /* 文件选择触发标签：用 <label for> 原生关联隐藏 input，Android WebView / PWA standalone 下也能可靠唤起选择器 */
-.file-trigger{display:inline-block;cursor:pointer;position:relative;}
-/* 覆盖式隐藏 input：视觉隐藏但真实可点击——opacity:0 + 绝对定位铺满触发区 + 盖在上方，
-   用户的触摸是真实物理事件（真实用户手势），能可靠触发文件选择器；绝不用 display:none / clip 隐藏，
-   否则部分老版本 WebView 会静默失败（方案 B 改良版）。 */
-.overlay-input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;font-size:0;cursor:pointer;z-index:10;border:0;padding:0;margin:0;}
+.file-trigger{display:inline-block;cursor:pointer;position:relative;overflow:hidden;}
+/* 直接覆盖式 input：作为按钮容器的直接子元素，绝对铺满并盖在最上层（z-index:9999），
+   用户的触摸真实落在 input 上（不依赖 label 的点击冒泡/for 关联），能可靠触发文件选择器；
+   绝不用 display:none / clip 隐藏，否则老 WebView 会静默失败。明确无 pointer-events:none。 */
+.direct-input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;z-index:9999;cursor:pointer;border:0;padding:0;margin:0;}
 .row{display:flex;gap:12px;flex-wrap:wrap;}
 .row > *{flex:1;min-width:120px;}
 .btn{
@@ -1801,8 +1801,8 @@ AppTools['img-merge'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（按顺序；可多次添加）</label>
-        <label class="btn file-trigger" id="mg-add" for="mg-file" style="position:relative;overflow:hidden">＋ 选择 / 继续添加图片
-          <input type="file" class="overlay-input" id="mg-file" accept="image/*" multiple aria-label="选择图片"></label></div>
+        <div class="btn file-trigger" id="mg-add">＋ 选择 / 继续添加图片
+          <input type="file" class="direct-input" id="mg-file" accept="image/*" multiple aria-label="选择图片"></div>
       <div id="mg-list" class="fq-list"></div>
       <div class="mb"><label class="field-label">拼接方向</label>
         <select class="sel" id="mg-dir" aria-label="拼接方向">
@@ -2765,8 +2765,8 @@ AppTools['pdf-merge'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择多个 PDF（按列表顺序合并；可多次添加）</label>
-        <label class="btn" id="pm-add" style="position:relative;overflow:hidden">＋ 选择 / 继续添加 PDF
-          <input type="file" class="overlay-input" id="pm-file" accept="application/pdf" multiple aria-label="选择PDF"></label></div>
+        <div class="btn file-trigger" id="pm-add">＋ 选择 / 继续添加 PDF
+          <input type="file" class="direct-input" id="pm-file" accept="application/pdf" multiple aria-label="选择PDF"></div>
       <div id="pm-list" class="fq-list"></div>
       <button class="btn" id="pm-run" disabled>合并 PDF</button>
       <div id="pm-result"></div>`;
@@ -3858,8 +3858,8 @@ AppTools['md5'] = {
         </div></div>
       <button class="btn" id="md-run">计算摘要</button>
       <div class="hint" style="margin-top:8px">⚠️ MD5 / SHA‑1 已被证实可人为制造碰撞，<b>不可用于密码存储、数字签名、完整性校验等安全场景</b>；建议改用 <b>SHA‑256 / SHA‑512</b>。也支持把文件拖到下方计算哈希。</div>
-      <div class="mb" style="margin-top:10px"><label id="md-drop" for="md-file" style="display:block;position:relative;overflow:hidden;border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;color:var(--text-2);cursor:pointer">把文件拖到这里，或点击此处选择文件（不联网、不上传）
-          <input type="file" id="md-file" class="overlay-input" aria-label="选择文件"></label></div>
+      <div class="mb" style="margin-top:10px"><div id="md-drop" style="display:block;position:relative;overflow:hidden;border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;color:var(--text-2);cursor:pointer">把文件拖到这里，或点击此处选择文件（不联网、不上传）
+          <input type="file" id="md-file" class="direct-input" aria-label="选择文件"></div></div>
       <div id="md-result"></div>`;
     function hashText(v, name){
       const map = { md5:'MD5', sha1:'SHA1', sha256:'SHA256', sha512:'SHA512' };
@@ -8634,16 +8634,17 @@ function triggerFileInput(input){
    累计多次选择的文件，onChange 回调返回全部已选文件。run 处理函数直接读取返回的数组即可。 */
 function ntBatchAddUI(body, inputId,  onChange){
   const input=$('#'+inputId, body); if(!input) return { getFiles:()=>[] };
-  // input 移入 label 内部，label 设 relative+overflow:hidden，input 用 overlay-input 铺满 label；
-  // 用户的触摸真实落在 input 上（真实用户手势），可靠触发选择器；绝不用 display:none / clip 隐藏，避免老 WebView 静默失败。
+  // 放弃 label for / vis-hide：容器用 div.file-trigger 做按钮，input 作为直接子元素并强制 .direct-input
+  // （absolute 铺满 + z-index:9999，真实触摸命中 input，不依赖点击冒泡）。绝不用 display:none / clip。
+  input.className='direct-input';
   const wrap=input.parentElement;
   const row=document.createElement('div'); row.className='btn-row'; row.style.marginTop='8px'; row.style.position='relative';
-  const label=document.createElement('label'); label.className='btn file-trigger'; label.id=inputId+'-add'; label.setAttribute('for', inputId); label.style.position='relative'; label.style.overflow='hidden';
-  label.innerHTML='＋ 选择 / 继续添加';
-  label.appendChild(input); // input 进 label，overlay 铺满 label，仅覆盖按钮区域
+  const box=document.createElement('div'); box.className='btn file-trigger'; box.id=inputId+'-add';
+  box.textContent='＋  选择 / 继续添加';
+  box.appendChild(input); // input 直接进按钮容器，direct-input 铺满覆盖
   const clearBtn=document.createElement('button'); clearBtn.className='btn ghost'; clearBtn.id=inputId+'-clear'; clearBtn.disabled=true; clearBtn.textContent='清空';
   const cnt=document.createElement('span'); cnt.className='mini-tag'; cnt.id=inputId+'-cnt'; cnt.style.alignSelf='center'; cnt.textContent='0 张';
-  row.appendChild(label); row.appendChild(clearBtn); row.appendChild(cnt);
+  row.appendChild(box); row.appendChild(clearBtn); row.appendChild(cnt);
   wrap.appendChild(row);
   input._files=[];
   $('#'+inputId+'-clear', body).onclick=()=>{ input._files=[]; $('#'+inputId+'-clear', body).disabled=true; $('#'+inputId+'-cnt', body).textContent='0 张'; if(onChange) onChange([]); };
@@ -8670,12 +8671,7 @@ AppTools['img-round'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
-        <input type="file" class="overlay-input" id="ir-files" accept="image/*" multiple>
-        <div class="btn-row" style="margin-top:8px">
-          <label class="btn file-trigger" id="ir-add" for="ir-files">＋ 选择 / 继续添加图片</label>
-          <button class="btn ghost" id="ir-clear" disabled>清空</button>
-          <span class="mini-tag" id="ir-count" style="align-self:center">0 张</span>
-        </div>
+        <input type="file" class="direct-input" id="ir-files" accept="image/*" multiple>
       </div>
       <div class="mb">
         <label class="field-label"><input type="checkbox" id="ir-enable-crop"> 启用裁剪（先裁剪再圆角）</label>
@@ -8710,7 +8706,7 @@ AppTools['img-round'] = {
     let imgs=[];
     $('#ir-sep',body).onchange=()=>{ $('#ir-sepbox',body).style.display = $('#ir-sep',body).checked?'flex':'none'; };
     $('#ir-enable-crop',body).onchange=()=>{ $('#ir-crop-box',body).style.display = $('#ir-enable-crop',body).checked?'block':'none'; };
-    // ir-add 已改为 <label for="ir-files"> 原生唤起，无需 JS 触发
+    // ir-add 容器用 direct-input 覆盖式 input 直接唤起，无需 JS 触发
     $('#ir-clear',body).onclick=()=>{ imgs=[]; $('#ir-run',body).disabled=true; $('#ir-zip',body).disabled=true; $('#ir-clear',body).disabled=true; $('#ir-count',body).textContent='0 张'; $('#ir-out',body).innerHTML='选择图片后预览（可继续添加更多）'; };
     $('#ir-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); $('#ir-run',body).disabled=false; $('#ir-zip',body).disabled=false; $('#ir-clear',body).disabled=false; $('#ir-count',body).textContent=imgs.length+' 张'; $('#ir-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成（可继续添加）'; // 自动设置默认裁剪宽高为第一张图
       if(imgs.length===1 && +$('#ir-cw',body).value===0){ const w=imgs[0].width, h=imgs[0].height; $('#ir-cw',body).value=w; $('#ir-ch',body).value=h; }
@@ -8748,19 +8744,14 @@ AppTools['img-base64'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
-        <input type="file" class="overlay-input" id="ib-files" accept="image/*" multiple>
-        <div class="btn-row" style="margin-top:8px">
-          <label class="btn file-trigger" id="ib-add" for="ib-files">＋ 选择 / 继续添加图片</label>
-          <button class="btn ghost" id="ib-clear" disabled>清空</button>
-          <span class="mini-tag" id="ib-count" style="align-self:center">0 张</span>
-        </div>
+        <input type="file" class="direct-input" id="ib-files" accept="image/*" multiple>
       </div>
       <div class="mb"><label class="field-label">输出格式</label><select class="sel" id="ib-fmt"><option value="dataurl">Data URL（可直接用于 &lt;img src&gt;）</option><option value="raw">仅 Base64 字符串</option></select></div>
       <div id="ib-out" class="hint">选择图片后自动生成（可继续添加更多）</div>`;
     let items=[];
     async function renderAll(){ const fmt=$('#ib-fmt',body).value; if(!items.length){ $('#ib-out',body).innerHTML='选择图片后自动生成（可继续添加更多）'; return; } $('#ib-out',body).innerHTML = items.map((it,i)=>{ const b64=it.du.split(',')[1]; const out=fmt==='raw'?b64:it.du; return `<div class="card-soft mb"><div class="mb-sm"><b>${escapeHtml(it.name)}</b>（${fmt==='raw'?'Base64':'Data URL'}）</div><img src="${it.du}" style="max-width:120px;max-height:120px;border-radius:6px"><textarea class="area" style="min-height:70px" readonly>${escapeHtml(out)}</textarea><button class="btn" id="ib-c${i}">复制</button></div>`; }).join(''); items.forEach((it,i)=>{ const b64=it.du.split(',')[1]; $('#ib-c'+i,body).onclick=()=>copyText(fmt==='raw'?b64:it.du); }); }
     async function addFiles(fileList){ const files=Array.from(fileList||[]); if(!files.length) return; for(const f of files){ items.push({name:f.name, du:await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(f); }) }); } $('#ib-clear',body).disabled=false; $('#ib-count',body).textContent=items.length+' 张'; renderAll(); }
-    // ib-add 已改为 <label for="ib-files"> 原生唤起
+    // ib-add 容器用 direct-input 覆盖式 input 直接唤起，无需 JS 触发
     $('#ib-clear',body).onclick=()=>{ items=[]; $('#ib-clear',body).disabled=true; $('#ib-count',body).textContent='0 张'; renderAll(); };
     $('#ib-files',body).onchange=async e=>{ await addFiles(e.target.files); e.target.value=''; };
     $('#ib-fmt',body).onchange=()=>renderAll();
@@ -8773,12 +8764,7 @@ AppTools['img-to-pdf'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，按顺序排列，可多次继续添加）</label>
-        <input type="file" class="overlay-input" id="ip-files" accept="image/*" multiple>
-        <div class="btn-row" style="margin-top:8px">
-          <label class="btn file-trigger" id="ip-add" for="ip-files">＋ 选择 / 继续添加图片</label>
-          <button class="btn ghost" id="ip-clear" disabled>清空</button>
-          <span class="mini-tag" id="ip-count" style="align-self:center">0 张</span>
-        </div>
+        <input type="file" class="direct-input" id="ip-files" accept="image/*" multiple>
       </div>
       <div class="row mb">
         <div><label class="field-label">纸张</label><select class="sel" id="ip-size"><option value="a4">A4</option><option value="a3">A3</option><option value="letter">Letter</option><option value="fit">适应图片</option></select></div>
@@ -8790,7 +8776,7 @@ AppTools['img-to-pdf'] = {
       <div id="ip-out" class="hint">选择图片后生成（可继续添加更多）</div>`;
     let imgs=[];
     function refreshIP(){ $('#ip-run',body).disabled=!imgs.length; $('#ip-clear',body).disabled=!imgs.length; $('#ip-count',body).textContent=imgs.length+' 张'; if(imgs.length) $('#ip-out',body).innerHTML='已载入 '+imgs.length+' 张，点击生成'; }
-    // ip-add 已改为 <label for="ip-files"> 原生唤起
+    // ip-add 容器用 direct-input 覆盖式 input 直接唤起，无需 JS 触发
     $('#ip-clear',body).onclick=()=>{ imgs=[]; $('#ip-out',body).innerHTML='选择图片后生成（可继续添加更多）'; refreshIP(); };
     $('#ip-files',body).onchange=async e=>{ const more=await ntFilesToImages(e.target.files); if(!more.length){ toast('请选择图片'); return; } imgs=imgs.concat(more); refreshIP(); };
     $('#ip-run',body).onclick=async()=>{
@@ -8941,8 +8927,8 @@ AppTools['sensitive-word'] = {
     body.innerHTML = `
       <div class="mb"><label class="field-label">待检测文本（可直接粘贴，或选择本地文档）</label><textarea class="txt" id="sw-in" style="min-height:150px" placeholder="粘贴需要检测的文本，或点击下方按钮选择文档…"></textarea>
         <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <label class="btn ghost file-trigger" id="sw-doc" for="sw-file" style="position:relative;overflow:hidden">📄 选择文档
-            <input type="file" id="sw-file" class="overlay-input" accept=".txt,.md,.csv,.json,.text,text/plain,text/*" multiple></label>
+          <div class="btn ghost file-trigger" id="sw-doc">📄 选择文档
+            <input type="file" id="sw-file" class="direct-input" accept=".txt,.md,.csv,.json,.text,text/plain,text/*" multiple></div>
           <span class="mini-tag" id="sw-docinfo">支持 .txt / .md / .csv / .json / .text</span>
         </div></div>
       <div class="mb"><label class="field-label">自定义敏感词（空格分隔，叠加在默认词库上）</label><input type="text" class="inp" id="sw-extra" value=""></div>
@@ -8963,7 +8949,7 @@ AppTools['sensitive-word'] = {
     };
     $('#sw-clear',body).onclick=()=>{ const text=$('#sw-in',body).value; let out=text; dict().forEach(w=>{ out=out.split(w).join(''); }); $('#sw-in',body).value=out; toast('已移除敏感词'); };
     // 文档上传：读取本地文本类文档（.txt/.md/.csv/.json 等）载入文本框，保留粘贴入口
-    // sw-doc 已改为 <label for="sw-file"> 原生唤起
+    // sw-doc 容器用 direct-input 覆盖式 input 直接唤起，无需 JS 触发
     $('#sw-file',body).onchange=async e=>{
       const files=Array.from(e.target.files||[]); if(!files.length) return;
       const parts=[];
