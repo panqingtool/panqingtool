@@ -16,7 +16,7 @@
 <meta name="format-detection" content="telephone=no">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- 冗余 CSP（与 _headers 保持一致；用于不支持 _headers 的部署平台） -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob: https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.dictionaryapi.dev https://ipwho.is https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob: https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <link rel="manifest" href="manifest.webmanifest?v=20260822">
 <link rel="icon" href="icons/icon-192.png?v=20260822" sizes="192x192" type="image/png">
@@ -47,6 +47,7 @@
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.5/dist/heic2any.min.js"></script>
 <!-- KaTeX：数学公式排版（LaTeX 渲染） -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ma-shan-zheng/index.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
 <!-- Word 渲染（mammoth，用于电子签名预览原文） -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js"></script>
@@ -510,15 +511,9 @@ canvas{max-width:100%;border-radius:8px;border:1px solid var(--border);backgroun
 .boot-inner{display:flex;flex-direction:column;align-items:center;gap:20px;}
 .boot-logo{width:84px;height:84px;object-fit:contain;border-radius:18px;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.08);}
 .boot-splash.no-logo .boot-logo{display:none;}
-.boot-quote{display:flex;flex-direction:column;align-items:center;}
-.boot-quote p{margin:0;font-size:17px;line-height:2.1;color:#222;letter-spacing:.5px;opacity:0;animation:bootLineIn .5s ease forwards;}
-.boot-quote p:nth-child(1){animation-delay:.15s;}
-.boot-quote p:nth-child(2){animation-delay:.55s;}
-.boot-quote p:nth-child(3){animation-delay:.95s;}
-.boot-quote p:nth-child(4){animation-delay:1.35s;}
-.boot-quote p:nth-child(5){animation-delay:1.75s;}
-.boot-quote p:nth-child(6){animation-delay:2.15s;}
-@keyframes bootLineIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+.boot-quote{display:flex;flex-direction:column;align-items:center;animation:bootQuoteIn .45s ease;}
+.boot-quote p{margin:0;font-size:18px;line-height:2.15;color:#222;letter-spacing:1px;font-family:'Ma Shan Zheng','STXingkai','华文行楷','LiSu','隶书','KaiTi','楷体',cursive;}
+@keyframes bootQuoteIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
 .spinner{width:16px;height:16px;border:2px solid var(--primary);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 input[type=range]{width:100%;accent-color:var(--primary);height:30px;}
@@ -797,7 +792,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.25-c</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.25-d</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6100,6 +6095,7 @@ const TOOLS = [
   {id:'photo-height', name:'拍照测高',        icon:'📐', cat:'life', desc:'选一张含参照物的照片，标注参照物与目标的上下端点，按像素比例换算目标真实高度。'},
   {id:'ar-area',      name:'AR 测面积',       icon:'🟦', cat:'life', desc:'选照片后用「自由套索」或「多边形」框选区域，输入图中一条已知边长即可按比例尺算出实际面积。'},
   {id:'photo-count',  name:'拍照计数',        icon:'🔢', cat:'life', desc:'选照片后逐一轻点目标即可自动计数（人数 / 物品数），带标记点与撤销，适合清点。'},
+  {id:'bg-remove',   name:'自动抠图',          icon:'🪄', cat:'image', desc:'基于本地 AI 模型一键去除图片背景，人像 / 商品 / 图标通用，透明 PNG 导出，可选白 / 黑 / 自定义底色；模型首次联网下载后浏览器缓存，全程本地运算不上传。'},
 
 ];;
 
@@ -6681,17 +6677,20 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-25', items:[
-    '【底部板块对齐】取消「开发者信息」16px 偏移，与「工作室核心技术栈」保持左边界对齐、同一字号标题，视觉更齐整。',
-    '【首帧加载页 · warm start 修复】修复从 PWA 快捷方式（已装好的）再次进入时看不到引用文案的缺陷：SW 缓存恢复路径下首次绘制完成即隐藏加载页，导致文案一闪而过。现改为延迟 60ms 再消失，确保 cold start 与 warm start 均能完整看到表白文案。',
+    '【加载页重做】引用文案改为整段同时出现（不再逐行渐入），改用艺术字体，加载完成后延迟 500ms 淡出进入主界面。',
+    '【自动抠图 · 新增】基于 @imgly 本地 AI 模型（jsdelivr CDN 加载，国内可达），一键去除图片背景、透明 PNG 导出，全程本地运算不上传。',
+    '【更新日志精简】2026-08-24 与 08-25 两条合并为一条并极简化。',
   ]},
   { date:'2026-08-24', items:[
-    '【移动端取图 · 终极方案】经多轮实测确认：系统浏览器「添加到主屏幕」生成的快捷方式为受限裸 WebView，文件选择器、摄像头与外链跳转均被禁用，前端无解。唯一稳定解法为改用 Edge / Chrome 重装快捷方式（选文件、拍照均正常，Edge 可登录电脑账号同步）。全站显眼位置（搜索栏、安装引导、OCR 批注）统一明示该结论。',
-    '【拍照 + 粘贴旁路】图片 / 文件类工具旁注入「📷 拍照」按钮（getUserMedia 截帧，绕开系统文件选择器）与「长按粘贴」兜底；并在文件框旁新增桌面 / 移动端通用的可聚焦粘贴区，取图不受系统选择器限制。',
-    '【状态持久化 · 10 分钟恢复窗口】退出到后台（未清理进程）时记录当前分类、滚动位置、已最小化应用、正在使用的工具及其文本；重新进入且在 10 分钟内自动恢复；通过清理运行程序（杀进程）结束则禁止记录，超时亦不恢复。',
-    '【PWA 文件接入 · Web Share Target】standalone 下支持从系统「分享」将文件传入本应用并自动定位工具；弱网不可用时不依赖网络，与粘贴兜底互为补充。',
-    '【分类标签栏横滑修复】触摸端交回原生横滑（touch-action:pan-x），鼠标拖拽严格管理 pointerId 并在抬起即复位，修复"滑动几次即卡死"的缺陷，点按切换不受影响。',
-    '【AI 抠图下架】因 @imgly 模型在国内环境加载失败，按用户要求彻底下线该工具及全部关联代码与模型路由，清理相关资源。',
-    '【搜索栏引导优化】原先的红色受限提示改为浅黄底、深蓝字，仅保留「手机装到主屏幕请用 Edge / Chrome（应用商店可下载，可用电脑账号登录）」一句，界面更克制。',
+    '移动端取图：系统浏览器「添加到主屏幕」为受限裸 WebView，文件选择 / 摄像头 / 外链均不可用；仅 Edge / Chrome 重装快捷方式可用，全站已明示。',
+    '拍照 + 粘贴旁路：图片类工具注入「📷 拍照」与「长按粘贴」兜底，取图不受系统选择器限制。',
+    '状态持久化：后台未杀进程时记录分类 / 滚动 / 工具 / 文本，10 分钟内重进自动恢复；杀进程或超时则不恢复。',
+    'PWA 文件接入：standalone 下支持系统「分享」传入文件并自动定位工具。',
+    '分类标签栏横滑修复：触摸端交回原生横滑，修复多次滑动卡死。',
+    'AI 抠图下架：@imgly 模型国内加载失败，按需求下线该工具（本次已重新上线为「自动抠图」）。',
+    '搜索栏引导优化：红色受限提示改浅黄底深蓝字，仅留 Edge / Chrome 安装建议。',
+    '底部板块对齐：取消「开发者信息」16px 偏移，与「工作室核心技术栈」左对齐。',
+    '首帧加载页：点击快捷方式后最先出现的那一帧（电脑白屏页 / 手机图标页）显示引用文案，加载完成自动进入；已修 warm start 一闪而过。',
   ]},
   { date:'2026-08-22', items:[
     '【交互焕新】重构「装到主屏幕」引导：放大排版、精简冗余信息，并新增移动端首启加载提示，安装体验更轻盈直观。',
@@ -8693,6 +8692,45 @@ function ntHistory(key){
 async function ntGetJSZip(){ if(window.JSZip) return window.JSZip; return ensureCDNLib('JSZip',['https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js','https://unpkg.com/jszip@3.10.1/dist/jszip.min.js']); }
 async function ntGetPDFLib(){ if(window.PDFLib) return window.PDFLib; return ensureCDNLib('PDFLib',['https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js','https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js']); }
 
+/* 自动抠图：图片→Blob、换背景合成、@imgly 引擎懒加载（多 CDN 容灾） */
+function ntImageToBlob(img){
+  const c=document.createElement('canvas');
+  c.width=img.naturalWidth||img.width; c.height=img.naturalHeight||img.height;
+  c.getContext('2d').drawImage(img,0,0);
+  return new Promise(res=>c.toBlob(b=>res(b),'image/png'));
+}
+async function compositeBg(fgBlob, color){
+  const fg=await ntLoadImage(URL.createObjectURL(fgBlob));
+  const c=document.createElement('canvas'); c.width=fg.naturalWidth; c.height=fg.naturalHeight;
+  const x=c.getContext('2d'); x.fillStyle=color; x.fillRect(0,0,c.width,c.height); x.drawImage(fg,0,0);
+  return new Promise(res=>c.toBlob(b=>res(b),'image/png'));
+}
+let __imglyRemove=null;
+const IMGLY_DATA_CDNS={
+  'cdn.jsdelivr.net':'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.5.5/dist/',
+  'unpkg.com':'https://unpkg.com/@imgly/background-removal-data@1.5.5/dist/',
+  'esm.sh':'https://esm.sh/@imgly/background-removal-data@1.5.5/dist/'
+};
+async function loadImglyRemove(prog){
+  if(__imglyRemove) return __imglyRemove;
+  const sources=[
+    'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm',
+    'https://unpkg.com/@imgly/background-removal@1.5.5/+esm',
+    'https://esm.sh/@imgly/background-removal@1.5.5'
+  ];
+  let lastErr;
+  for(const s of sources){
+    try{
+      if(prog) prog.textContent='加载抠图引擎：'+new URL(s).host+' …';
+      const m=await import(s);
+      __imglyRemove=m.removeBackground;
+      window.__imglyDataCDN=IMGLY_DATA_CDNS[new URL(s).host]||IMGLY_DATA_CDNS['cdn.jsdelivr.net'];
+      return __imglyRemove;
+    }catch(e){ lastErr=e; }
+  }
+  throw lastErr||new Error('抠图引擎加载失败');
+}
+
 /* 图片圆角生成（含裁剪） */
 AppTools['img-round'] = {
   build(body){
@@ -8763,6 +8801,64 @@ AppTools['img-round'] = {
     }
     $('#ir-run',body).onclick=()=>{ if(!imgs.length) return; const cv=roundOne(imgs[0]); $('#ir-out',body).innerHTML='<img src="'+cv.toDataURL('image/png')+'" style="max-width:100%;border-radius:8px"><div class="btn-row"><button class="btn" id="ir-dl">下载 PNG</button></div>'; $('#ir-dl',body).onclick=()=>downloadBlob(ntDataURLtoBlob(cv.toDataURL('image/png')),'rounded.png'); };
     $('#ir-zip',body).onclick=async()=>{ if(!imgs.length) return; const JSZip=await ntGetJSZip(); const z=new JSZip(); imgs.forEach((img,i)=>{ z.file('rounded_'+(i+1)+'.png', ntDataURLtoBlob(roundOne(img).toDataURL('image/png'))); }); downloadBlob(await z.generateAsync({type:'blob'}),'rounded_images.zip'); };
+  }
+};
+
+/* 自动抠图（AI 去背景） */
+AppTools['bg-remove'] = {
+  build(body){
+    body.innerHTML = `
+      <div class="mb"><label class="field-label">选择图片（人像 / 商品 / 图标均可，主体越清晰效果越好）</label>
+        <input type="file" class="vis-file-btn" id="br-files" accept="image/*">
+      </div>
+      <div class="mb"><label class="field-label">导出背景</label>
+        <select class="sel" id="br-bg">
+          <option value="transparent">透明（PNG，推荐）</option>
+          <option value="#ffffff">白色</option>
+          <option value="#000000">黑色</option>
+          <option value="custom">自定义颜色</option>
+        </select>
+        <input type="color" class="inp" id="br-custom" value="#4f9dff" style="display:none">
+      </div>
+      <div class="btn-row"><button class="btn" id="br-run" disabled>开始抠图</button><button class="btn ghost" id="br-dl" disabled>下载</button></div>
+      <div id="br-progress" class="hint" style="display:none"></div>
+      <div id="br-out" class="hint">选择一张图片后点击「开始抠图」。首次需联网下载 AI 模型（约几十 MB，之后浏览器自动缓存，无需重复下载）。</div>`;
+    let curBlob=null, imgEl=null;
+    $('#br-bg',body).onchange=()=>{ $('#br-custom',body).style.display = $('#br-bg',body).value==='custom'?'inline-block':'none'; };
+    $('#br-files',body).onchange=async e=>{
+      const more=await ntFilesToImages(e.target.files);
+      if(!more.length){ toast('请选择图片'); return; }
+      imgEl=more[0]; curBlob=null; $('#br-run',body).disabled=false; $('#br-dl',body).disabled=true;
+      $('#br-out',body).innerHTML='已载入：'+imgEl.width+'×'+imgEl.height+'，点击「开始抠图」';
+    };
+    $('#br-run',body).onclick=async()=>{
+      if(!imgEl) return;
+      const runBtn=$('#br-run',body); runBtn.disabled=true; runBtn.textContent='模型加载中…';
+      const prog=$('#br-progress',body); prog.style.display='block'; prog.textContent='准备中…';
+      try{
+        const removeBackground = await loadImglyRemove(prog);
+        prog.textContent='AI 推理中（首次较慢，请耐心等待）…';
+        const blob = await removeBackground(await ntImageToBlob(imgEl), {
+          publicPath: window.__imglyDataCDN || IMGLY_DATA_CDNS['cdn.jsdelivr.net'],
+          progress: (key, current, total)=>{ if(total) prog.textContent='处理中：'+key+' '+(current/total*100|0)+'%'; }
+        });
+        const bg=$('#br-bg',body).value;
+        let outBlob=blob;
+        if(bg!=='transparent'){
+          outBlob = await compositeBg(blob, bg==='custom'?$('#br-custom',body).value:bg);
+        }
+        curBlob=outBlob;
+        const url=URL.createObjectURL(outBlob);
+        $('#br-out',body).innerHTML='<div style="display:inline-block;padding:10px;background:repeating-conic-gradient(#e9e9e9 0% 25%, #fff 0% 50%) 50%/22px 22px;border-radius:8px"><img src="'+url+'" style="max-width:100%;display:block"></div><div class="btn-row"><a class="btn" id="br-dl2" download="cutout.png" href="'+url+'">下载 PNG</a></div>';
+        $('#br-dl',body).disabled=false;
+        $('#br-dl',body).onclick=()=>downloadBlob(outBlob,'cutout.png');
+        runBtn.textContent='重新抠图'; runBtn.disabled=false;
+      }catch(err){
+        prog.style.display='none';
+        $('#br-out',body).innerHTML='<span style="color:var(--error)">抠图失败：'+((err&&err.message)?err.message:err)+'</span><br>若模型下载失败，请确认网络可访问 cdn.jsdelivr.net 后重试。';
+        runBtn.textContent='开始抠图'; runBtn.disabled=false;
+      }
+    };
   }
 };
 
@@ -9934,8 +10030,8 @@ consumeShare();
       setTimeout(function(){ try{ bs.remove(); }catch(_){ } }, 550);
     };
     if(document.readyState === 'complete'){
-      // warm start（SW 缓存恢复）：延迟 60ms 再隐藏，确保 boot-splash 至少渲染一次再淡出
-      setTimeout(hide, 60);
+      // warm start（SW 缓存恢复）：渲染一次后延迟 500ms 再淡出，整段文案同屏可读
+      setTimeout(hide, 500);
       return;
     }
     window.addEventListener('load', hide);
