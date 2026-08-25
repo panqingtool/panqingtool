@@ -504,6 +504,18 @@ img{max-width:100%;}
 canvas{max-width:100%;border-radius:8px;border:1px solid var(--border);background:#fff;}
 .hint{font-size:13px;color:var(--text-2);margin-top:4px;}
 .loading{display:inline-flex;align-items:center;gap:8px;color:var(--primary);font-size:14px;}
+/* 手机快捷方式加载页：居中情话引语 */
+#bootSplash{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#0b1026 0%,#1a237e 60%,#283593 100%);transition:opacity .6s ease;opacity:1;}
+#bootSplash.hide{opacity:0;pointer-events:none;}
+#bootSplash .boot-quote{text-align:center;color:#fff;font-size:17px;line-height:2.1;padding:0 28px;letter-spacing:.5px;text-shadow:0 1px 6px rgba(0,0,0,.35);}
+#bootSplash .boot-quote p{margin:0;opacity:0;animation:bootLineIn .5s ease forwards;}
+#bootSplash .boot-quote p:nth-child(1){animation-delay:.15s;}
+#bootSplash .boot-quote p:nth-child(2){animation-delay:.55s;}
+#bootSplash .boot-quote p:nth-child(3){animation-delay:.95s;}
+#bootSplash .boot-quote p:nth-child(4){animation-delay:1.35s;}
+#bootSplash .boot-quote p:nth-child(5){animation-delay:1.75s;}
+#bootSplash .boot-quote p:nth-child(6){animation-delay:2.15s;}
+@keyframes bootLineIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 .spinner{width:16px;height:16px;border:2px solid var(--primary);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 input[type=range]{width:100%;accent-color:var(--primary);height:30px;}
@@ -672,6 +684,17 @@ th{background:var(--bg);}
 </head>
 
 <body>
+<!-- ============ 手机快捷方式加载页 ============ -->
+<div id="bootSplash" aria-hidden="true">
+  <div class="boot-quote">
+    <p>睡了吗</p>
+    <p>其实有件事我一直想告诉你</p>
+    <p>但我害怕说出来影响我们的关系</p>
+    <p>我今天一定要说</p>
+    <p>其实……</p>
+    <p>我还是很喜欢你</p>
+  </div>
+</div>
 
 <!-- ============ 顶部固定导航栏 ============ -->
 <nav class="nav" aria-label="主导航">
@@ -702,11 +725,11 @@ th{background:var(--bg);}
   <p class="slogan">免登录 · 免注册 · 本地处理保护隐私 · 所有运算均在您的<span class="red-bold">浏览器</span>完成</p>
   <div class="search-wrap search-box">
     <span class="search-icon" aria-hidden="true">🔍</span>
-    <input type="text" id="searchInput" placeholder="🔍 搜索工具（名称、简介都搜）：压缩、PDF、二维码、JSON、抠图… 支持批量" aria-label="搜索工具">
+    <input type="text" id="searchInput" placeholder="搜索工具（名称、简介都搜）：压缩、PDF、二维码、JSON、抠图… 支持批量" aria-label="搜索工具">
     <button class="search-clear" id="searchClear" type="button" aria-label="清空搜索" hidden>×</button>
   </div>
   <div class="search-hint" id="searchHint" hidden aria-live="polite"></div>
-  <div style="max-width:560px;margin:10px auto 0;padding:7px 12px;border:1px solid #e53935;border-radius:8px;background:rgba(229,57,53,.06);font-size:12.5px;color:#c62828;line-height:1.6;text-align:center">📱 <b>手机装到主屏幕 / 选文件、拍照请用 Edge 或 Chrome（应用商店可下载，Edge 可用电脑账号登录）；小米等系统浏览器快捷方式受限，选文件会无响应。</b></div>
+  <div style="max-width:560px;margin:10px auto 0;padding:7px 12px;border:1px solid #ffe08a;border-radius:8px;background:#fffbe6;font-size:12.5px;color:#1A237E;line-height:1.6;text-align:center">📱 <b>手机装到主屏幕请用 Edge / Chrome（应用商店可下载，可用电脑账号登录）。</b></div>
   <div class="popular" id="popularTools"><!-- 热门工具由 JS 注入 --></div>
 </header>
 
@@ -730,18 +753,6 @@ th{background:var(--bg);}
 <!-- ============ 底部信息区 ============ -->
 <footer class="footer">
   <div class="footer-grid">
-    <div class="ft-col">
-      <h4>关于本站</h4>
-      <p>完全本地运行的在线工具集合，所有处理均在您的浏览器中完成，文件与文本数据绝不离开您的设备。</p>
-    </div>
-    <div class="ft-col">
-      <h4>隐私说明</h4>
-      <ul>
-        <li>🔒 所有工具本地处理</li>
-        <li>无需登录，不收集信息</li>
-        <li>无弹窗、无广告</li>
-      </ul>
-    </div>
     <div class="ft-col ft-dis">
       <h4>免责声明</h4>
       <ol class="ft-disc-list">
@@ -752,8 +763,6 @@ th{background:var(--bg);}
         <li>本站保留对工具功能、界面与条款的最终解释与调整权。</li>
       </ol>
     </div>
-  </div>
-  <div class="footer-row">
     <div class="ft-col ft-dev">
       <h4>开发者信息</h4>
       <div class="dev-name">冉攀<span class="dev-meta">·男·重庆酉阳</span></div>
@@ -762,16 +771,8 @@ th{background:var(--bg);}
         <a class="dev-mail" href="mailto:3771822893@qq.com">📧 3771822893@qq.com</a>
       </div>
     </div>
-    <div class="ft-col ft-quick">
-      <h4>快捷链接</h4>
-      <ul>
-        <li><a href="#top">回到顶部</a></li>
-        <li><a href="#all-tools">全部工具</a></li>
-        <li><a href="#cat-intro">工具分类</a></li>
-      </ul>
-    </div>
     <div class="ft-col ft-tags">
-      <h4>擅长领域</h4>
+      <h4>工作室核心技术栈</h4>
       <span class="studio-tag">云原生架构</span>
       <span class="studio-tag">高并发分布式</span>
       <span class="studio-tag">大模型与 AI Agent</span>
@@ -784,7 +785,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-m</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.24-n</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -811,11 +812,10 @@ th{background:var(--bg);}
     </div>
     <div class="clog-body">
       <div class="install-guide-card" id="installGuideContent">
-        <div style="margin:0 0 14px;padding:9px 12px;background:rgba(24,144,255,.08);border:1px solid rgba(24,144,255,.35);border-radius:8px;font-size:12.5px;color:var(--text-2);line-height:1.65">💡 若桌面快捷方式不正常显示，而"开始"页的图标正常显示，可先删除桌面的快捷方式，然后点击开始页的"全部"，滑动找到"托托"，然后拖到桌面即可。</div>
+        <div style="margin:0 0 14px;padding:9px 12px;background:rgba(24,144,255,.08);border:1px solid rgba(24,144,255,.35);border-radius:8px;font-size:12.5px;color:var(--text-2);line-height:1.65">💡 若桌面快捷方式不正常显示，而"开始"页的图标正常显示，可先删除桌面的快捷方式，点击开始页的"全部"，滑动找到"托托"，拖到桌面即可。</div>
         <h3>📲 一键安装，离线可用</h3>
         <p style="color:var(--text-2);margin:6px 0 14px">安装后像 App 一样全屏打开，免浏览器地址栏，秒开即用（数据本地处理，不上传）。</p>
         <p style="margin:0 0 14px;font-size:12.5px;color:var(--text-2)">📱 手机上面首次下载打开可能会有点慢，请耐心等待几秒。</p>
-        <div style="margin:0 0 14px;padding:8px 12px;background:rgba(82,196,26,.1);border:1px solid rgba(82,196,26,.35);border-radius:8px;font-size:12.5px;color:var(--text-2);line-height:1.6">💡 若快捷方式已添加但暂时无法打开网站，可能是应用正在更新，请勿移除快捷方式，稍等片刻更新成功之后待你刷新即可恢复访问。</div>
         <div style="margin:0 0 14px;padding:8px 12px;background:rgba(250,173,20,.1);border:1px solid rgba(250,173,20,.4);border-radius:8px;font-size:12.5px;color:var(--text-2);line-height:1.6">⚠️ 若遇白屏现象，通常为缓存加载延迟所致，关闭运行进程重开或强制刷新（Windows 系统按 <b>Ctrl + Shift + R</b>、Mac 系统按 <b>Cmd + Shift + R</b> 强制刷新；或按 <b>Alt + F4</b> 退出再重启；或 <b>Ctrl + Shift + Esc</b> 结束进程）页面即可。</div>
         <div class="ig-platform">
           <b>📱 iPhone / iPad（Safari）</b>
@@ -829,13 +829,11 @@ th{background:var(--bg);}
         <div class="ig-platform" style="border:1px solid #e53935;background:rgba(229,57,53,.04)">
           <b style="color:#e53935">🤖 安卓手机（<span style="color:#e53935">⚠️ 强烈推荐用 Edge 或 Chrome</span>）</b>
           <ol style="margin:2px 0 0 20px;padding:0;line-height:1.35">
-            <li style="margin:2px 0"><b style="color:#e53935">先在应用商店下载 Microsoft Edge 或 Google Chrome</b>（Edge 可用电脑上的微软账号登录，书签同步）</li>
+            <li style="margin:2px 0"><b style="color:#e53935">先在应用商店下载 Microsoft Edge 或 Google Chrome</b>（可用电脑上的账号登录，书签同步）</li>
             <li style="margin:2px 0">用 Edge / Chrome 打开本网站 <b>panqingtool.pages.dev</b></li>
             <li style="margin:2px 0">点右上角「⋮」菜单（或地址栏右侧「安装」）</li>
             <li style="margin:2px 0">选「安装应用 / 添加到主屏幕」→ 弹窗点「安装」</li>
-            <li style="margin:2px 0">新装的快捷方式选文件、拍照全部正常</li>
           </ol>
-          <div style="margin-top:6px;padding:6px 10px;background:rgba(229,57,53,.08);border-radius:6px;color:#c62828;font-size:12.5px;line-height:1.5">⚠️ <b>不要</b>用小米/红米系统浏览器自带的「添加到主屏幕」——它生成的快捷方式会禁用「选择文件 / 拍照」，文件类工具全部无响应。夸克也没有该入口。认准 Edge / Chrome。</div>
         </div>
         <div class="ig-platform">
           <b>💻 电脑（Chrome / Edge）</b>
@@ -844,9 +842,6 @@ th{background:var(--bg);}
             <li style="margin:2px 0">或点右上角「⋮」→「将此应用作为应用安装」</li>
             <li style="margin:2px 0">安装后桌面生成图标，独立窗口运行</li>
           </ol>
-        </div>
-        <div id="igInstalledTip" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(24,144,255,.08);border:1px solid var(--primary);border-radius:8px;color:var(--text-2);font-size:13px;line-height:1.6">
-          ✅ 您已通过快捷方式进入本工具箱（说明安装成功）。如需重新安装，请先卸载当前快捷方式，再点顶部「📱 安装」按浏览器提示添加即可。
         </div>
         <div id="installNativeBtn" style="margin-top:14px;text-align:center;display:none">
           <button class="btn" id="installNativeClick" style="font-size:15px;padding:10px 24px">⚡ 一键安装到本机</button>
@@ -870,11 +865,11 @@ th{background:var(--bg);}
           <ol style="margin:1px 0 0 18px;padding:0;line-height:1.2">
             <li style="margin:1px 0"><b>iPhone Safari</b><br>- 设置 → App → Safari浏览器 → 清除历史记录与网站数据
             </li>
-            <li style="margin:1px 0"><b>iPhone Chrome</b><br>- Chrome App → 右下角"..." → 历史记录 → 清除全部数据（浏览数据） → 时间不限 → 勾选缓存 → 清除
+            <li style="margin:1px 0"><b>iPhone Chrome / Edge</b><br>- 打开 App → 点击"…" → 历史记录 / 隐私和安全 → 清除浏览数据 → 时间不限 → 勾选缓存 → 清除
             </li>
-            <li style="margin:1px 0"><b>Android Chrome</b><br>- Chrome App → 右上角"..." → 历史记录 → 清除全部数据（浏览数据） → 时间不限 → 勾选缓存 → 清除数据
+            <li style="margin:1px 0"><b>Android Chrome / Edge</b><br>- 打开 App → 点击"…" → 历史记录 / 隐私和安全 → 清除浏览数据 → 时间不限 → 勾选缓存 → 清除
             </li>
-            <li style="margin:1px 0"><b>Android 其他浏览器</b><br>- 设置 → 应用 → (应用管理→ )找到浏览器 → （存储 → ）清除全部数据
+            <li style="margin:1px 0"><b>Android通用保险方法</b><br>- 打开 App → 点击"…" → 历史记录 / 隐私和安全 → 清除浏览数据 → 时间不限 → 勾选缓存 → 清除
             </li>
           </ol>
         </div>
@@ -6676,17 +6671,13 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-24', items:[
-    '【手机 PWA 文件选择 · Web Share Target】standalone 下系统不弹文件选择器，新增「分享」入口：从相册 / 文件管理器「分享」文件到本应用，或用长按粘贴图片，自动弹出工具选择并注入文件；文件按钮下方同步提示兜底方式',
-    '【分类标签栏横滑修复】触摸端交回原生 overflow-x 横滑（加 touch-action:pan-x），鼠标拖拽改用严格 pointerId 管理并在抬起即复位，修复"滑几次就卡死、重启才恢复"的矛盾 bug，点按切换板块不受影响',
-    '【应用最小化 · 状态持久化】当前分类、页面滚动位置与已最小化的应用写入 localStorage，被系统收起或杀死后回到应用自动恢复（受系统后台策略限制，仍尽力保留）',
-    '【证件照换背景 · 下架】AI 抠图模型（@imgly）在国内环境加载失败（Failed to fetch），按用户要求彻底删除该工具及全部 imgly 关联代码与模型路由，清理 /imgly-data 资源',
-    '【手机 PWA 文件选择 · 换真招】红米系统浏览器 standalone 不实现系统文件选择器（任何前端 hack 都无效），原「分享入口」不实用已淡化。改为页面内「📷 拍照」取图（getUserMedia，绕开文件选择器，standalone 可用）+ 长按粘贴兜底；并在 standalone 首启提示用 Google Chrome 重新「添加到主屏幕」安装即可恢复原生「选择文件」',
-    '【拍照按钮 · 移动端全量显示】红米快捷方式 WebView 不报告 display-mode:standalone，导致上一版拍照按钮检测不到、不出现。改为移动触摸设备（触摸 + 移动 UA）一律注入「📷 拍照」按钮与粘贴提示，手机端任意浏览器打开图片工具都能看到，拍照取图不受系统文件选择器限制',
-    '【网站缩小恢复 · 状态增强】除分类 / 最小化应用 / 滚动位置外，额外保存「当前打开的工具」及其已填写的文本内容；切后台或系统回收后回到应用，自动重新打开上次的工具并回填内容，实现"缩小后继续运行、除非关闭快捷方式"',
-    '【受限快捷方式 · 明确引导】实测确认：小米系统浏览器「快捷方式」内核禁用文件选择器与摄像头（同一手机普通浏览器网页完全正常），前端无解。新增受限环境检测（移动端无 getUserMedia API → 顶部黄色横幅）与拍照失败提示，均带「在浏览器中打开完整版」一键链接；文件框旁提示同步加入该引导。解决路径：用 Chrome / Edge / 夸克「添加到主屏幕」安装即完整可用，或直接在浏览器中打开本站',
-    '【受限环境 · 跳转修正】实测「点此在浏览器中打开」链接在受限快捷方式 WebView 内被吞、无法跳出（外链跳转也被禁）。改为教用户用系统级跳转：点网页右上角「⋮」→「在浏览器中打开」（最快），或长按链接选「在浏览器中打开」；横幅 / 文件框提示 / 拍照失败提示三处文案同步更新',
-    '【受限环境 · 务实化】实测手机快捷方式连「⋮」菜单都没有（裸 WebView），夸克无「添加主屏幕」功能。放弃跳转依赖：横幅改为「① 长按粘贴取图（唯一可用方式）；② 用 UC / QQ浏览器 / Edge 重装快捷方式；③ 网址可长按复制」。拍照按钮/文件框提示仅移动端显示（电脑 PWA 功能完整不再误导）',
-    '【推荐浏览器 · 明示】用户实测手机 Edge / Chrome 快捷方式「选择文件 / 拍照」正常（小米系统浏览器快捷方式受限无响应）。搜索栏下方新增红色提示条推荐用 Edge / Chrome 装到主屏幕；「装到主屏幕」安卓卡片改为红色标注「强烈推荐 Edge / Chrome」（Edge 可登电脑账号同步）、并警告勿用小米系统浏览器快捷方式；OCR 工具新增「建议用电脑（手机慢易卡顿）」红色批注',
+    '【移动端取图 · 终极方案】经多轮实测确认：小米 / 红米系统浏览器「添加到主屏幕」生成的快捷方式为受限裸 WebView，文件选择器、摄像头与外链跳转均被禁用，前端无解。唯一稳定解法为改用 Edge / Chrome 重装快捷方式（选文件、拍照均正常，Edge 可登录电脑账号同步）。全站显眼位置（搜索栏、安装引导、OCR 批注）统一明示该结论。',
+    '【拍照 + 粘贴旁路】图片 / 文件类工具旁注入「📷 拍照」按钮（getUserMedia 截帧，绕开系统文件选择器）与「长按粘贴」兜底；并在文件框旁新增桌面 / 移动端通用的可聚焦粘贴区，取图不受系统选择器限制。',
+    '【状态持久化 · 10 分钟恢复窗口】退出到后台（未清理进程）时记录当前分类、滚动位置、已最小化应用、正在使用的工具及其文本；重新进入且在 10 分钟内自动恢复；通过清理运行程序（杀进程）结束则禁止记录，超时亦不恢复。',
+    '【PWA 文件接入 · Web Share Target】standalone 下支持从系统「分享」将文件传入本应用并自动定位工具；弱网不可用时不依赖网络，与粘贴兜底互为补充。',
+    '【分类标签栏横滑修复】触摸端交回原生横滑（touch-action:pan-x），鼠标拖拽严格管理 pointerId 并在抬起即复位，修复"滑动几次即卡死"的缺陷，点按切换不受影响。',
+    '【AI 抠图下架】因 @imgly 模型在国内环境加载失败，按用户要求彻底下线该工具及全部关联代码与模型路由，清理相关资源。',
+    '【搜索栏引导优化】原先的红色受限提示改为浅黄底、深蓝字，仅保留「手机装到主屏幕请用 Edge / Chrome（应用商店可下载，可用电脑账号登录）」一句，界面更克制。',
   ]},
   { date:'2026-08-22', items:[
     '【交互焕新】重构「装到主屏幕」引导：放大排版、精简冗余信息，并新增移动端首启加载提示，安装体验更轻盈直观。',
@@ -8607,6 +8598,40 @@ function normalizeFileInputs(body){
         if(input.parentElement) input.parentElement.insertBefore(hint, input.nextSibling);
       }
     }
+    // 粘贴入口（桌面 / 移动端通用）：文件框旁提供可聚焦粘贴区，长按 / 右键 / Ctrl+V 粘贴图片或文件
+    let pz = input.parentElement && input.parentElement.querySelector('.ft-paste');
+    if(!pz){
+      pz = document.createElement('div');
+      pz.className = 'ft-paste';
+      pz.contentEditable = 'true';
+      pz.setAttribute('role', 'textbox');
+      pz.setAttribute('aria-label', '长按或右键粘贴图片 / 文件');
+      pz.tabIndex = 0;
+      pz.textContent = '📋 在此长按 / 右键粘贴图片或文件（Ctrl+V）';
+      pz.style.cssText = 'margin-top:6px;padding:8px 10px;border:1px dashed #c7cdd6;border-radius:8px;font-size:12.5px;color:var(--text-2);background:#fafbfc;min-height:20px;outline:none;cursor:text;line-height:1.6;';
+      if(input.parentElement) input.parentElement.insertBefore(pz, input.nextSibling);
+      pz.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const files = [];
+        const cd = e.clipboardData || window.clipboardData;
+        if(cd){
+          if(cd.items){ for(const it of cd.items){ try{ if(it.kind === 'file'){ const f = it.getAsFile && it.getAsFile(); if(f) files.push(f); } }catch(_){ } } }
+          if(cd.files){ for(const f of cd.files){ files.push(f); } }
+        }
+        if(files.length){
+          if(input._files && Array.isArray(input._files)){
+            if(typeof input.onchange === 'function') input.onchange({ target: { files: files } });
+            else setInputFiles(input, input._files.concat(files));
+          } else {
+            setInputFiles(input, files);
+          }
+          pz.textContent = '📋 已粘贴 ' + files.length + ' 个文件，可继续粘贴';
+        } else {
+          pz.textContent = '📋 未检测到图片 / 文件，请先复制后再粘贴';
+        }
+      });
+      pz.addEventListener('blur', () => { if(pz.textContent.indexOf('已粘贴') < 0) pz.textContent = '📋 在此长按 / 右键粘贴图片或文件（Ctrl+V）'; });
+    }
   });
 }
 /* 安全的工具构建：build 后统一修复文件选择（PWA 兼容） */
@@ -9608,7 +9633,7 @@ const PT_STATE_KEY = 'pt_state_v1';
 const PT_TEXT_SEL = 'textarea, input[type=text], input[type=number], input[type=search], input[type=url], input[type=email], input[type=password], input[type=date], input[type=time], input:not([type])';
 function saveAppState(){
   try{
-    const s = { filter: (typeof currentFilter!=='undefined' ? currentFilter : 'all'), min: minimizedIds || [], scrollY: window.scrollY || 0, active: '', texts: {} };
+    const s = { filter: (typeof currentFilter!=='undefined' ? currentFilter : 'all'), min: minimizedIds || [], scrollY: window.scrollY || 0, active: '', texts: {}, savedAt: Date.now() };
     if(activeTool && overlay.classList.contains('show')){
       s.active = activeTool;
       const inputs = modalBody.querySelectorAll(PT_TEXT_SEL);
@@ -9618,12 +9643,16 @@ function saveAppState(){
   }catch(_){ }
 }
 function loadAppState(){ try{ return JSON.parse(localStorage.getItem(PT_STATE_KEY)) || {}; }catch(_){ return {}; } }
+function clearAppState(){ try{ localStorage.removeItem(PT_STATE_KEY); }catch(_){ } }
+const PT_RESTORE_TTL = 10 * 60 * 1000; // 退出到后台后可恢复的窗口：10 分钟
 (function restoreState(){
   const s = loadAppState();
+  // 超时（>10 分钟）视为失效，清理后不再恢复（退出快捷方式未清理后台，超时则不恢复）
+  if(s.savedAt && (Date.now() - s.savedAt > PT_RESTORE_TTL)){ clearAppState(); return; }
   if(s.filter && typeof s.filter === 'string'){ currentFilter = s.filter; }
   if(Array.isArray(s.min)){ minimizedIds = s.min.filter(id => TOOLS.some(t=>t.id===id)); }
   if(typeof s.scrollY === 'number'){ window.addEventListener('load', () => { try{ window.scrollTo(0, s.scrollY); }catch(_){ } }); }
-  // 恢复上次打开的工具（v-i：网站缩小 / 被系统回收后回来自动回到原状）；已最小化的工具走 dock 恢复，不重复弹窗
+  // 恢复上次打开的工具（网站缩小 / 被系统回收后回来自动回到原状）；已最小化的工具走 dock 恢复，不重复弹窗
   if(s.active && typeof s.active === 'string' && TOOLS.some(t=>t.id===s.active) && !minimizedIds.includes(s.active)){
     const act = s.active, texts = s.texts || {};
     window.addEventListener('load', () => {
@@ -9643,8 +9672,10 @@ function loadAppState(){ try{ return JSON.parse(localStorage.getItem(PT_STATE_KE
     });
   }
 })();
+// 退出到后台（仍在运行，未清理后台）：记录位置 / 内容，10 分钟内可恢复
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') saveAppState(); });
-window.addEventListener('beforeunload', saveAppState);
+// 清理运行程序（杀进程）/ 真正卸载：禁止记录退出时的位置与内容
+window.addEventListener('pagehide', (e) => { if(e && e.persisted === false) clearAppState(); });
 // 移动端首次进入提示：部分系统浏览器「选择文件」受限，可用「拍照 / 粘贴」取图，或用 Chrome 重装获得完整体验（仅提示一次）
 (function(){
   try{
@@ -9861,6 +9892,21 @@ consumeShare();
       }, 50);
     }
   }catch(e){ console.warn('?open parse failed:', e); }
+})();
+</script>
+<!-- ============ 手机快捷方式加载页控制 ============ -->
+<script>
+(function(){
+  try{
+    var sp = document.getElementById('bootSplash');
+    if(!sp) return;
+    var mobile = (typeof isMobileTouch === 'function' && isMobileTouch()) || (typeof isStandalonePWA === 'function' && isStandalonePWA());
+    if(!mobile){ sp.remove(); return; }
+    var hide = function(){ if(sp.classList.contains('hide')) return; sp.classList.add('hide'); setTimeout(function(){ try{ sp.remove(); }catch(_){ } }, 700); };
+    sp.addEventListener('click', hide);
+    window.addEventListener('load', function(){ setTimeout(hide, 3200); });
+    setTimeout(hide, 6000); // 兜底：load 迟迟不触发也隐藏
+  }catch(_){ }
 })();
 </script>
 </body>
