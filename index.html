@@ -792,7 +792,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.25-g</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.25-h</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -2173,6 +2173,7 @@ AppTools['img-matting-manual'] = {
     const stage = $('#mm-stage', body);
     const cv = $('#mm-canvas', body);
     const cx = cv.getContext('2d');
+    const DPR = Math.min(window.devicePixelRatio || 1, 3); // 高 DPI 屏按设备像素放大预览，避免手机上照片发糊
     // 视口变换（屏幕 → 图像坐标系）
     const view = { scale: 1, tx: 0, ty: 0 };
     let img = null, origW = 0, origH = 0;
@@ -2239,7 +2240,7 @@ AppTools['img-matting-manual'] = {
     function fitImage(){
       if(!img) return;
       const r = stage.getBoundingClientRect();
-      const cw = r.width || cv.width, ch = r.height || cv.height;
+      const cw = (r.width || cv.width) * DPR, ch = (r.height || cv.height) * DPR;
       const s = Math.min(cw / origW, ch / origH);
       view.scale = s * 0.95; // 留 5% 边距
       view.tx = (cw - origW * view.scale) / 2;
@@ -2262,8 +2263,8 @@ AppTools['img-matting-manual'] = {
     }
     function drawAll(){
       const r = stage.getBoundingClientRect();
-      cv.width = Math.max(1, Math.round(r.width));
-      cv.height = Math.max(1, Math.round(r.height));
+      cv.width = Math.max(1, Math.round(r.width * DPR));
+      cv.height = Math.max(1, Math.round(r.height * DPR));
       cx.clearRect(0, 0, cv.width, cv.height);
       // 背景
       cx.fillStyle = '#f3f4f6'; cx.fillRect(0, 0, cv.width, cv.height);
