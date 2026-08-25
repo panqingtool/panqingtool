@@ -792,7 +792,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.25-d</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.25-e</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6095,7 +6095,6 @@ const TOOLS = [
   {id:'photo-height', name:'拍照测高',        icon:'📐', cat:'life', desc:'选一张含参照物的照片，标注参照物与目标的上下端点，按像素比例换算目标真实高度。'},
   {id:'ar-area',      name:'AR 测面积',       icon:'🟦', cat:'life', desc:'选照片后用「自由套索」或「多边形」框选区域，输入图中一条已知边长即可按比例尺算出实际面积。'},
   {id:'photo-count',  name:'拍照计数',        icon:'🔢', cat:'life', desc:'选照片后逐一轻点目标即可自动计数（人数 / 物品数），带标记点与撤销，适合清点。'},
-  {id:'bg-remove',   name:'自动抠图',          icon:'🪄', cat:'image', desc:'基于本地 AI 模型一键去除图片背景，人像 / 商品 / 图标通用，透明 PNG 导出，可选白 / 黑 / 自定义底色；模型首次联网下载后浏览器缓存，全程本地运算不上传。'},
 
 ];;
 
@@ -6676,11 +6675,6 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
-  { date:'2026-08-25', items:[
-    '【加载页重做】引用文案改为整段同时出现（不再逐行渐入），改用艺术字体，加载完成后延迟 500ms 淡出进入主界面。',
-    '【自动抠图 · 新增】基于 @imgly 本地 AI 模型（jsdelivr CDN 加载，国内可达），一键去除图片背景、透明 PNG 导出，全程本地运算不上传。',
-    '【更新日志精简】2026-08-24 与 08-25 两条合并为一条并极简化。',
-  ]},
   { date:'2026-08-24', items:[
     '移动端取图：系统浏览器「添加到主屏幕」为受限裸 WebView，文件选择 / 摄像头 / 外链均不可用；仅 Edge / Chrome 重装快捷方式可用，全站已明示。',
     '拍照 + 粘贴旁路：图片类工具注入「📷 拍照」与「长按粘贴」兜底，取图不受系统选择器限制。',
@@ -8692,45 +8686,6 @@ function ntHistory(key){
 async function ntGetJSZip(){ if(window.JSZip) return window.JSZip; return ensureCDNLib('JSZip',['https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js','https://unpkg.com/jszip@3.10.1/dist/jszip.min.js']); }
 async function ntGetPDFLib(){ if(window.PDFLib) return window.PDFLib; return ensureCDNLib('PDFLib',['https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js','https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js']); }
 
-/* 自动抠图：图片→Blob、换背景合成、@imgly 引擎懒加载（多 CDN 容灾） */
-function ntImageToBlob(img){
-  const c=document.createElement('canvas');
-  c.width=img.naturalWidth||img.width; c.height=img.naturalHeight||img.height;
-  c.getContext('2d').drawImage(img,0,0);
-  return new Promise(res=>c.toBlob(b=>res(b),'image/png'));
-}
-async function compositeBg(fgBlob, color){
-  const fg=await ntLoadImage(URL.createObjectURL(fgBlob));
-  const c=document.createElement('canvas'); c.width=fg.naturalWidth; c.height=fg.naturalHeight;
-  const x=c.getContext('2d'); x.fillStyle=color; x.fillRect(0,0,c.width,c.height); x.drawImage(fg,0,0);
-  return new Promise(res=>c.toBlob(b=>res(b),'image/png'));
-}
-let __imglyRemove=null;
-const IMGLY_DATA_CDNS={
-  'cdn.jsdelivr.net':'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.5.5/dist/',
-  'unpkg.com':'https://unpkg.com/@imgly/background-removal-data@1.5.5/dist/',
-  'esm.sh':'https://esm.sh/@imgly/background-removal-data@1.5.5/dist/'
-};
-async function loadImglyRemove(prog){
-  if(__imglyRemove) return __imglyRemove;
-  const sources=[
-    'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm',
-    'https://unpkg.com/@imgly/background-removal@1.5.5/+esm',
-    'https://esm.sh/@imgly/background-removal@1.5.5'
-  ];
-  let lastErr;
-  for(const s of sources){
-    try{
-      if(prog) prog.textContent='加载抠图引擎：'+new URL(s).host+' …';
-      const m=await import(s);
-      __imglyRemove=m.removeBackground;
-      window.__imglyDataCDN=IMGLY_DATA_CDNS[new URL(s).host]||IMGLY_DATA_CDNS['cdn.jsdelivr.net'];
-      return __imglyRemove;
-    }catch(e){ lastErr=e; }
-  }
-  throw lastErr||new Error('抠图引擎加载失败');
-}
-
 /* 图片圆角生成（含裁剪） */
 AppTools['img-round'] = {
   build(body){
@@ -8801,64 +8756,6 @@ AppTools['img-round'] = {
     }
     $('#ir-run',body).onclick=()=>{ if(!imgs.length) return; const cv=roundOne(imgs[0]); $('#ir-out',body).innerHTML='<img src="'+cv.toDataURL('image/png')+'" style="max-width:100%;border-radius:8px"><div class="btn-row"><button class="btn" id="ir-dl">下载 PNG</button></div>'; $('#ir-dl',body).onclick=()=>downloadBlob(ntDataURLtoBlob(cv.toDataURL('image/png')),'rounded.png'); };
     $('#ir-zip',body).onclick=async()=>{ if(!imgs.length) return; const JSZip=await ntGetJSZip(); const z=new JSZip(); imgs.forEach((img,i)=>{ z.file('rounded_'+(i+1)+'.png', ntDataURLtoBlob(roundOne(img).toDataURL('image/png'))); }); downloadBlob(await z.generateAsync({type:'blob'}),'rounded_images.zip'); };
-  }
-};
-
-/* 自动抠图（AI 去背景） */
-AppTools['bg-remove'] = {
-  build(body){
-    body.innerHTML = `
-      <div class="mb"><label class="field-label">选择图片（人像 / 商品 / 图标均可，主体越清晰效果越好）</label>
-        <input type="file" class="vis-file-btn" id="br-files" accept="image/*">
-      </div>
-      <div class="mb"><label class="field-label">导出背景</label>
-        <select class="sel" id="br-bg">
-          <option value="transparent">透明（PNG，推荐）</option>
-          <option value="#ffffff">白色</option>
-          <option value="#000000">黑色</option>
-          <option value="custom">自定义颜色</option>
-        </select>
-        <input type="color" class="inp" id="br-custom" value="#4f9dff" style="display:none">
-      </div>
-      <div class="btn-row"><button class="btn" id="br-run" disabled>开始抠图</button><button class="btn ghost" id="br-dl" disabled>下载</button></div>
-      <div id="br-progress" class="hint" style="display:none"></div>
-      <div id="br-out" class="hint">选择一张图片后点击「开始抠图」。首次需联网下载 AI 模型（约几十 MB，之后浏览器自动缓存，无需重复下载）。</div>`;
-    let curBlob=null, imgEl=null;
-    $('#br-bg',body).onchange=()=>{ $('#br-custom',body).style.display = $('#br-bg',body).value==='custom'?'inline-block':'none'; };
-    $('#br-files',body).onchange=async e=>{
-      const more=await ntFilesToImages(e.target.files);
-      if(!more.length){ toast('请选择图片'); return; }
-      imgEl=more[0]; curBlob=null; $('#br-run',body).disabled=false; $('#br-dl',body).disabled=true;
-      $('#br-out',body).innerHTML='已载入：'+imgEl.width+'×'+imgEl.height+'，点击「开始抠图」';
-    };
-    $('#br-run',body).onclick=async()=>{
-      if(!imgEl) return;
-      const runBtn=$('#br-run',body); runBtn.disabled=true; runBtn.textContent='模型加载中…';
-      const prog=$('#br-progress',body); prog.style.display='block'; prog.textContent='准备中…';
-      try{
-        const removeBackground = await loadImglyRemove(prog);
-        prog.textContent='AI 推理中（首次较慢，请耐心等待）…';
-        const blob = await removeBackground(await ntImageToBlob(imgEl), {
-          publicPath: window.__imglyDataCDN || IMGLY_DATA_CDNS['cdn.jsdelivr.net'],
-          progress: (key, current, total)=>{ if(total) prog.textContent='处理中：'+key+' '+(current/total*100|0)+'%'; }
-        });
-        const bg=$('#br-bg',body).value;
-        let outBlob=blob;
-        if(bg!=='transparent'){
-          outBlob = await compositeBg(blob, bg==='custom'?$('#br-custom',body).value:bg);
-        }
-        curBlob=outBlob;
-        const url=URL.createObjectURL(outBlob);
-        $('#br-out',body).innerHTML='<div style="display:inline-block;padding:10px;background:repeating-conic-gradient(#e9e9e9 0% 25%, #fff 0% 50%) 50%/22px 22px;border-radius:8px"><img src="'+url+'" style="max-width:100%;display:block"></div><div class="btn-row"><a class="btn" id="br-dl2" download="cutout.png" href="'+url+'">下载 PNG</a></div>';
-        $('#br-dl',body).disabled=false;
-        $('#br-dl',body).onclick=()=>downloadBlob(outBlob,'cutout.png');
-        runBtn.textContent='重新抠图'; runBtn.disabled=false;
-      }catch(err){
-        prog.style.display='none';
-        $('#br-out',body).innerHTML='<span style="color:var(--error)">抠图失败：'+((err&&err.message)?err.message:err)+'</span><br>若模型下载失败，请确认网络可访问 cdn.jsdelivr.net 后重试。';
-        runBtn.textContent='开始抠图'; runBtn.disabled=false;
-      }
-    };
   }
 };
 
@@ -10030,8 +9927,8 @@ consumeShare();
       setTimeout(function(){ try{ bs.remove(); }catch(_){ } }, 550);
     };
     if(document.readyState === 'complete'){
-      // warm start（SW 缓存恢复）：渲染一次后延迟 500ms 再淡出，整段文案同屏可读
-      setTimeout(hide, 500);
+      // warm start（SW 缓存恢复）：渲染一次后延迟 150ms 再淡出，整段文案同屏可读
+      setTimeout(hide, 150);
       return;
     }
     window.addEventListener('load', hide);
