@@ -540,8 +540,7 @@ th{background:var(--bg);}
 .footer-grid{display:grid;grid-template-columns:1.2fr 2fr;gap:18px;align-items:start;padding-bottom:8px;}
 /* 开发者信息组：核心技术栈直接堆叠在开发者信息正下方 */
 .ft-dev-group{display:flex;flex-direction:column;gap:12px;}
-/* 开发者信息向右偏移一点 */
-.ft-dev{margin-left:16px;}
+/* 开发者信息与工作室核心技术栈：左边界对齐（同一左对齐线、同一字号标题） */
 /* 下排：开发者信息 + 快捷链接 + 擅长领域 */
 .footer-row{display:grid;grid-template-columns:1fr 0.7fr 1.6fr;gap:18px;align-items:start;margin-top:6px;padding-top:10px;border-top:1px dashed var(--border);}
 .footer h4{font-size:12.5px;color:var(--title);margin-bottom:6px;white-space:nowrap;letter-spacing:.2px;}
@@ -798,7 +797,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.25-b</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.25-c</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6682,11 +6681,8 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-25', items:[
-    '【缓存清理指引精简】手机端清除缓存说明合并 Chrome / Edge 通用步骤，并将「Android 通用保险方法」改写为「设置 → 应用 → 找到浏览器 → 清除全部数据」的系统级清法，覆盖无痕清不净的场景。',
-    '【更新日志表述收敛】移除对具体厂商浏览器的点名，相关描述统一以「系统浏览器」表述，避免歧义。',
-    '【粘贴计数修正】修复文件框粘贴区重复计数的缺陷：同一图片被「剪贴图条目 + 文件列表」双重计入，且粘贴事件冒泡至全局处理器再次送入工具，导致「粘 1 变 3」。现改为去重并阻断冒泡，粘贴数量与实际一致。',
-    '【首帧加载页修正】引用文案从主页内嵌改回真正的"首帧加载页"：点击快捷方式后最先出现的那一帧（电脑端白屏加载页 / 手机端图标页，均为白色背景）即显示文案，加载完成自动进入主界面、不设置固定进入时间；手机端显示托托 logo、电脑端为纯白屏。',
-    '【底部板块重排】将「工作室核心技术栈」移至「开发者信息」正下方，并将「开发者信息」向右偏移一点，信息层级更清晰。',
+    '【底部板块对齐】取消「开发者信息」16px 偏移，与「工作室核心技术栈」保持左边界对齐、同一字号标题，视觉更齐整。',
+    '【首帧加载页 · warm start 修复】修复从 PWA 快捷方式（已装好的）再次进入时看不到引用文案的缺陷：SW 缓存恢复路径下首次绘制完成即隐藏加载页，导致文案一闪而过。现改为延迟 60ms 再消失，确保 cold start 与 warm start 均能完整看到表白文案。',
   ]},
   { date:'2026-08-24', items:[
     '【移动端取图 · 终极方案】经多轮实测确认：系统浏览器「添加到主屏幕」生成的快捷方式为受限裸 WebView，文件选择器、摄像头与外链跳转均被禁用，前端无解。唯一稳定解法为改用 Edge / Chrome 重装快捷方式（选文件、拍照均正常，Edge 可登录电脑账号同步）。全站显眼位置（搜索栏、安装引导、OCR 批注）统一明示该结论。',
@@ -9937,7 +9933,11 @@ consumeShare();
       bs.classList.add('hide');
       setTimeout(function(){ try{ bs.remove(); }catch(_){ } }, 550);
     };
-    if(document.readyState === 'complete'){ hide(); return; }
+    if(document.readyState === 'complete'){
+      // warm start（SW 缓存恢复）：延迟 60ms 再隐藏，确保 boot-splash 至少渲染一次再淡出
+      setTimeout(hide, 60);
+      return;
+    }
     window.addEventListener('load', hide);
   }catch(_){ }
 })();
