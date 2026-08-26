@@ -792,7 +792,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.25-h</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.26-a</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -1200,120 +1200,6 @@ AppTools['web-search'] = {
     }
     btn.onclick = run;
     q.addEventListener('keydown', function(e){ if(e.key === 'Enter') run(); });
-  }
-};
-
-/* ---------- 天气查询（Open-Meteo 公开 API，由 Cloudflare Functions 代理） ---------- */
-AppTools['weather'] = {
-  build(body){
-    body.innerHTML = `
-      <div class="card-soft mb">
-        <div class="row" style="gap:8px">
-          <div style="flex:1"><label class="field-label">城市 / 地名</label>
-            <input type="text" class="inp" id="wt-city" placeholder="如：重庆、北京、shanghai" value="重庆"></div>
-          <button class="btn" id="wt-search">查询</button>
-        </div>
-        <div class="row mt" style="gap:8px">
-          <div style="flex:1"><label class="field-label">经度</label><input type="number" class="inp" id="wt-lon" step="0.0001" placeholder="自动解析"></div>
-          <div style="flex:1"><label class="field-label">纬度</label><input type="number" class="inp" id="wt-lat" step="0.0001" placeholder="自动解析"></div>
-        </div>
-        <div class="hint mt">支持中英文城市名（自动调 Open-Meteo geocoding 转经纬度），或手动填经纬度。后端走 Cloudflare Functions 免墙。</div>
-      </div>
-      <details class="card-soft mb">
-        <summary class="field-label" style="cursor:pointer">批量查询（每行一个城市）</summary>
-        <textarea class="inp" id="wt-batch" rows="4" placeholder="重庆&#10;北京&#10;上海&#10;广州" style="width:100%;font-family:monospace;margin-top:8px"></textarea>
-        <button class="btn mt" id="wt-batch-run">批量查询</button>
-      </details>
-      <div id="wt-out" class="result-box">点击「查询」获取实时天气与未来 7 天预报。</div>
-      <div class="hint">🌐 由 Open-Meteo 免费公开接口提供（无需 Key），CF Functions 代理确保国内可访问。</div>`;
-    const WCODE = { 0:'晴',1:'少云',2:'多云',3:'阴',45:'雾',48:'雾凇',51:'轻毛毛雨',53:'中毛毛雨',55:'浓毛毛雨',61:'小雨',63:'中雨',65:'大雨',71:'小雪',73:'中雪',75:'大雪',77:'雪粒',80:'阵雨',81:'强阵雨',82:'强阵雨',85:'阵雪',86:'强阵雪',95:'雷阵雨',96:'雷雨冰雹',99:'强雷雨冰雹' };
-    async function geo(name){
-      const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name=' + encodeURIComponent(name));
-      const j = await r.json();
-      const it = (j.results || [])[0];
-      if(!it) throw new Error('找不到该城市');
-      return { lat: it.latitude, lon: it.longitude, label: it.name + (it.admin1 ? ' · ' + it.admin1 : '') + (it.country ? ' · ' + it.country : '') };
-    }
-    async function fetchWeather(lat, lon, label){
-      try{
-        const r = await fetch('/weather?lat=' + lat + '&lon=' + lon);
-        const j = await r.json();
-        if(j && j.ok) return Object.assign(j, { label });
-      }catch(e){}
-      // 直连 Open-Meteo 兜底（支持 CORS，CF 不可用时仍可查）
-      const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
-        '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,surface_pressure' +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=7';
-      const r2 = await fetch(u);
-      const j2 = await r2.json();
-      const now = {
-        temperature: j2.current.temperature_2m, feelsLike: j2.current.apparent_temperature,
-        humidity: j2.current.relative_humidity_2m, windSpeed: j2.current.wind_speed_10m,
-        pressure: j2.current.surface_pressure, weatherCode: j2.current.weather_code
-      };
-      const daily = (j2.daily.time||[]).map(function(t,i){ return {
-        date: t, weatherCode: j2.daily.weather_code[i],
-        tMax: j2.daily.temperature_2m_max[i], tMin: j2.daily.temperature_2m_min[i],
-        pop: (j2.daily.precipitation_probability_max||[])[i] || 0
-      };});
-      return { ok:true, now:now, daily:daily, label:label, timezone:(j2.timezone||'') };
-    }
-    function cardHtml(d){
-      const n = d.now;
-      const days = d.daily || [];
-      const html = `
-        <div class="card-soft mb" style="text-align:center">
-          <div style="font-size:13px;color:var(--text-2)">${d.label || (d.lat + ', ' + d.lon)} · ${d.timezone || ''}</div>
-          <div style="font-size:42px;font-weight:800;color:var(--primary);line-height:1;margin:6px 0">${(n.temperature||0).toFixed(1)}°<span style="font-size:18px;color:var(--text-2)">C</span></div>
-          <div style="font-size:15px">${WCODE[n.weatherCode] || '天气 ' + n.weatherCode} · 体感 ${(n.feelsLike||0).toFixed(1)}°</div>
-          <div class="row" style="justify-content:center;gap:14px;margin-top:8px;font-size:13px;color:var(--text-2)">
-            <span>💧 ${n.humidity}%</span>
-            <span>💨 ${(n.windSpeed||0).toFixed(1)} m/s</span>
-            <span>🌡 ${(n.pressure||0).toFixed(0)} hPa</span>
-          </div>
-        </div>
-        <div class="row wrap" style="gap:8px">
-          ${days.map(dy => `<div class="card-soft" style="flex:1;min-width:120px;text-align:center">
-            <div style="font-weight:700">${dy.date.slice(5)}</div>
-            <div style="font-size:13px;color:var(--text-2)">${WCODE[dy.weatherCode]||'-'}</div>
-            <div style="margin-top:6px">${(dy.tMin||0).toFixed(0)}° / <b>${(dy.tMax||0).toFixed(0)}°</b></div>
-            <div style="font-size:12px;color:var(--text-2)">☔ ${dy.pop||0}%</div>
-          </div>`).join('')}
-        </div>`;
-      return html;
-    }
-    function render(d){ $('#wt-out', body).innerHTML = cardHtml(d); }
-    $('#wt-search', body).onclick = async () => {
-      const out = $('#wt-out', body); out.innerHTML = '<span class="loading"><span class="spinner"></span>查询中…</span>';
-      try{
-        let lat = +$('#wt-lat', body).value, lon = +$('#wt-lon', body).value, label = '';
-        if(!(lat && lon)){
-          const city = $('#wt-city', body).value.trim();
-          if(!city) throw new Error('请输入城市名或经纬度');
-          const g = await geo(city); lat = g.lat; lon = g.lon; label = g.label;
-          $('#wt-lat', body).value = lat.toFixed(4); $('#wt-lon', body).value = lon.toFixed(4);
-        } else {
-          label = (lat.toFixed(2) + ', ' + lon.toFixed(2));
-        }
-        const w = await fetchWeather(lat, lon, label);
-        render(w);
-      }catch(e){ out.innerHTML = '❌ ' + errMsg(e); }
-    };
-    $('#wt-batch-run', body).onclick = async () => {
-      const out = $('#wt-out', body);
-      const lines = ($('#wt-batch', body).value || '').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-      if(!lines.length){ out.innerHTML='⚠️ 请在文本框中每行输入一个城市'; return; }
-      out.innerHTML = '<span class="loading"><span class="spinner"></span>批量查询中（共 '+lines.length+' 个城市）…</span>';
-      const cards = [];
-      for(const city of lines){
-        try{
-          const g = await geo(city);
-          const w = await fetchWeather(g.lat, g.lon, g.label);
-          cards.push(cardHtml(w));
-        }catch(e2){ cards.push('<div class="card-soft mb" style="color:var(--error)">'+escapeHtml(city)+'：'+errMsg(e2)+'</div>'); }
-      }
-      out.innerHTML = cards.join('');
-    };
   }
 };
 
@@ -6066,7 +5952,6 @@ const TOOLS = [
   {id:'renovation',   name:'装修预算估算',        icon:'🏗️', cat:'money', desc:'按面积与档次（简 / 精 / 豪装）估算总预算及分项占比，各项占比可自定义，附条形图可视化。'},
   /* ============ 生活实用 ============ */
   {id:'unit-convert', name:'单位换算',            icon:'📏', cat:'life',  desc:'长度 / 重量 / 温度 / 面积 / 体积 / 速度 / 时间 / 数据存储 / 压强 共九大类单位互转，结果可复制。'},
-  {id:'weather',      name:'天气查询',            icon:'🌤️', cat:'life', desc:'实时天气 + 未来 7 天预报，由 Open-Meteo 公开接口 + Cloudflare Functions 代理，国内免墙，支持中英文城市名。'},
   {id:'lunar',        name:'公历农历互转',        icon:'🌗', cat:'life', desc:'公历↔农历互转（1900–2100），含干支 / 生肖 / 朝代 / 星期 / 星座 / 当日节气与传统节日，节气与节日附百科简介并可跳转百度百科，完全离线运行。'},
   {id:'date-diff',    name:'日期差计算',          icon:'📅', cat:'life',  desc:'计算两个日期相差的天 / 周 / 月 / 年数，支持剔除周末与法定节假日（含调休补班），可填入今天、支持倒序日期。'},
   {id:'age',          name:'年龄计算器',          icon:'🎂', cat:'life',  desc:'根据公历生日计算周岁 / 月 / 天与已出生总天数，并显示距下次生日天数。'},
@@ -9934,8 +9819,8 @@ consumeShare();
       setTimeout(function(){ try{ bs.remove(); }catch(_){ } }, 550);
     };
     if(document.readyState === 'complete'){
-      // warm start（SW 缓存恢复）：渲染一次后延迟 150ms 再淡出，整段文案同屏可读
-      setTimeout(hide, 500);
+      // warm start（SW 缓存恢复）：渲染一次后延迟 1 秒再淡出，整段文案同屏可读
+      setTimeout(hide, 1000);
       return;
     }
     window.addEventListener('load', hide);
