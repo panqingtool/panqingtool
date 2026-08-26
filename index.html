@@ -792,7 +792,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.26-c</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.26-d</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -9802,7 +9802,7 @@ consumeShare();
   }catch(e){ console.warn('?open parse failed:', e); }
 })();
 </script>
-<!-- ============ 首帧加载页控制：电脑白屏页 / 手机图标页均显示，固定 1.5 秒后进入主界面 ============ -->
+<!-- ============ 首帧加载页控制：电脑白屏页 / 手机图标页均显示，固定 1.2 秒后进入主界面 ============ -->
 <script>
 (function(){
   try{
@@ -9811,14 +9811,14 @@ consumeShare();
     // 电脑端为纯白屏加载页（不显示 logo）；手机端为显示图标的那一页（显示 logo）
     var mobile = (typeof isMobileTouch === 'function' && isMobileTouch()) || (typeof isStandalonePWA === 'function' && isStandalonePWA());
     if(!mobile) bs.classList.add('no-logo');
-    // 固定 1.5 秒后进入主界面（warm / cold 一致），整段文案同屏可读
+    // 固定 1.2 秒后进入主界面（warm / cold 一致），整段文案同屏可读
     var done = false;
     var hide = function(){
       if(done) return; done = true;
       bs.classList.add('hide');
       setTimeout(function(){ try{ bs.remove(); }catch(_){ } }, 550);
     };
-    setTimeout(hide, 1500);
+    setTimeout(hide, 1200);
   }catch(_){ }
 })();
 </script>
