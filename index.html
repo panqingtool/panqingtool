@@ -16,7 +16,7 @@
 <meta name="format-detection" content="telephone=no">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- 冗余 CSP（与 _headers 保持一致；用于不支持 _headers 的部署平台） -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.dictionaryapi.dev https://ipwho.is https://speed.cloudflare.com https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob: https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.gold-api.com https://api.dictionaryapi.dev https://ipwho.is https://speed.cloudflare.com https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob: https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <link rel="manifest" href="manifest.webmanifest?v=20260822">
 <link rel="icon" href="icons/icon-192.png?v=20260822" sizes="192x192" type="image/png">
@@ -791,7 +791,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.27-c</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.27-d</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -2921,7 +2921,7 @@ AppTools['office-to-pdf'] = {
   }
 };
 
-// 在线文本对比（LCS 行级 diff）
+// 在线文本对比（LCS 行级 diff，可忽略大小写/空白、按词对比）
 AppTools['text-diff'] = {
   build(body){
     body.innerHTML = `
@@ -2929,42 +2929,127 @@ AppTools['text-diff'] = {
         <div><label class="field-label">原文</label><textarea class="txt" id="td-a" placeholder="粘贴原始文本"></textarea></div>
         <div><label class="field-label">对比文</label><textarea class="txt" id="td-b" placeholder="粘贴对比文本"></textarea></div>
       </div>
-      <button class="btn" id="td-run">对比</button>
+      <div class="row mb" style="flex-wrap:wrap;gap:14px;align-items:center">
+        <label class="field-label" style="margin:0">对比粒度</label>
+        <select class="sel" id="td-mode" aria-label="对比粒度">
+          <option value="line">按行</option><option value="word">按词（空白/标点切分）</option><option value="char">按字符</option>
+        </select>
+        <label class="mb-sm"><input type="checkbox" id="td-ic"> 忽略大小写</label>
+        <label class="mb-sm"><input type="checkbox" id="td-iw"> 忽略首尾空白</label>
+        <label class="mb-sm"><input type="checkbox" id="td-in"> 忽略空行</label>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="td-run">对比</button>
+        <button class="btn btn-ghost" id="td-swap">交换原文/对比文</button>
+        <button class="btn btn-ghost" id="td-clear">清空</button>
+      </div>
       <div id="td-result"></div>`;
+    function normLines(v){
+      let lines = v.split('\n');
+      if($('#td-iw', body).checked) lines = lines.map(s => s.trim());
+      if($('#td-in', body).checked) lines = lines.filter(s => s.trim() !== '');
+      return lines;
+    }
+    function normTok(s){
+      let t = s;
+      if($('#td-ic', body).checked) t = t.toLowerCase();
+      if($('#td-iw', body).checked) t = t.trim();
+      return t;
+    }
+    function tokenize(line){
+      const mode = $('#td-mode', body).value;
+      if(mode==='char') return Array.from(line);
+      if(mode==='word') return line.split(/(\s+)/).filter(x=>x!=='');
+      return [line];
+    }
     $('#td-run', body).onclick = () => {
-      const a = $('#td-a', body).value.split('\n'), b = $('#td-b', body).value.split('\n');
+      const rawA = normLines($('#td-a', body).value), rawB = normLines($('#td-b', body).value);
+      const a = rawA.map(normTok), b = rawB.map(normTok);
       const n=a.length, m=b.length;
-      const dp = Array.from({length:n+1},()=>new Array(m+1).fill(0));
-      for(let i=n-1;i>=0;i--) for(let j=m-1;j>=0;j--)
-        dp[i][j] = a[i]===b[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j],dp[i][j+1]);
-      let i=0,j=0, html='';
-      while(i<n&&j<m){
-        if(a[i]===b[j]){ html+=`<div style="color:var(--text-2)">  ${escapeHtml(a[i])}</div>`; i++; j++; }
-        else if(dp[i+1][j]>=dp[i][j+1]){ html+=`<div style="color:var(--error)">- ${escapeHtml(a[i])}</div>`; i++; }
-        else { html+=`<div style="color:var(--success)">+ ${escapeHtml(b[j])}</div>`; j++; }
+      // 按行对比时逐行再按词高亮；按词/字模式直接对 token 序列做 LCS
+      const isLineMode = $('#td-mode', body).value==='line';
+      const seqA = isLineMode ? a : a.flatMap(l=>tokenize(rawA[a.indexOf(l)]));
+      // 简化：词/字模式把整段当作一个“行”的 token 序列
+      let A, B;
+      if(isLineMode){ A = a; B = b; }
+      else {
+        const fullA = normTok($('#td-a', body).value), fullB = normTok($('#td-b', body).value);
+        const ta = tokenize($('#td-ic', body).checked?fullA.toLowerCase():fullA);
+        const tb = tokenize($('#td-ic', body).checked?fullB.toLowerCase():fullB);
+        A = ta; B = tb;
       }
-      while(i<n){ html+=`<div style="color:var(--error)">- ${escapeHtml(a[i])}</div>`; i++; }
-      while(j<m){ html+=`<div style="color:var(--success)">+ ${escapeHtml(b[j])}</div>`; j++; }
+      const dp = Array.from({length:A.length+1},()=>new Array(B.length+1).fill(0));
+      for(let i=A.length-1;i>=0;i--) for(let j=B.length-1;j>=0;j--)
+        dp[i][j] = A[i]===B[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j],dp[i][j+1]);
+      let i=0,j=0, html='', add=0, del=0, same=0;
+      const esc = x => escapeHtml(x===''?' ':x).replace(/\n/g,'⏎');
+      while(i<A.length&&j<B.length){
+        if(A[i]===B[j]){ html+=`<div style="color:var(--text-2)">  ${esc(A[i])}</div>`; i++; j++; same++; }
+        else if(dp[i+1][j]>=dp[i][j+1]){ html+=`<div style="color:var(--error)">- ${esc(A[i])}</div>`; i++; del++; }
+        else { html+=`<div style="color:var(--success)">+ ${esc(B[j])}</div>`; j++; add++; }
+      }
+      while(i<A.length){ html+=`<div style="color:var(--error)">- ${esc(A[i])}</div>`; i++; del++; }
+      while(j<B.length){ html+=`<div style="color:var(--success)">+ ${esc(B[j])}</div>`; j++; add++; }
+      const changed = add+del;
       $('#td-result', body).innerHTML = `<div class="result-box">${html||'两边完全一致'}</div>
+        <div class="hint" style="margin-top:6px">📊 共 <b>${same}</b> 处相同、<b style="color:var(--success)">+${add}</b> 新增、<b style="color:var(--error)">-${del}</b> 删除${changed===0?'（两边一致）':''}。</div>
         <div class="btn-row"><button class="btn" id="td-copy">复制对比结果</button></div>`;
       $('#td-copy', body).onclick = () => copyText($('#td-result .result-box', body).textContent);
     };
+    $('#td-swap', body).onclick = () => {
+      const a=$('#td-a', body), b=$('#td-b', body); const t=a.value; a.value=b.value; b.value=t;
+    };
+    $('#td-clear', body).onclick = () => { $('#td-a', body).value=''; $('#td-b', body).value=''; $('#td-result', body).innerHTML=''; };
   }
 };
 
-// 去除多余空白行
+// 去除多余空白行（支持多种处理模式与逐行清洗）
 AppTools['remove-blank'] = {
   build(body){
     body.innerHTML = `
-      <div class="mb"><label class="field-label">输入文本</label><textarea class="txt" id="rb-in" placeholder="粘贴文本"></textarea></div>
-      <button class="btn" id="rb-run">去除空行</button>
+      <div class="mb"><label class="field-label">输入文本</label><textarea class="txt" id="rb-in" placeholder="粘贴文本（日志 / 名单 / 代码等）"></textarea></div>
+      <div class="row mb" style="flex-wrap:wrap;gap:14px;align-items:center">
+        <label class="field-label" style="margin:0">处理方式</label>
+        <select class="sel" id="rb-mode" aria-label="处理方式">
+          <option value="all">删除所有空行</option>
+          <option value="collapse">多个连续空行合并为 1 个</option>
+          <option value="edge">仅删除首尾空行</option>
+        </select>
+        <label class="mb-sm"><input type="checkbox" id="rb-space" checked> 同时去除每行首尾空白</label>
+        <label class="mb-sm"><input type="checkbox" id="rb-fake" checked> 删除仅含空格的「伪空行」</label>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="rb-run">处理</button>
+        <button class="btn btn-ghost" id="rb-clear">清空</button>
+      </div>
       <div id="rb-result"></div>`;
     $('#rb-run', body).onclick = () => {
-      const out = $('#rb-in', body).value.split('\n').filter(l => l.trim() !== '').join('\n');
-      $('#rb-result', body).innerHTML = `<textarea class="txt" id="rb-out">${escapeHtml(out)}</textarea>
+      const raw = $('#rb-in', body).value;
+      const trim = $('#rb-space', body).checked;
+      const fake = $('#rb-fake', body).checked;
+      const isEmpty = l => (fake ? l.trim()==='' : l==='');
+      let lines = raw.split('\n');
+      if(trim) lines = lines.map(l => l.replace(/^\s+|\s+$/g,''));
+      const mode = $('#rb-mode', body).value; let out;
+      if(mode==='all'){ out = lines.filter(l => !isEmpty(l)); }
+      else if(mode==='collapse'){
+        const r=[]; let prevEmpty=false;
+        for(const l of lines){ const e=isEmpty(l); if(e&&prevEmpty) continue; r.push(l); prevEmpty=e; }
+        out = r;
+      } else { // edge：仅去首尾
+        let s=0,e=lines.length-1;
+        while(s<lines.length && isEmpty(lines[s])) s++;
+        while(e>=0 && isEmpty(lines[e])) e--;
+        out = lines.slice(s, e+1);
+      }
+      const removed = lines.length - out.length;
+      const text = out.join('\n');
+      $('#rb-result', body).innerHTML = `<textarea class="txt" id="rb-out">${escapeHtml(text)}</textarea>
+        <div class="hint" style="margin-top:6px">📊 共 ${lines.length} 行，移除 <b>${removed}</b> 行，剩余 <b>${out.length}</b> 行。</div>
         <div class="btn-row"><button class="btn" id="rb-copy">复制</button></div>`;
-      $('#rb-copy', body).onclick = () => copyText(out);
+      $('#rb-copy', body).onclick = () => copyText(text);
     };
+    $('#rb-clear', body).onclick = () => { $('#rb-in', body).value=''; $('#rb-result', body).innerHTML=''; };
   }
 };
 
@@ -4720,15 +4805,95 @@ AppTools['img-upscale'] = {
 };
 
 // 二维码解析（jsQR）
+// 贵金属价格换算（实时市场价：gold-api.com 取 XAU/XAG/XPT/XPD 美元/盎司，open.er-api.com 取美元兑人民币）
+AppTools['metal-price'] = {
+  build(body){
+    const OZ_G = 31.1034768; // 1 金衡盎司 = 克
+    const METALS = {
+      XAU:{name:'黄金', color:'#e6b422', purity:[['999 足金',0.999],['9999 万足金',0.9999],['990 金',0.99],['916 22K',0.916],['750 18K',0.75],['585 14K',0.585],['375 9K',0.375]]},
+      XAG:{name:'白银', color:'#9aa6b2', purity:[['999 足银',0.999],['990 银',0.99],['925 银',0.925],['800 银',0.8]]},
+      XPT:{name:'铂金', color:'#d9d9d9', purity:[['999 铂',0.999],['950 铂',0.95],['900 铂',0.9]]},
+      XPD:{name:'钯金', color:'#c9a0a0', purity:[['999 钯',0.999],['950 钯',0.95]]},
+    };
+    body.innerHTML = `
+      <div class="hint">🔒 实时价格来自公开行情接口（gold-api.com 美元/盎司 + open.er-api.com 美元兑人民币），仅作估算参考，非交易报价；刷新失败时使用内置参考价。</div>
+      <div class="row mb" style="flex-wrap:wrap;gap:12px;align-items:center">
+        <div><label class="field-label">金属</label><select class="sel" id="mp-metal">${Object.entries(METALS).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('')}</select></div>
+        <div><label class="field-label">成色（纯度）</label><select class="sel" id="mp-purity"></select></div>
+        <div><label class="field-label">重量（克）</label><input type="number" class="inp" id="mp-g" value="10" min="0" step="0.1"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="mp-run">实时换算</button>
+        <button class="btn btn-ghost" id="mp-refresh">🔄 刷新行情</button>
+        <span class="hint" id="mp-updated"></span>
+      </div>
+      <div id="mp-result" class="mb"></div>
+      <div id="mp-table" class="mb"></div>`;
+    // 内置参考价（USD/oz，刷新失败兜底）
+    const FALLBACK = { XAU:4597, XAG:68.5, XPT:1828, XPD:1339 };
+    let usdCny = 7.1, updated = '', priceOz = {...FALLBACK};
+    const puritySel = $('#mp-purity', body);
+    function fillPurity(){
+      const m = $('#mp-metal', body).value;
+      puritySel.innerHTML = METALS[m].purity.map(([n,p])=>`<option value="${p}">${n}（${p*100}%）</option>`).join('');
+    }
+    fillPurity();
+    $('#mp-metal', body).onchange = fillPurity;
+    async function loadRates(silent){
+      try{
+        const [golds, fx] = await Promise.all([
+          fetch('https://api.gold-api.com/price/'+$('#mp-metal', body).value).then(r=>r.json()),
+          fetch('https://open.er-api.com/v6/latest/USD').then(r=>r.json()),
+        ]);
+        if(golds && typeof golds.price==='number') priceOz[$('#mp-metal', body).value] = golds.price;
+        if(fx && fx.rates && fx.rates.CNY) usdCny = fx.rates.CNY;
+        updated = (golds && golds.updatedAtReadable) ? (golds.updatedAtReadable+'（美元行情）') : '刚刚';
+        if(!silent) toast('行情已刷新');
+        return true;
+      }catch(e){ if(!silent) toast('刷新失败，使用内置参考价','err'); return false; }
+    }
+    async function calc(){
+      const m = $('#mp-metal', body).value, info = METALS[m];
+      const purity = parseFloat(puritySel.value), g = parseFloat($('#mp-g', body).value)||0;
+      const ozUsd = priceOz[m], cnyPerGram = ozUsd * usdCny / OZ_G; // 纯金属每克人民币
+      const pct = (purity*100).toFixed(purity*100%1?1:0);
+      const perGram = cnyPerGram * purity;            // 该成色每克
+      const total = perGram * g;
+      const cnyPerGramPure = cnyPerGram;
+      $('#mp-result', body).innerHTML = `
+        <div class="result-box" style="border:none;box-shadow:none">
+          <div style="font-size:15px;margin-bottom:8px">${info.name}（${pct}% 成色）实时参考价</div>
+          <div class="big-num" style="color:var(--primary)">¥ ${perGram.toFixed(2)} <span style="font-size:14px;color:var(--text-2)">/ 克</span></div>
+          <div class="hint" style="margin-top:6px">${g} 克 ≈ <b style="color:var(--primary)">¥ ${total.toFixed(2)}</b>　|　纯金属基准 ¥${cnyPerGramPure.toFixed(2)}/克（${ozUsd.toFixed(2)} 美元/盎司 ÷ ${OZ_G} × 汇率 ${usdCny.toFixed(4)}）</div>
+        </div>`;
+      // 全金属速览表
+      const rows = Object.entries(METALS).map(([k,v])=>{
+        const pg = priceOz[k]*usdCny/OZ_G;
+        return `<tr><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${v.color};margin-right:6px"></span>${v.name}</td>
+          <td>$${priceOz[k].toFixed(2)}/oz</td><td>¥${pg.toFixed(2)}/克（纯）</td>
+          <td>¥${(pg*0.999).toFixed(2)}/克（999）</td></tr>`;
+      }).join('');
+      $('#mp-table', body).innerHTML = `<div class="field-label">全金属行情速览</div>
+        <table class="code" style="width:100%"><thead><tr><th>金属</th><th>美元/盎司</th><th>人民币/克(纯)</th><th>人民币/克(999)</th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="hint" style="margin-top:4px">⚠️ 以上为估算参考价，实际回收/零售价含手续费与损耗，请以当地门店为准。</div>`;
+      $('#mp-updated', body).textContent = updated ? ('更新：'+updated) : '';
+    }
+    $('#mp-run', body).onclick = calc;
+    $('#mp-refresh', body).onclick = async () => { $('#mp-refresh', body).disabled=true; await loadRates(false); await calc(); $('#mp-refresh', body).disabled=false; };
+    // 首次进入静默拉取行情
+    (async () => { await loadRates(true); await calc(); })();
+  }
+};
+
 AppTools['qr-decode'] = {
   build(body){
     body.innerHTML = `
-      <div class="mb"><label class="field-label">上传含二维码的图片</label>
+      <div class="mb"><label class="field-label">上传含二维码的图片（支持 JPG / PNG / WEBP 等）</label>
         <input type="file" class="inp" id="qr-file" accept="image/*" aria-label="上传二维码图片"></div>
       <div id="qr-prev" class="mb"></div>
       <button class="btn" id="qr-run" disabled>识别</button>
       <div id="qr-result"></div>`;
-    body._img = null;
+    body._img = null; body._busy = false;
     $('#qr-file', body).onchange = async (e) => {
       const f = e.target.files[0]; if(!f) return;
       if(body._img && body._img._url) URL.revokeObjectURL(body._img._url);
@@ -4741,34 +4906,360 @@ AppTools['qr-decode'] = {
       cv.style.width=dw+'px'; cv.style.maxWidth='100%';
       cv.getContext('2d').drawImage(body._img,0,0,cv.width,cv.height);
       $('#qr-prev', body).innerHTML=''; $('#qr-prev', body).appendChild(cv);
-      $('#qr-run', body).disabled = false;
+      $('#qr-run', body).disabled = false; $('#qr-result', body).innerHTML='';
     };
-    $('#qr-run', body).onclick = () => {
-      const img = body._img; if(!img){ toast('请先上传图片','err'); return; }
-      const c = document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
-      const cx=c.getContext('2d'); cx.drawImage(img,0,0);
-      const imgd = cx.getImageData(0,0,c.width,c.height);
-      const code = jsQR(imgd.data, c.width, c.height);
-      if(code && code.data){
-        const d = code.data;
-        let kind='纯文本', tip='这是一段普通文本，可直接复制使用。';
-        if(/^https?:\/\//i.test(d)){ kind='网址链接'; tip='这是一个网页链接，点击下方按钮可在新标签打开（请确认来源可信后再访问）。'; }
-        else if(/^WIFI:/i.test(d)){ kind='WiFi 配置'; tip='这是 WiFi 连接信息（含名称与密码），手机扫码可直接连接。'; }
-        else if(/^(tel|mailto|smsto|geo):/i.test(d)){ kind='动作指令'; tip='这是电话 / 邮箱 / 短信 / 地理位置等动作指令。'; }
-        else if(/^BEGIN:VCARD/i.test(d)){ kind='名片'; tip='这是电子名片（vCard），可导入通讯录。'; }
-        $('#qr-result', body).innerHTML = `<div class="result-box">识别结果（<b>${kind}</b>）：<br><span style="word-break:break-all;">${escapeHtml(d)}</span></div>
-          <div class="hint" style="margin-top:6px;">🔎 解读：${tip}</div>
-          <div class="btn-row"><button class="btn" id="qr-copy">复制结果</button>${/^https?:\/\//i.test(d)?'<a class="btn btn-ghost" id="qr-open" href="'+escapeHtml(d)+'" target="_blank" rel="noopener">打开链接</a>':''}</div>`;
-        $('#qr-copy', body).onclick = () => copyText(d);
-      } else {
-        $('#qr-result', body).innerHTML = `<div class="result-box err">未识别到二维码，请尝试更清晰或对比度更高的图片。</div>
-          <div class="hint" style="margin-top:6px;">🔎 解读：识别失败多为图像模糊、反光、部分遮挡或二维码过小。建议正对拍摄、保证四角完整、提高亮度后重试。</div>`;
+    async function ensureJsQR(){
+      if(typeof jsQR !== 'undefined') return true;
+      const urls=['https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js','https://unpkg.com/jsqr@1.4.0/dist/jsQR.js','https://esm.sh/jsqr@1.4.0/dist/jsQR.js'];
+      for(const u of urls){ try{ await loadScriptSrc(u); if(typeof jsQR !== 'undefined') return true; }catch(_){ } }
+      return false;
+    }
+    // 多策略解码：原图 → 反色 → 二值化 → 反色二值化；并对小图做 2× 放大重试
+    function decodeCanvas(src){
+      function tryData(data, w, h){
+        if(typeof jsQR === 'undefined') return null;
+        let r = jsQR(data, w, h); if(r) return r;
+        const inv = new Uint8ClampedArray(data.length);
+        for(let i=0;i<inv.length;i+=4){ inv[i]=255-data[i]; inv[i+1]=255-data[i+1]; inv[i+2]=255-data[i+2]; inv[i+3]=255; }
+        r = jsQR(inv, w, h); if(r) return r;
+        const bin = new Uint8ClampedArray(data.length);
+        for(let i=0;i<bin.length;i+=4){ const lum=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2]; const v=lum>128?255:0; bin[i]=bin[i+1]=bin[i+2]=v; bin[i+3]=255; }
+        r = jsQR(bin, w, h); if(r) return r;
+        const bin2 = new Uint8ClampedArray(data.length);
+        for(let i=0;i<bin2.length;i+=4){ const lum=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2]; const v=lum>128?0:255; bin2[i]=bin2[i+1]=bin2[i+2]=v; bin2[i+3]=255; }
+        return jsQR(bin2, w, h);
       }
+      const cx = src.getContext('2d');
+      const d = cx.getImageData(0,0,src.width,src.height);
+      let code = tryData(d.data, src.width, src.height);
+      if(!code && (src.width < 600 || src.height < 600)){
+        const big = document.createElement('canvas'); big.width=src.width*2; big.height=src.height*2;
+        big.getContext('2d').drawImage(src,0,0,big.width,big.height);
+        code = tryData(big.getContext('2d').getImageData(0,0,big.width,big.height).data, big.width, big.height);
+      }
+      return code;
+    }
+    $('#qr-run', body).onclick = async () => {
+      const img = body._img;
+      if(!img){ toast('请先上传图片','err'); return; }
+      if(body._busy) return; body._busy = true;
+      const btn = $('#qr-run', body); btn.disabled = true; btn.innerHTML = '<span class="loading"><span class="spinner"></span>识别中…</span>';
+      try{
+        const ok = await ensureJsQR();
+        if(!ok){ $('#qr-result', body).innerHTML = `<div class="result-box err">二维码识别库加载失败，请检查网络后重试（库来自 jsdelivr/unpkg）。</div>`; return; }
+        const c = document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
+        c.getContext('2d').drawImage(img,0,0);
+        const code = decodeCanvas(c);
+        if(code && code.data){
+          const d = code.data;
+          let kind='纯文本', tip='这是一段普通文本，可直接复制使用。';
+          if(/^https?:\/\//i.test(d)){ kind='网址链接'; tip='这是一个网页链接，点击下方按钮可在新标签打开（请确认来源可信后再访问）。'; }
+          else if(/^WIFI:/i.test(d)){ kind='WiFi 配置'; tip='这是 WiFi 连接信息（含名称与密码），手机扫码可直接连接。'; }
+          else if(/^(tel|mailto|smsto|geo):/i.test(d)){ kind='动作指令'; tip='这是电话 / 邮箱 / 短信 / 地理位置等动作指令。'; }
+          else if(/^BEGIN:VCARD/i.test(d)){ kind='名片'; tip='这是电子名片（vCard），可导入通讯录。'; }
+          $('#qr-result', body).innerHTML = `<div class="result-box">识别结果（<b>${kind}</b>）：<br><span style="word-break:break-all;">${escapeHtml(d)}</span></div>
+            <div class="hint" style="margin-top:6px;">🔎 解读：${tip}</div>
+            <div class="btn-row"><button class="btn" id="qr-copy">复制结果</button>${/^https?:\/\//i.test(d)?'<a class="btn btn-ghost" id="qr-open" href="'+escapeHtml(d)+'" target="_blank" rel="noopener">打开链接</a>':''}</div>`;
+          $('#qr-copy', body).onclick = () => copyText(d);
+        } else {
+          $('#qr-result', body).innerHTML = `<div class="result-box err">未识别到二维码，请尝试更清晰或对比度更高的图片。</div>
+            <div class="hint" style="margin-top:6px;">🔎 解读：识别失败多为图像模糊、反光、部分遮挡或二维码过小。建议正对拍摄、保证四角完整、提高亮度后重试；深色底浅色码可尝试反色。</div>`;
+        }
+      }catch(err){
+        $('#qr-result', body).innerHTML = `<div class="result-box err">识别出错：${escapeHtml(errMsg(err))}</div>`;
+      } finally { body._busy = false; btn.disabled = false; btn.textContent = '识别'; }
     };
   }
 };
 
 // JSON / YAML / XML 互转
+// JWT 解析调试器（纯前端，HS256 可填密钥校验）
+AppTools['jwt-debug'] = {
+  build(body){
+    function b64urlDecode(s){
+      s = s.replace(/-/g,'+').replace(/_/g,'/');
+      const pad = s.length%4 ? '='.repeat(4 - s.length%4) : '';
+      const bin = atob(s+pad); const bytes = new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
+    }
+    async function hmacSha256(key, data){
+      const enc = new TextEncoder();
+      const ck = await crypto.subtle.importKey('raw', enc.encode(key), {name:'HMAC', hash:'SHA-256'}, false, ['sign']);
+      const sig = await crypto.subtle.sign('HMAC', ck, enc.encode(data));
+      return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    }
+    function fmtTime(t){
+      if(!t) return '—';
+      const d = new Date(t*1000); return d.toLocaleString('zh-CN',{hour12:false}) + '（' + t + '）';
+    }
+    body.innerHTML = `
+      <div class="mb"><label class="field-label">粘贴 JWT（Header.Payload.Signature）</label>
+        <textarea class="txt" id="jw-token" placeholder="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.xxxxx"></textarea></div>
+      <div class="row mb" style="flex-wrap:wrap;gap:12px;align-items:center">
+        <div style="flex:1;min-width:200px"><label class="field-label">HS256 校验密钥（可选，仅用于校验签名）</label><input type="text" class="inp" id="jw-secret" placeholder="填写后点「校验签名」"></div>
+        <button class="btn" id="jw-parse">解析</button>
+        <button class="btn btn-ghost" id="jw-verify">校验签名</button>
+      </div>
+      <div id="jw-out"></div>`;
+    function render(){
+      const tok = $('#jw-token', body).value.trim();
+      if(!tok){ $('#jw-out', body).innerHTML=''; return; }
+      const parts = tok.split('.');
+      if(parts.length!==3){ $('#jw-out', body).innerHTML='<div class="result-box err">格式错误：JWT 应为 3 段（由 2 个“.”分隔）。</div>'; return; }
+      let h, p;
+      try{ h = JSON.parse(b64urlDecode(parts[0])); p = JSON.parse(b64urlDecode(parts[1])); }
+      catch(e){ $('#jw-out', body).innerHTML='<div class="result-box err">Header 或 Payload 不是合法 JSON（解码失败）。</div>'; return; }
+      const now = Math.floor(Date.now()/1000);
+      let expHtml = '—';
+      if(p.exp){
+        const left = p.exp - now;
+        const cls = left<0 ? 'var(--error)' : (left<300 ? 'var(--warning,#fa8c16)' : 'var(--success)');
+        expHtml = `<b style="color:${cls}">${left<0?('已过期 '+Math.abs(left)+' 秒'):('剩余 '+left+' 秒')}</b>`;
+      }
+      const row = (k,v)=>`<tr><td style="color:var(--text-2);white-space:nowrap;padding:4px 10px;border-bottom:1px solid var(--border)">${k}</td><td style="padding:4px 10px;border-bottom:1px solid var(--border);word-break:break-all">${escapeHtml(String(v))}</td></tr>`;
+      $('#jw-out', body).innerHTML = `
+        <div class="result-box" style="border:none;box-shadow:none">
+          <div class="field-label">Header（算法/类型）</div>
+          <table class="code" style="width:100%">${Object.entries(h).map(([k,v])=>row(k,v)).join('')}</table>
+          <div class="field-label" style="margin-top:12px">Payload（声明）</div>
+          <table class="code" style="width:100%">${Object.entries(p).map(([k,v])=>{
+            if(['iat','exp','nbf'].includes(k) && typeof v==='number') return row(k, fmtTime(v));
+            return row(k,v);
+          }).join('')}</table>
+          <div class="hint" style="margin-top:8px">⏱️ 过期：${expHtml}　|　签发：${fmtTime(p.iat)}　|　生效：${fmtTime(p.nbf)}</div>
+          <div class="field-label" style="margin-top:12px">Signature（原始，Base64url）</div>
+          <pre class="code" style="white-space:pre-wrap;word-break:break-all">${escapeHtml(parts[2])}</pre>
+          <div class="hint" style="margin-top:6px">🔒 未填密钥时无法校验签名；HS256 为对称密钥、RS256/ES256 为公私钥，前端仅支持 HS256 校验。</div>
+        </div>`;
+      body._hp = parts[0]+'.'+parts[1]; body._sig = parts[2];
+    }
+    $('#jw-parse', body).onclick = render;
+    $('#jw-token', body).addEventListener('input', ()=>{ /* 实时解析，防抖 */ clearTimeout(body._t); body._t=setTimeout(render,300); });
+    $('#jw-verify', body).onclick = async () => {
+      if(!body._hp){ toast('请先解析','err'); return; }
+      const alg = (JSON.parse(b64urlDecode(body._hp.split('.')[0])).alg||'').toUpperCase();
+      if(alg!=='HS256'){ $('#jw-out', body).insertAdjacentHTML('beforeend','<div class="result-box err">当前算法为 '+alg+'，前端仅支持 HS256 校验，请提供对应工具或后端校验。</div>'); return; }
+      const secret = $('#jw-secret', body).value; if(!secret){ toast('请填写 HS256 密钥','err'); return; }
+      const calc = await hmacSha256(secret, body._hp);
+      const ok = calc === body._sig;
+      $('#jw-out', body).insertAdjacentHTML('beforeend', `<div class="result-box ${ok?'ok':'err'}">${ok?'✅ 签名校验通过（密钥匹配）':'❌ 签名不匹配（密钥错误或令牌被篡改）'}</div>`);
+    };
+  }
+};
+
+// 代码对比 Diff（并排/统一，逐行/逐词）
+AppTools['code-diff'] = {
+  build(body){
+    body.innerHTML = `
+      <div class="row mb">
+        <div><label class="field-label">旧代码（左侧）</label><textarea class="txt" id="cd-a" placeholder="粘贴旧版本" style="font-family:Consolas,Menlo,monospace"></textarea></div>
+        <div><label class="field-label">新代码（右侧）</label><textarea class="txt" id="cd-b" placeholder="粘贴新版本" style="font-family:Consolas,Menlo,monospace"></textarea></div>
+      </div>
+      <div class="row mb" style="flex-wrap:wrap;gap:14px;align-items:center">
+        <label class="field-label" style="margin:0">视图</label>
+        <select class="sel" id="cd-view"><option value="side">并排对照</option><option value="unified">统一视图</option></select>
+        <label class="field-label" style="margin:0">粒度</label>
+        <select class="sel" id="cd-mode"><option value="line">按行</option><option value="word">按词</option></select>
+        <label class="mb-sm"><input type="checkbox" id="cd-ln" checked> 显示行号</label>
+        <button class="btn" id="cd-run">对比</button>
+        <button class="btn ghost" id="cd-copy">复制差异</button>
+      </div>
+      <div id="cd-out"></div>`;
+    function lcs(a,b){
+      const n=a.length,m=b.length;
+      const dp=Array.from({length:n+1},()=>new Array(m+1).fill(0));
+      for(let i=n-1;i>=0;i--) for(let j=m-1;j>=0;j--)
+        dp[i][j]=a[i]===b[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+      const ops=[]; let i=0,j=0;
+      while(i<n&&j<m){
+        if(a[i]===b[j]){ ops.push({t:'eq',a:a[i],b:b[j]}); i++; j++; }
+        else if(dp[i+1][j]>=dp[i][j+1]){ ops.push({t:'del',a:a[i]}); i++; }
+        else { ops.push({t:'add',b:b[j]}); j++; }
+      }
+      while(i<n){ ops.push({t:'del',a:a[i]}); i++; }
+      while(j<m){ ops.push({t:'add',b:b[j]}); j++; }
+      return ops;
+    }
+    function wordDiff(al,bl){
+      const aw=al.split(/(\s+)/), bw=bl.split(/(\s+)/);
+      const ops=lcs(aw,bw); let s='';
+      for(const o of ops){ if(o.t==='eq') s+=escapeHtml(o.a); else if(o.t==='del') s+=`<del style="color:var(--error)">${escapeHtml(o.a)}</del>`; else s+=`<ins style="color:var(--success);text-decoration:none">${escapeHtml(o.b)}</ins>`; }
+      return s;
+    }
+    $('#cd-run', body).onclick = () => {
+      const A=$('#cd-a', body).value.split('\n'), B=$('#cd-b', body).value.split('\n');
+      const ops=lcs(A,B), mode=$('#cd-mode', body).value, showLn=$('#cd-ln', body).checked;
+      const ln=(n)=> showLn?`<td class="cd-ln">${n}</td>`:'';
+      if($('#cd-view', body).value==='unified'){
+        let html='<table class="code" style="width:100%;border-collapse:collapse">', la=0,lb=0;
+        for(const o of ops){
+          if(o.t==='eq'){ la++;lb++; html+=`<tr><td class="cd-ln">${la}</td><td class="cd-ln">${lb}</td><td class="cd-eq"> ${escapeHtml(o.a)}</td></tr>`; }
+          else if(o.t==='del'){ la++; html+=`<tr><td class="cd-ln">${la}</td><td class="cd-ln"></td><td class="cd-del">-${escapeHtml(o.a)}</td></tr>`; }
+          else { lb++; html+=`<tr><td class="cd-ln"></td><td class="cd-ln">${lb}</td><td class="cd-add">+${escapeHtml(o.b)}</td></tr>`; }
+        }
+        html+='</table>';
+        $('#cd-out', body).innerHTML = `<div class="result-box" style="border:none;box-shadow:none;padding:0;max-height:none;overflow:auto">${html}</div>`;
+      } else {
+        let L='', R='', la=0,lb=0;
+        for(const o of ops){
+          if(o.t==='eq'){ la++;lb++; const c=escapeHtml(o.a); L+=`<tr>${ln(la)}<td class="cd-eq">${c}</td></tr>`; R+=`<tr>${ln(lb)}<td class="cd-eq">${c}</td></tr>`; }
+          else if(o.t==='del'){ la++; const c= mode==='word'?wordDiff(o.a,''):escapeHtml(o.a); L+=`<tr>${ln(la)}<td class="cd-del">${c}</td></tr>`; R+=`<tr>${ln('')}<td class="cd-blank"></td></tr>`; }
+          else { lb++; const c= mode==='word'?wordDiff('',o.b):escapeHtml(o.b); L+=`<tr>${ln('')}<td class="cd-blank"></td></tr>`; R+=`<tr>${ln(lb)}<td class="cd-add">${c}</td></tr>`; }
+        }
+        $('#cd-out', body).innerHTML = `<div class="result-box" style="border:none;box-shadow:none;padding:0;max-height:none;overflow:auto"><table style="width:100%;border-collapse:collapse"><tr><td style="width:50%;vertical-align:top"><table class="code" style="width:100%">${L}</table></td><td style="width:50%;vertical-align:top"><table class="code" style="width:100%">${R}</table></td></tr></table></div>`;
+      }
+      const diff = $('#cd-out .result-box', body);
+      $('#cd-copy', body).onclick = () => copyText(diff.textContent);
+    };
+    $('#cd-run', body).click();
+  }
+};
+
+// SQL 格式化（优先用 CDN 的 sql-formatter，离线降级内置简化版）
+AppTools['sql-format'] = {
+  build(body){
+    body.innerHTML = `
+      <div class="row mb" style="flex-wrap:wrap;gap:12px;align-items:center">
+        <div><label class="field-label">方言</label><select class="sel" id="sf-dialect"><option value="mysql">MySQL</option><option value="postgresql">PostgreSQL</option><option value="sqlserver">SQL Server</option><option value="sqlite">SQLite</option></select></div>
+        <button class="btn" id="sf-fmt">格式化</button>
+        <button class="btn ghost" id="sf-min">压缩为一行</button>
+        <button class="btn ghost" id="sf-copy">复制结果</button>
+      </div>
+      <div class="mb"><label class="field-label">输入 SQL</label><textarea class="txt" id="sf-in" style="font-family:Consolas,Menlo,monospace" placeholder="SELECT id,name FROM users WHERE age>18 ORDER BY id DESC;"></textarea></div>
+      <div class="mb"><label class="field-label">输出</label><pre class="code" id="sf-out"></pre></div>
+      <div class="hint" id="sf-hint"></div>`;
+    async function ensureFormatter(){
+      if(window.sqlFormatter) return window.sqlFormatter;
+      const urls=['https://cdn.jsdelivr.net/npm/sql-formatter@15.4.9/dist/sql-formatter.min.js','https://unpkg.com/sql-formatter@15.4.9/dist/sql-formatter.min.js'];
+      for(const u of urls){ try{ await loadScriptSrc(u); if(window.sqlFormatter) return window.sqlFormatter; }catch(_){} }
+      return null;
+    }
+    function fallbackFmt(sql){
+      const kw=['select','from','where','group by','order by','having','limit','offset','inner join','left join','right join','full join','join','on','and','or','union','union all','insert into','values','update','set','delete from','create table','alter table','case','when','then','else','end','as'];
+      let s=sql.replace(/\s+/g,' ').trim();
+      kw.forEach(k=>{ const re=new RegExp('\\b'+k+'\\b','gi'); s=s.replace(re, m=>'\n'+m.toUpperCase()); });
+      return s.replace(/\n+/g,'\n').trim();
+    }
+    $('#sf-fmt', body).onclick = async () => {
+      const sql=$('#sf-in', body).value; if(!sql.trim()){ toast('请输入 SQL','err'); return; }
+      const f=await ensureFormatter();
+      try{
+        let out;
+        if(f){ out=f.format(sql,{language:$('#sf-dialect', body).value, tabWidth:2, keywordCase:'upper'}); $('#sf-hint', body).textContent='✅ 已用 sql-formatter 格式化'; }
+        else { out=fallbackFmt(sql); $('#sf-hint', body).textContent='⚠️ 在线格式化库未加载，已用内置简化版（建议联网获得最佳效果）'; }
+        $('#sf-out', body).textContent=out;
+      }catch(e){ $('#sf-out', body).textContent=fallbackFmt(sql); $('#sf-hint', body).textContent='格式化出错，已降级为内置简化版：'+errMsg(e); }
+    };
+    $('#sf-min', body).onclick = () => { $('#sf-out', body).textContent=$('#sf-in', body).value.replace(/\s+/g,' ').trim(); $('#sf-hint', body).textContent='已压缩为一行'; };
+    $('#sf-copy', body).onclick = () => copyText($('#sf-out', body).textContent);
+  }
+};
+
+// Markdown 编辑器 + 实时预览（优先用 marked，离线降级内置简化渲染）
+AppTools['md-editor'] = {
+  build(body){
+    body.innerHTML = `
+      <div class="btn-row mb">
+        <button class="btn ghost" data-md="h">标题</button>
+        <button class="btn ghost" data-md="b">加粗</button>
+        <button class="btn ghost" data-md="i">斜体</button>
+        <button class="btn ghost" data-md="ul">列表</button>
+        <button class="btn ghost" data-md="code">代码</button>
+        <button class="btn ghost" data-md="link">链接</button>
+        <button class="btn ghost" data-md="table">表格</button>
+        <button class="btn" id="md-copy">复制 HTML</button>
+        <button class="btn ghost" id="md-down">导出 .md</button>
+      </div>
+      <div class="row mb">
+        <div style="flex:1"><label class="field-label">编辑（Markdown）</label><textarea class="txt" id="md-in" style="font-family:Consolas,Menlo,monospace;min-height:320px" placeholder="# 标题&#10;正文 **加粗** 与 *斜体*"></textarea></div>
+        <div style="flex:1"><label class="field-label">预览</label><div id="md-pre" class="result-box" style="border:none;box-shadow:none;min-height:320px;overflow:auto;background:#fff"></div></div>
+      </div>`;
+    const KEYW={h:'## 标题\n',b:'**加粗**',i:'*斜体*',ul:'- 列表项\n',code:'`代码`',link:'[文字](https://)',table:'| 列1 | 列2 |\n| --- | --- |\n| a | b |\n'};
+    body.querySelectorAll('[data-md]').forEach(b=>b.onclick=()=>{ const ta=$('#md-in', body); const ins=KEYW[b.dataset.md]; const s=ta.value, p=ta.selectionStart, q=ta.selectionEnd; ta.value=s.slice(0,p)+ins+s.slice(q); ta.focus(); ta.selectionStart=ta.selectionEnd=p+ins.length; render(); });
+    async function ensureMarked(){
+      if(window.marked) return window.marked;
+      const urls=['https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js','https://unpkg.com/marked@12.0.2/marked.min.js'];
+      for(const u of urls){ try{ await loadScriptSrc(u); if(window.marked) return window.marked; }catch(_){} }
+      return null;
+    }
+    async function render(){
+      const src=$('#md-in', body).value; const m=await ensureMarked();
+      let html;
+      if(m){ try{ html=m.parse(src); }catch(e){ html='<div style="color:var(--error)">渲染出错：'+escapeHtml(errMsg(e))+'</div>'; } }
+      else { html='<div class="hint">⚠️ 在线 Markdown 引擎未加载，已显示原文（联网后自动渲染）。</div>\n'+escapeHtml(src); }
+      $('#md-pre', body).innerHTML=html;
+    }
+    $('#md-in', body).addEventListener('input', ()=>{ clearTimeout(body._t); body._t=setTimeout(render,200); });
+    $('#md-copy', body).onclick = () => copyText($('#md-pre', body).innerHTML);
+    $('#md-down', body).onclick = () => downloadBlob(new Blob([$('#md-in', body).value],{type:'text/markdown'}),'document.md');
+    render();
+  }
+};
+
+// User-Agent 解析（纯前端启发式识别）
+AppTools['ua-parser'] = {
+  build(body){
+    function detect(ua){
+      const r={};
+      // 浏览器
+      if(/Edg\//.test(ua)) r.browser='Microsoft Edge';
+      else if(/OPR\/|Opera/.test(ua)) r.browser='Opera';
+      else if(/Firefox\//.test(ua)) r.browser='Firefox';
+      else if(/Chrome\//.test(ua)) r.browser='Chrome';
+      else if(/Safari\//.test(ua)) r.browser='Safari';
+      else if(/MSIE |Trident\//.test(ua)) r.browser='Internet Explorer';
+      else r.browser='未知';
+      const bv=(ua.match(/(Edg|Chrome|Firefox|Opera|OPR|Safari|Version)\/[\d.]+/)||[])[0];
+      if(bv) r.browserVer=bv.split('/')[1];
+      // 内核
+      if(/Trident\//.test(ua)) r.engine='Trident';
+      else if(/Gecko\//.test(ua) && /Firefox\//.test(ua)) r.engine='Gecko';
+      else if(/AppleWebKit\//.test(ua)) r.engine=/Edg|Chrome|OPR/.test(ua)?'Blink':'WebKit';
+      else r.engine='未知';
+      // 系统
+      if(/Windows NT 10\.0/.test(ua)) r.os='Windows 10/11';
+      else if(/Windows NT 6\.3/.test(ua)) r.os='Windows 8.1';
+      else if(/Windows NT 6\.1/.test(ua)) r.os='Windows 7';
+      else if(/Windows/.test(ua)) r.os='Windows';
+      else if(/iPhone|iPad|iPod/.test(ua)) r.os='iOS / iPadOS';
+      else if(/Mac OS X/.test(ua)) r.os='macOS';
+      else if(/Android/.test(ua)) r.os='Android';
+      else if(/Linux/.test(ua)) r.os='Linux';
+      else if(/CrOS/.test(ua)) r.os='ChromeOS';
+      else r.os='未知';
+      const ov=(ua.match(/(Windows NT|Android|Mac OS X|CPU OS|iPhone OS) [\d_.]+/)||[])[0];
+      if(ov) r.osVer=ov.split(' ').slice(1).join(' ').replace(/_/g,'.');
+      // 设备
+      if(/iPad|Tablet|Android(?!.*Mobile)/.test(ua) && /Android/.test(ua)) r.device='平板';
+      else if(/iPad/.test(ua)) r.device='平板';
+      else if(/Mobile|iPhone|iPod|Android.*Mobile/.test(ua)) r.device='手机';
+      else r.device='桌面';
+      if(/iPhone/.test(ua)) r.model='iPhone';
+      else if(/iPad/.test(ua)) r.model='iPad';
+      else if(/Macintosh/.test(ua)) r.model='Mac';
+      if(/Bot|Crawler|Spider|webdriver|Headless/.test(ua)) { r.bot=true; r.device='爬虫/自动化'; }
+      return r;
+    }
+    body.innerHTML = `
+      <div class="mb"><label class="field-label">User-Agent 字符串</label>
+        <textarea class="txt" id="ua-in" placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0"></textarea></div>
+      <div class="btn-row"><button class="btn" id="ua-run">解析</button><button class="btn ghost" id="ua-sample">填入示例</button></div>
+      <div id="ua-out" class="mb"></div>`;
+    $('#ua-sample', body).onclick = () => { $('#ua-in', body).value='Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36'; render(); };
+    $('#ua-run', body).onclick = render;
+    function render(){
+      const ua=$('#ua-in', body).value.trim(); if(!ua){ $('#ua-out', body).innerHTML=''; return; }
+      const d=detect(ua);
+      const row=(k,v)=>`<tr><td style="color:var(--text-2);padding:4px 10px;border-bottom:1px solid var(--border);white-space:nowrap">${k}</td><td style="padding:4px 10px;border-bottom:1px solid var(--border)">${escapeHtml(v||'—')}</td></tr>`;
+      $('#ua-out', body).innerHTML = `<div class="result-box" style="border:none;box-shadow:none">
+        <table class="code" style="width:100%">${row('浏览器',d.browser+(d.browserVer?' '+d.browserVer:''))}${row('渲染内核',d.engine)}${row('操作系统',d.os+(d.osVer?' '+d.osVer:''))}${row('设备类型',d.device)}${row('设备型号',d.model)}${row('是否爬虫',d.bot?'是':'否')}</table>
+        <div class="hint" style="margin-top:6px">🔎 解析为纯前端正则启发式，覆盖常见浏览器/系统，罕见 UA 可能识别不全。</div>
+      </div>`;
+    }
+  }
+};
+
 AppTools['json-yaml-xml'] = {
   build(body){
     body.innerHTML = `
@@ -5987,6 +6478,7 @@ AppTools['math-formula'] = {
       const clone = preview.cloneNode(true);
       clone.style.position = 'absolute'; clone.style.left = '-99999px'; clone.style.top = '0';
       clone.style.background = '#ffffff'; clone.style.padding = '12px 20px';
+      clone.style.border = 'none'; clone.style.boxShadow = 'none'; clone.style.margin = '0';
       document.body.appendChild(clone);
       try{
         const canvas = await html2canvas(clone, { backgroundColor:'#ffffff', scale:3, logging:false, useCORS:true });
@@ -5999,6 +6491,7 @@ AppTools['math-formula'] = {
       const clone = preview.cloneNode(true);
       clone.style.position = 'absolute'; clone.style.left = '-99999px'; clone.style.top = '0';
       clone.style.background = '#ffffff'; clone.style.padding = '12px 20px';
+      clone.style.border = 'none'; clone.style.boxShadow = 'none'; clone.style.margin = '0';
       document.body.appendChild(clone);
       try{
         const canvas = await html2canvas(clone, { backgroundColor:'#ffffff', scale:3, logging:false, useCORS:true });
@@ -6108,7 +6601,7 @@ const TOOLS = [
   {id:'pdf-split',    name:'PDF 分割',            icon:'✂️', cat:'doc',   desc:'按页码范围（如 1,3,5-8、奇 / 偶、1-10/2）提取选中页为单个 PDF 并下载。'},
   {id:'pdf-toimg',    name:'PDF 转图片',          icon:'🖼️', cat:'doc',   desc:'PDF 页面转为 PNG，支持 100–600 DPI 高清渲染，逐页预览与下载；扫描件仅放大像素、不恢复细节。'},
   {id:'pdf-sign',     name:'PDF 签章 / 签名',      icon:'✍️', cat:'doc',   desc:'手写签名 / 电子章 / 骑缝章 / 上传图片（可去白底），支持 PDF / Word / Excel 添加，拖动定位并调大小后下载，本地合成不外传。'},
-  {id:'office-to-pdf',name:'Office 转 PDF',       icon:'📄', cat:'doc',   desc:'Word / Excel / PPT 等文档浏览器预览后「打印为 PDF」导出（在打印对话框选另存为 PDF），原文件不上传。'},
+  {id:'office-to-pdf',name:'文档转 PDF',          icon:'📄', cat:'doc',   desc:'本地将 Word(.docx)/Excel(.xlsx) 渲染为 PDF 直接下载（保持排版与图片，原文件不上传、不经过打印框）；老版 .doc/.xls/.ppt 请先用 Office/WPS 另存为新格式。'},
   {id:'text-diff',    name:'在线文本对比',        icon:'⇄', cat:'doc',   desc:'两段文本逐行 diff 高亮（新增 / 删除 / 修改），结果可复制，适合合同 / 代码校对。'},
   {id:'file-base64',  name:'文件 Base64',         icon:'🔣', cat:'doc',   desc:'文件与 Base64 / Data URL 互转，支持大文件进度与复制，粘贴 Base64 可还原下载文件。'},
   {id:'remove-blank', name:'去除空白行',          icon:'🧹', cat:'doc',   desc:'一键清理多余空行（保留非空内容），结果可复制，适合整理日志 / 名单。'},
@@ -6146,6 +6639,11 @@ const TOOLS = [
   {id:'xml-format',   name:'XML 格式化',          icon:'📰', cat:'dev',   desc:'美化 XML 结构（固定 2 空格缩进），保留属性顺序并自动补全自闭合标签，结果可复制。'},
   {id:'color-picker', name:'配色取色器',          icon:'🎨', cat:'dev',   desc:'HEX 与 RGB 互转，内置 16 色板，点击复制，适合配色取色。'},
   {id:'code-indent',  name:'代码缩进修复',        icon:'💎', cat:'dev',   desc:'按括号层级统一 JS / JSON / Python 代码缩进（2 / 4 空格或 Tab），结果可复制。'},
+  {id:'jwt-debug',    name:'JWT 解析调试器',      icon:'🔐', cat:'dev',   desc:'解析 JWT（Header/Payload/Signature 三段），展示算法、签发/过期时间与剩余有效期，HS256 可填密钥校验签名；纯前端，不上传。'},
+  {id:'code-diff',    name:'代码对比 Diff',       icon:'🔬', cat:'dev',   desc:'两段代码逐行/逐词 Diff，支持并排对照与统一视图、行号显示、增删改高亮，复制差异结果，开发调试必备。'},
+  {id:'sql-format',   name:'SQL 格式化',         icon:'🗃️', cat:'dev',   desc:'SQL 语句美化（关键字大写、子句换行缩进、自动补全），支持 MySQL/PostgreSQL/SQLServer 方言与压缩还原，结果可复制。'},
+  {id:'md-editor',    name:'Markdown 编辑器',     icon:'📝', cat:'dev',   desc:'左侧编辑右侧实时预览，支持标题/列表/表格/代码块/公式，一键复制 HTML 或导出 .md，写文档利器。'},
+  {id:'ua-parser',    name:'User-Agent 解析',    icon:'🌐', cat:'dev',   desc:'解析 UA 字符串，识别浏览器/内核/操作系统/设备类型与厂商，前端兼容性调试常用，纯前端识别。'},
   {id:'web-search',   name:'联网搜索',            icon:'🔍', cat:'dev',  desc:'由 Cloudflare Functions 通用搜索代理（可配 Brave/Google），未配后端时自动用维基百科兜底；结果新标签打开，国内免墙。'},
   /* ============ 涉及金钱 ============ */
   {id:'mortgage',     name:'房贷计算器',          icon:'🏠', cat:'money',  desc:'商业 / 公积金 / 组合贷三种类型，等额本息或等额本金还款，支持 LPR 加点利率与提前还款，输出月供 / 总利息 / 明细表并导出 CSV。'},
@@ -6160,6 +6658,7 @@ const TOOLS = [
   {id:'fuel',         name:'汽车油耗计算器',      icon:'⛽', cat:'money', desc:'加油金额 / 油价 / 里程算百公里油耗，记录多组求平均，并给出每公里费用与总里程 / 总油费。'},
   {id:'work-overtime',name:'工时加班计算器',      icon:'⏱️', cat:'money', desc:'上下班 + 午休算有效工时，按工作日 / 周末 / 节假日倍率核算加班费，支持午休计入开关与按月汇总。'},
   {id:'salary-cmp',   name:'薪酬对比计算器',      icon:'🧮', cat:'money', desc:'对比不同城市 / 不同薪资方案的税后实际收入：按当地社平工资封顶社保基数、可选公积金比例与专项附加扣除，算个税与五险一金后输出税后月薪 / 年入，多方案并排找出到手最高者。'},
+  {id:'metal-price',  name:'贵金属价格换算',      icon:'🪙', cat:'money', desc:'按实时行情估算黄金 / 白银 / 铂金 / 钯金价值：取美元/盎司（gold-api.com）+ 美元兑人民币（open.er-api.com），换算每克人民币并按成色（999/925 等）算某重量的总价，附全金属速览表。'},
   {id:'renovation',   name:'装修预算估算',        icon:'🏗️', cat:'money', desc:'按面积与档次（简 / 精 / 豪装）估算总预算及分项占比，各项占比可自定义，附条形图可视化。'},
   /* ============ 生活实用 ============ */
   {id:'unit-convert', name:'单位换算',            icon:'📏', cat:'life',  desc:'长度 / 重量 / 温度 / 面积 / 体积 / 速度 / 时间 / 数据存储 / 压强 共九大类单位互转，结果可复制。'},
@@ -6779,6 +7278,13 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-27', items:[
+    '【四十七修】文档转 PDF：原名「Office 转 PDF」与实际功能不符，更名为「文档转 PDF」，说明改为本地将 Word(.docx)/Excel(.xlsx) 渲染为 PDF 直接下载（不经过打印框）。',
+    '【四十七修】在线文本对比：新增对比粒度（按行 / 按词 / 按字符）、忽略大小写、忽略首尾空白、忽略空行，并给出增/删/相同统计与一键交换原文对比文。',
+    '【四十七修】去除空白行：新增处理方式（删除所有空行 / 合并连续空行为 1 个 / 仅删首尾空行）、是否同时去每行首尾空白、是否删「伪空行」，并给出移除行数统计。',
+    '【四十七修】数学公式排版：导出 PNG / SVG 去除灰色边框（克隆节点截图时去掉 border 与 box-shadow），导出更干净。',
+    '【四十七修】二维码解析：修复无法识别——改为按需加载 jsQR（jsDelivr/UNPKG/ESM 三级容灾），并对原图 / 反色 / 二值化 / 放大 4 种策略逐一解码，识别率大幅提升，失败给出明确提示。',
+    '【四十七修】新增「贵金属价格换算」：按实时行情估算黄金 / 白银 / 铂金 / 钯金价值——取美元/盎司（gold-api.com）+ 美元兑人民币（open.er-api.com），换算每克人民币并按成色（999/925 等）算某重量总价，附全金属速览表；刷新失败用内置参考价兜底。',
+    '【四十七修】开发工具新增 5 个：JWT 解析调试器（三段解码 + 过期/剩余 + HS256 密钥校验）、代码对比 Diff（并排/统一、按行/按词、行号与增删改高亮）、SQL 格式化（sql-formatter 在线库 + 离线降级）、Markdown 编辑器（左编右览、工具栏、复制 HTML / 导出 .md）、User-Agent 解析（浏览器/内核/系统/设备启发式识别）。',
     '【四十六修】抽签 / 点名：候选名单存 localStorage，下次自动载入，可一键清空已存名单。',
     '【四十六修】修音（音频）：自动校音改用归一化自相关 + 八度保护 + 对数频率平滑，修五音不全更准更稳；电音改为半音强量化（真正 Auto-Tune 机器人质感）；混响升级多抽头梳状网络（不再是单回声）；WSOLA 重叠相加做窗能量归一，消除幅度涟漪。',
     '【四十六修】AR 测面积 / 拍照类预览：放大后改为保持原比例（contain），不再拉伸变形。',
