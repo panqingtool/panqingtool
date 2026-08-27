@@ -235,8 +235,7 @@ img{max-width:100%;}
 /* ============ 拍照测量类通用 ============ */
 .photo-tool{display:flex;flex-direction:column;gap:10px;}
 .photo-canvas-wrap{position:relative;border:1px solid var(--border);border-radius:10px;background:#111;}
-.photo-canvas-wrap canvas{display:block;max-width:100%;height:auto;margin:0 auto;touch-action:none;}
-.photo-canvas-wrap canvas{display:block;width:100%;max-height:60vh;touch-action:none;}
+.photo-canvas-wrap canvas{display:block;max-width:100%;max-height:60vh;width:auto;height:auto;margin:0 auto;touch-action:none;}
 .photo-hint{font-size:12px;color:var(--text-2);line-height:1.6;}
 .photo-result{font-size:15px;font-weight:700;color:#1890ff;}
 .modal-min{width:36px;height:36px;border-radius:8px;font-size:20px;color:var(--text-2);line-height:1;border:1px solid transparent;background:transparent;cursor:pointer;transition:background .2s ease,color .2s ease;}
@@ -792,7 +791,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.27-b</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.27-c</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -4451,12 +4450,26 @@ AppTools['zodiac'] = {
 // 随机抽签 / 点名
 AppTools['draw'] = {
   build(body){
+    const KEY='pt_draw_list';
+    let saved=''; try{ saved=localStorage.getItem(KEY)||''; }catch(_){}
     body.innerHTML = `
-      <div class="mb"><label class="field-label">候选名单（每行一个）</label><textarea class="txt" id="dr-list" placeholder="张三&#10;李四&#10;王五"></textarea></div>
+      <div class="mb"><label class="field-label">候选名单（每行一个）</label><textarea class="txt" id="dr-list" placeholder="张三&#10;李四&#10;王五">${escapeHtml(saved)}</textarea>
+        <div class="row" style="margin-top:6px;align-items:center;gap:12px;flex-wrap:wrap">
+          <label class="check" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="dr-keep" checked> 记住名单（下次自动载入）</label>
+          <button class="btn ghost" id="dr-clearhist">清空已存名单</button>
+          <span id="dr-num" class="hint"></span>
+        </div></div>
       <button class="btn" id="dr-run">随机抽签</button>
       <div id="dr-result" class="result-box" style="font-size:24px;text-align:center;margin-top:16px"></div>`;
+    const list=$('#dr-list', body), keep=$('#dr-keep', body), num=$('#dr-num', body);
+    const updNum=()=>{ const n=list.value.split('\n').map(s=>s.trim()).filter(Boolean).length; num.textContent= n? `当前 ${n} 人` : ''; };
+    const save=()=>{ if(keep.checked){ try{ localStorage.setItem(KEY, list.value); }catch(_){} } };
+    list.addEventListener('input',()=>{ updNum(); save(); });
+    keep.addEventListener('change',()=>{ if(keep.checked) save(); else try{ localStorage.removeItem(KEY); }catch(_){} });
+    $('#dr-clearhist', body).onclick=()=>{ try{ localStorage.removeItem(KEY); }catch(_){} list.value=''; keep.checked=false; updNum(); $('#dr-result', body).innerHTML=''; toast('已清空保存的名单'); };
+    updNum();
     $('#dr-run', body).onclick = () => {
-      const arr = $('#dr-list', body).value.split('\n').map(s=>s.trim()).filter(Boolean);
+      const arr = list.value.split('\n').map(s=>s.trim()).filter(Boolean);
       if(!arr.length){ toast('请输入候选名单','err'); return; }
       const pick = arr[Math.floor(Math.random()*arr.length)];
       $('#dr-result', body).innerHTML = `🎯 ${escapeHtml(pick)}`;
@@ -5357,7 +5370,7 @@ AppTools['pdf-sign'] = {
       </div>
       <div class="hint">在预览页上用鼠标 / 手指拖动印章到合适位置（建议拖到空白处，不遮挡正文），滚轮可缩放；骑缝章自动贴在每页右缘。所有操作本地完成。</div>
       <div id="ps-prog" class="hint"></div>
-      <div id="ps-preview" class="mb" style="max-height:58vh;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:10px;background:#f3f4f6"></div>
+      <div id="ps-preview" class="mb" style="max-height:48vh;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:#f3f4f6"></div>
       <div class="btn-row"><button class="btn ghost" id="ps-ok">确定位置</button><button class="btn" id="ps-run" disabled>应用并下载</button></div>
       <div id="ps-result"></div>
       <div class="hint">🔒 全程本地处理，文件不上传。PDF 直接写入签名 / 印章；Word / Excel 导出为「带章 PDF」（保留原文与印章）。</div>`;
@@ -5391,7 +5404,15 @@ AppTools['pdf-sign'] = {
       chars.forEach((ch,i)=>{ const a=a0+step*i; x.fillText(ch, size/2+Math.cos(a)*R, size/2+Math.sin(a)*R); });
       return c;
     }
-    const stampCanvas = () => makeStamp($('#ps-text', body).value||' ', 600);
+    const stampCanvas = () => makeStamp($('#ps-text', body).value||' ', 1000);
+    // 骑缝章：把整枚印章按页数竖向切成 n 条，第 k 页取第 k 条；所有页按顺序拼起来即复原整章
+    function perfSlice(srcCanvas, k, n){
+      const W=srcCanvas.width, H=srcCanvas.height;
+      const x0=Math.floor(k*W/n), x1=Math.max(x0+1, Math.floor((k+1)*W/n));
+      const w=x1-x0; const sc=document.createElement('canvas'); sc.width=w; sc.height=H;
+      sc.getContext('2d').drawImage(srcCanvas, x0,0,w,H, 0,0,w,H);
+      return sc.toDataURL('image/png');
+    }
     let imgDataUrl=null;
     function loadImage(file){
       const fr=new FileReader();
@@ -5443,7 +5464,7 @@ AppTools['pdf-sign'] = {
           for(let p=1;p<=pdf.numPages;p++){
             const pg=await pdf.getPage(p);
             const cv=$('#pgcv-'+p, body);
-            const vp=pg.getViewport({scale:1.4});
+            const vp=pg.getViewport({scale:1.15});
             cv.width=vp.width; cv.height=vp.height; cv.style.maxWidth='100%';
             await pg.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise;
           }
@@ -5491,6 +5512,7 @@ AppTools['pdf-sign'] = {
         el.style.display='block';
         if(m==='sign') el.style.backgroundImage=`url(${pad.toDataURL('image/png')})`;
         else if(m==='img') el.style.backgroundImage= imgDataUrl?`url(${imgDataUrl})`:'none';
+        else if(m==='perf'){ const n=pages.length||1; const k=pages.indexOf(pg); el.style.backgroundImage=`url(${perfSlice(stampCanvas(), k<0?0:k, n)})`; }
         else el.style.backgroundImage=`url(${stampCanvas().toDataURL('image/png')})`;
         positionStamp(el);
       });
@@ -5500,11 +5522,14 @@ AppTools['pdf-sign'] = {
       const ratio=(+$('#ps-s', body).value/100)*stamp.scale;
       el.style.opacity = (m==='img') ? (1 - $('#ps-o', body).value/100) : '0.88';
       const pg=el.parentElement, pw=pg.clientWidth, ph=pg.clientHeight, base=Math.min(pw,ph);
+      const pgNo=+el.dataset.pg;
       if(m==='perf'){
-        const perfW=ph*0.10, perfH=ph*0.85;
-        el.style.left='auto'; el.style.right='0'; el.style.top=(ph-perfH)/2+'px'; el.style.transform='none';
+        const pages=parsePages($('#ps-pages', body).value, pageCount);
+        const n=Math.max(1, pages.length), k=(pages.indexOf(pgNo)>=0?pages.indexOf(pgNo):0);
+        const perfH=ph*0.85, perfW=perfH/n;   // 等分给每页，保持印章原比例不拉伸
+        el.style.left='auto'; el.style.right='0'; el.style.top=((ph-perfH)/2)+'px'; el.style.transform='none';
         el.style.width=perfW+'px'; el.style.height=perfH+'px';
-        el.style.backgroundSize='cover'; el.style.backgroundPosition='right center';
+        el.style.backgroundSize='100% 100%'; el.style.backgroundPosition='center';
       } else {
         el.style.left=(stamp.x*100)+'%'; el.style.top=(stamp.y*100)+'%'; el.style.right='auto';
         const size=base*ratio;
@@ -5573,11 +5598,12 @@ AppTools['pdf-sign'] = {
             for(const pi of pages){
               const page=all[pi-1]; if(!page) continue; const {width,height}=page.getSize();
               if(m==='perf'){
-                const sliceW=stCanvas.width/n;
-                const sc=document.createElement('canvas'); sc.width=Math.max(1,Math.floor(sliceW)); sc.height=stCanvas.height;
-                sc.getContext('2d').drawImage(stCanvas, (pi-1)*sliceW,0,sliceW,stCanvas.height,0,0,sc.width,sc.height);
+                const n=pages.length, k=Math.max(0, pages.indexOf(pi));
+                const sliceW=stCanvas.width/n, x0=k*sliceW;
+                const sc=document.createElement('canvas'); sc.width=Math.max(1,Math.ceil(sliceW)); sc.height=stCanvas.height;
+                sc.getContext('2d').drawImage(stCanvas, x0,0,sliceW,stCanvas.height, 0,0,sc.width,sc.height);
                 const scImg=await pdf.embedPng(await ntDataURLtoBlob(sc.toDataURL()).arrayBuffer());
-                const dw=height*0.10, dh=height*0.85;
+                const dh=height*0.85, dw=dh*(sliceW/stCanvas.height);   // 保持切片原比例，不拉伸变形
                 page.drawImage(scImg,{x:width-dw-6, y:(height-dh)/2, width:dw, height:dh, opacity:0.88});
               } else if(m==='img'){
                 const ar=stImg.height/stImg.width;
@@ -6071,7 +6097,7 @@ const TOOLS = [
   {id:'img-tojpg',    name:'转换 JPG',       icon:'🖼️', cat:'image', desc:'PNG / WebP / GIF / BMP / HEIC 等批量转 JPG，可调质量、缩放与透明背景填充色，打包 ZIP。', batch:true},
   {id:'gif-split',    name:'GIF 图片分解',   icon:'🎞️', cat:'image', desc:'上传 GIF 分解为单帧，支持全部 / 范围 / 每 N 帧抽取，导出 PNG / JPG / WebP 并打包 ZIP（需联网加载解析库）。'},
   {id:'video-gif',    name:'视频转 GIF',     icon:'🎬', cat:'image', desc:'截取视频片段转 GIF，可调起止时间 / 帧率 / 尺寸 / 色彩数（64 / 128 / 256），生成后下载。'},
-  {id:'photo-measure',name:'拍照测距测高',   icon:'📐', cat:'image', desc:'上传图片，用参考物标定比例后测量两点距离或物体高度，结果显示在面板；适合实物估测。'},
+  {id:'photo-measure',name:'拍照测距测高',   icon:'📐', cat:'life', desc:'选一张含参照物的照片，点 2 点标定参考物真实长度（可选 cm/米/英寸），再点 2 点即可测「两点距离」或「物体垂直高度」；支持下载标注图，本地运算不上传。'},
   {id:'img-round',    name:'图片圆角生成',   icon:'⬜', cat:'image', desc:'一键生成圆角图片，可选「先裁剪再圆角」（X/Y/宽高手动设置或居中/正方形一键裁剪），四角可独立设半径、自定义背景色，透明导出 PNG，支持批量打包 ZIP。', batch:true},
   {id:'img-base64',   name:'图片转 Base64',  icon:'🔣', cat:'image', desc:'上传图片生成 Data URL / 纯 Base64 字符串，支持批量与格式切换，一键复制，适配网页嵌入。', batch:true},
   {id:'img-to-pdf',   name:'图片转 PDF',     icon:'📕', cat:'image', desc:'多张图片按序合并为 PDF，可选 A4 / A3 / Letter、页面方向与边距，图片适应 / 铺满裁切，本地生成。', batch:true},
@@ -6133,6 +6159,7 @@ const TOOLS = [
   {id:'electricity',  name:'家用耗电电费',        icon:'💡', cat:'money', desc:'录入多个电器功率 / 时长 / 数量，按阶梯电价算日 / 月 / 年耗电量与电费。'},
   {id:'fuel',         name:'汽车油耗计算器',      icon:'⛽', cat:'money', desc:'加油金额 / 油价 / 里程算百公里油耗，记录多组求平均，并给出每公里费用与总里程 / 总油费。'},
   {id:'work-overtime',name:'工时加班计算器',      icon:'⏱️', cat:'money', desc:'上下班 + 午休算有效工时，按工作日 / 周末 / 节假日倍率核算加班费，支持午休计入开关与按月汇总。'},
+  {id:'salary-cmp',   name:'薪酬对比计算器',      icon:'🧮', cat:'money', desc:'对比不同城市 / 不同薪资方案的税后实际收入：按当地社平工资封顶社保基数、可选公积金比例与专项附加扣除，算个税与五险一金后输出税后月薪 / 年入，多方案并排找出到手最高者。'},
   {id:'renovation',   name:'装修预算估算',        icon:'🏗️', cat:'money', desc:'按面积与档次（简 / 精 / 豪装）估算总预算及分项占比，各项占比可自定义，附条形图可视化。'},
   /* ============ 生活实用 ============ */
   {id:'unit-convert', name:'单位换算',            icon:'📏', cat:'life',  desc:'长度 / 重量 / 温度 / 面积 / 体积 / 速度 / 时间 / 数据存储 / 压强 共九大类单位互转，结果可复制。'},
@@ -6168,7 +6195,6 @@ const TOOLS = [
   {id:'noise-meter',  name:'噪音检测',        icon:'🎤', cat:'life', desc:'调用麦克风实时测量环境分贝（dB），显示嘈杂等级与场景建议；手机端体验最佳，电脑端需授权麦克风。'},
   {id:'altitude',     name:'海拔高度检测',    icon:'⛰️', cat:'life', desc:'调用 GPS 获取当前海拔（米）与定位精度，附海拔常识解读。', mobileOnly:true},
   {id:'photo-range',  name:'测距测高换算',     icon:'📏', cat:'life', desc:'已知眼睛高度 + 仰角（可用手机传感器自动取角或手动输入），在「已知距离测高」与「已知高度测距」之间换算（简易经纬仪法）。'},
-  {id:'photo-height', name:'拍照测高',        icon:'📐', cat:'life', desc:'选一张含参照物的照片，标注参照物与目标的上下端点，按像素比例换算目标真实高度。'},
   {id:'ar-area',      name:'AR 测面积',       icon:'🟦', cat:'life', desc:'选照片后用「自由套索」或「多边形」框选区域，输入图中一条已知边长即可按比例尺算出实际面积。'},
   {id:'photo-count',  name:'拍照计数',        icon:'🔢', cat:'life', desc:'选照片后逐一轻点目标即可自动计数（人数 / 物品数），带标记点与撤销，适合清点。'},
   {id:'postal-code',  name:'邮政编码查询',     icon:'📮', cat:'life', desc:'省/直辖市/自治区级标准邮编查询（准确），支持反向由 6 位邮编定位省区，并可跳转中国邮政官网查街道/乡镇级精确邮编。'},
@@ -6753,6 +6779,15 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-27', items:[
+    '【四十六修】抽签 / 点名：候选名单存 localStorage，下次自动载入，可一键清空已存名单。',
+    '【四十六修】修音（音频）：自动校音改用归一化自相关 + 八度保护 + 对数频率平滑，修五音不全更准更稳；电音改为半音强量化（真正 Auto-Tune 机器人质感）；混响升级多抽头梳状网络（不再是单回声）；WSOLA 重叠相加做窗能量归一，消除幅度涟漪。',
+    '【四十六修】AR 测面积 / 拍照类预览：放大后改为保持原比例（contain），不再拉伸变形。',
+    '【四十六修】新增「薪酬对比计算器」：按城市社平工资封顶社保基数、可选公积金比例与专项附加扣除，对比多方案个税与五险一金后的税后到手，高亮到手最高。',
+    '【四十六修】存款利息：新增「刷新实时利率」（项目自带 deposit-rates.json 经 jsDelivr 拉取，内置大行均值兜底），各存期收益按实时利率对比。',
+    '【四十六修】工时加班 / 家用耗电 / 汽车油耗：新增历史记录，用户可自由选择是否保存当次，便于前后比较。',
+    '【四十六修】图片圆角生成 / 图片转 PDF：修复加载失败（元素缺失导致 null onclick）。',
+    '【四十六修】PDF 签章：支持上传图片章（可去白底 + 调透明度）；整体预览区缩小更易看；骑缝章改为按操作页数竖向切片、每页取不同片段、保持原比例拼合成整章（不再每页相同 / 拉伸发花）。',
+    '【四十六修】拍照测距测高：由「图片工具」并入「生活实用」，并合并「拍照测高」（优先用测距测高清框架，吸收参照物真实高度与分步提示），代码无冲突。',
     '【四十五修】手机号归属：上游淘宝 / 360 接口已失效，改为内置离线号段数据库（约 31 万号段，本地 gzip 解压查询），零外部请求、不上传，隐私优先；标注同步更新。',
     '【四十五修】网速测试：改用 Cloudflare 测速节点（speed.cloudflare.com）4 轮 × 8MB 下载采样、取中位数，结果不再「一律较差」，并新增均值 / 峰值与等级解读（旧方案单次小文件下载易偏低）。',
     '【四十五修】年龄计算器：新增「他人生日」输入，可算两人相差天数（约 X 年 Y 月 Z 天）与谁大谁小；并支持生成对比分享链接（?open=age#agecmp=），发给好友自动载入对比。',
@@ -7223,21 +7258,46 @@ function afSnap(freq, scale){
 }
 function afDetect(buf, sr, lo, hi){
   const N=buf.length; let mean=0; for(let i=0;i<N;i++) mean+=buf[i]; mean/=N;
+  const x=new Float64Array(N); let E0=0; for(let i=0;i<N;i++){ const v=buf[i]-mean; x[i]=v; E0+=v*v; }
+  if(E0<=1e-9) return 0;
   const minL=Math.max(2,Math.floor(sr/hi)), maxL=Math.floor(sr/lo);
-  let bestR=0, bestLag=minL; const corr=new Float64Array(maxL+1);
-  for(let lag=minL; lag<=maxL; lag++){ let s=0; for(let i=0;i<N-lag;i++) s+=(buf[i]-mean)*(buf[i+lag]-mean); corr[lag]=s; if(s>bestR){ bestR=s; bestLag=lag; } }
-  if(bestLag<=minL||bestR<=0) return 0;
-  const r1=corr[bestLag-1]||bestR, r2=bestR, r3=corr[bestLag+1]||bestR;
-  let d=(r1-r3)/(2*(r1-2*r2+r3)+1e-9); let lag=bestLag+d; if(lag<1) lag=bestLag;
+  // 归一化自相关（NACF）：除以 sqrt(E0·Elag)，消除长延时能量衰减带来的八度误判
+  let E1=0; for(let i=0;i<N-minL;i++) E1+=x[i+minL]*x[i+minL];
+  let bestN=-Infinity, bestLag=minL; const NA=new Float64Array(maxL+1);
+  for(let lag=minL; lag<=maxL; lag++){
+    let s=0; const lim=N-lag; for(let i=0;i<lim;i++) s+=x[i]*x[i+lag];
+    if(lag>minL) E1 = E1 - x[lag-1]*x[lag-1] + x[N-lag]*x[N-lag];
+    const denom=Math.sqrt(E0*E1)+1e-12;
+    const na=s/denom; NA[lag]=na;
+    if(na>bestN){ bestN=na; bestLag=lag; }
+  }
+  if(bestLag<=minL || bestN<=0.1) return 0;
+  // 抛物线插值精修峰值
+  const y0=NA[bestLag-1]||bestN, y1=bestN, y2=NA[bestLag+1]||bestN;
+  const denom=y0-2*y1+y2; const d= denom!==0 ? 0.5*(y0-y2)/denom : 0;
+  let lag=bestLag+d; if(lag<minL) lag=bestLag;
+  // 八度保护：若 2×lag 处相关性仍高，说明原检测偏了八度（高八度），取更低的真实基频
+  const lag2=2*bestLag;
+  if(lag2<=maxL && NA[lag2] > 0.7*bestN) lag=lag2;
   return sr/lag;
 }
 function afAutotune(ch, sr, scale, amount){
   const frame=1024, hop=512; const nFrames=Math.floor(ch.length/hop);
   const ratios=new Float32Array(nFrames);
-  let last=1;
-  for(let i=0;i<nFrames;i++){ const s=i*hop; if(s+frame>ch.length) break; const seg=ch.subarray(s, s+frame); const f=afDetect(seg, sr, 80, 900); let ratio=1; if(f>0) ratio=afSnap(f, scale)/f; ratio=last+(ratio-last)*amount; last=ratio; ratios[i]=ratio; }
-  const out=new Float32Array(ch.length); const w=afHanning(frame); let outPos=0, srcPos=0;
-  while(outPos+frame<ch.length){ const ratio=ratios[Math.min(ratios.length-1, Math.floor(srcPos/hop))]||1; for(let j=0;j<frame;j++){ const sp=srcPos+j*ratio; const i0=Math.floor(sp), i1=Math.min(ch.length-1,i0+1), f=sp-i0; out[outPos+j]+=(ch[i0]*(1-f)+ch[i1]*f)*w[j]; } outPos+=hop; srcPos+=hop/ratio; }
+  let last=1, fSmooth=0, hasF=false;
+  for(let i=0;i<nFrames;i++){ const s=i*hop; if(s+frame>ch.length) break; const seg=ch.subarray(s, s+frame); let f=afDetect(seg, sr, 80, 900);
+    if(f>0){ // 在 log 频率域做 EMA 平滑，抑制抖动、避免音高轮廓忽上忽下
+      const lf=Math.log(f); fSmooth = hasF ? fSmooth + 0.4*(lf-fSmooth) : lf; hasF=true; f=Math.exp(fSmooth);
+      let ratio=afSnap(f, scale)/f; ratio=last+(ratio-last)*amount; last=ratio; ratios[i]=ratio;
+    } else { hasF=false; ratios[i]=last; }
+  }
+  const out=new Float32Array(ch.length); const w=afHanning(frame); const wsum=new Float32Array(ch.length);
+  let outPos=0, srcPos=0;
+  // WSOLA 重叠相加 + 窗能量归一（COLA），消除幅度随时间的 wah-wah 涟漪
+  while(outPos+frame<ch.length){ const ratio=ratios[Math.min(ratios.length-1, Math.floor(srcPos/hop))]||1;
+    for(let j=0;j<frame;j++){ const sp=srcPos+j*ratio; const i0=Math.floor(sp), i1=Math.min(ch.length-1,i0+1), f=sp-i0; out[outPos+j]+=(ch[i0]*(1-f)+ch[i1]*f)*w[j]; wsum[outPos+j]+=w[j]; }
+    outPos+=hop; srcPos+=hop/ratio; }
+  for(let i=0;i<out.length;i++){ if(wsum[i]>1e-6) out[i]/=wsum[i]; }
   let mx=0; for(let i=0;i<out.length;i++) mx=Math.max(mx,Math.abs(out[i])); if(mx>0){ const g=0.95/mx; for(let i=0;i<out.length;i++) out[i]*=g; }
   return out;
 }
@@ -7305,23 +7365,32 @@ AppTools['audio-fix'] = {
       const sr = srcBuf.sampleRate;
       const scale = $('#af-scale', body).value, amount = +$('#af-amount', body).value/100;
       const out = new Array(srcBuf.numberOfChannels);
-      const fmod = 60;                                   // 环形调制频率
       for(let c=0;c<srcBuf.numberOfChannels;c++){
         let d = resample(srcBuf.getChannelData(c), ratio, newLen);
         if(fx==='auto'){
-          d = afAutotune(d, sr, scale, amount);          // 自动校音：检测音高并量化到音阶
-        } else {
-          for(let i=0;i<newLen;i++){
-            let v = d[i];
-            if(fx==='edm'){ const t=i/sr; const mod=Math.sin(2*Math.PI*fmod*t); v = v*(1-elect) + v*mod*elect; }
-            else if(fx==='cartoon'){ v = Math.sign(v) * Math.pow(Math.abs(v), 0.6) * 1.2; }
-            d[i] = Math.max(-1, Math.min(1, v));
-          }
-        }
+          d = afAutotune(d, sr, scale, amount);          // 自动校音：逐帧检测音高并量化到所选音阶
+        } else if(fx==='edm'){
+          d = afAutotune(d, sr, 'chrom', 0.92);          // 电音 = 强量化到半音（机器人 Auto-Tune 质感）
+        } else if(fx==='cartoon'){
+          for(let i=0;i<newLen;i++){ let v=d[i]; v = Math.sign(v)*Math.pow(Math.abs(v),0.7)*1.15; d[i]=Math.max(-1,Math.min(1,v)); }
+        } // fx==='none' 保持原声
         if(dn){ // 噪声门 + 一阶高通去低频隆隆声
           let prev=0; for(let i=0;i<newLen;i++){ const x=d[i]; const hp=0.98*prev + 0.98*(x-prev); prev=x; d[i]= Math.abs(hp)<0.012 ? 0 : Math.max(-1,Math.min(1,hp)); }
         }
-        if(reverb>0){ const g=reverb*0.55, dl=Math.floor(sr*0.03); for(let i=dl;i<newLen;i++) d[i] += g*0.6*d[i-dl]; }
+        if(reverb>0){ // 多抽头梳状混响（并联反馈延迟），比单回声更自然
+          const g=reverb*0.5;
+          const d1=Math.max(1,Math.floor(sr*0.023)), d2=Math.max(1,Math.floor(sr*0.031)), d3=Math.max(1,Math.floor(sr*0.047));
+          const a1=new Float32Array(d1), a2=new Float32Array(d2), a3=new Float32Array(d3);
+          let p1=0,p2=0,p3=0;
+          for(let i=0;i<newLen;i++){ const inp=d[i];
+            const o1=a1[p1], o2=a2[p2], o3=a3[p3];
+            a1[p1]=inp + o1*0.6; p1=(p1+1)%d1;
+            a2[p2]=inp + o2*0.55; p2=(p2+1)%d2;
+            a3[p3]=inp + o3*0.5; p3=(p3+1)%d3;
+            const wet=g*(o1+o2+o3);
+            d[i]=Math.max(-1,Math.min(1, inp + wet));
+          }
+        }
         out[c] = d;
       }
       const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC();
@@ -7628,6 +7697,9 @@ AppTools['ganzhi'] = {
 
 AppTools['work-overtime'] = {
   build(body){
+    const HK='pt_wo_hist';
+    let hist=[]; try{ hist=JSON.parse(localStorage.getItem(HK)||'[]'); }catch(_){}
+    let lastResult=null;
     body.innerHTML=`
       <div class="hint mb">倍率含义：<b>X1</b>＝工作日（平时）按 1 倍时薪；<b>X2</b>＝休息日/周末按 2 倍；<b>X3</b>＝法定节假日按 3 倍。标准工时内计正常工资，超出部分按对应倍率算加班费。</div>
       <div class="row mb"><div><label class="field-label">上班时间</label><input type="time" class="inp" id="wo-in" value="09:00"></div>
@@ -7637,7 +7709,7 @@ AppTools['work-overtime'] = {
         <div><label class="field-label">时薪(元)</label><input type="number" class="inp" id="wo-rate" value="30"></div>
         <div><label class="field-label">当日类型</label><select class="sel" id="wo-type"><option value="1">工作日 X1</option><option value="2">周末 X2</option><option value="3">法定节假日 X3</option></select></div></div>
       <div class="mb"><label class="field-label">用餐/休息时间是否计入工时</label><select class="sel" id="wo-meal"><option value="0">已剔除午休（不计入）</option><option value="1">计入工时（不剔除）</option></select></div>
-      <button class="btn" id="wo-run">计算当日</button>
+      <div class="btn-row"><button class="btn" id="wo-run">计算当日</button><button class="btn ghost" id="wo-save" disabled>保存到历史</button></div>
       <div id="wo-out" class="result-box">结果将显示在此</div>
       <div class="card-soft mt"><label class="field-label">批量：一周工时（每行 上班,下班,午休分钟,类型1/2/3）</label>
         <textarea class="area" id="wo-batch" placeholder="09:00,18:00,60,1&#10;09:00,20:00,60,2"></textarea>
@@ -7646,12 +7718,23 @@ AppTools['work-overtime'] = {
       <div class="card-soft mt"><div class="row3"><div><label class="field-label">按月工作日</label><input type="number" class="inp" id="wo-d" value="22"></div>
         <div><label class="field-label">月加班时</label><input type="number" class="inp" id="wo-ot" value="20"></div>
         <div><label class="field-label">加班类型</label><select class="sel" id="wo-ott"><option value="1">X1</option><option value="2">X2</option><option value="3">X3</option></select></div></div>
-        <button class="btn" id="wo-mrun">按月汇总</button><div id="wo-mout" class="hint"></div></div>`;
+        <button class="btn" id="wo-mrun">按月汇总</button><div id="wo-mout" class="hint"></div></div>
+      <div class="card-soft mt" id="wo-histbox" style="display:none">
+        <div class="row" style="justify-content:space-between;align-items:center"><b>📋 历史记录（本地保存，可比较前后变化）</b><button class="btn-mini danger" id="wo-histclear">清空</button></div>
+        <div id="wo-hist" class="hint" style="margin-top:6px"></div></div>`;
     function parse(line){ const p=line.split(',').map(s=>s.trim()); if(p.length<4) return null; const [h1,m1]=p[0].split(':').map(Number), [h2,m2]=p[1].split(':').map(Number); const rest=+$('#wo-meal',body).value?0:(+p[2]||0); const type=+p[3]||1; let mins=(h2*60+m2)-(h1*60+m1)-rest; if(mins<0)mins+=1440; return {hours:mins/60,type}; }
     function calc(hours,std,rate,type){ const normalPay=Math.min(hours,std)*rate, otPay=Math.max(0,hours-std)*rate*type, total=normalPay+otPay; return {hours,normalPay,otPay,total}; }
-    $('#wo-run',body).onclick=()=>{ const std=+$('#wo-std',body).value||8, rate=+$('#wo-rate',body).value, type=+$('#wo-type',body).value; const r=parse($('#wo-in',body).value+','+$('#wo-out',body).value+','+$('#wo-rest',body).value+','+type); if(!r){toast('时间格式有误');return;} const c=calc(r.hours,std,rate,type); $('#wo-out',body).innerHTML=`<div class="big-num">有效工时 ${c.hours.toFixed(2)} 小时（倍率 X${type}）</div><div class="row3"><div><b>正常工资</b><br>¥${c.normalPay.toFixed(2)}</div><div><b>加班费</b><br>¥${c.otPay.toFixed(2)}</div><div><b>合计</b><br>¥${c.total.toFixed(2)}</div></div>`; };
+    function renderHist(){
+      const box=$('#wo-histbox',body); if(!hist.length){ box.style.display='none'; return; }
+      box.style.display=''; $('#wo-hist',body).innerHTML=hist.map((it,i)=>`<div class="mini-tag" style="cursor:pointer;background:var(--bg);border:1px solid var(--border)"><b>${escapeHtml(it.label)}</b> · 合计¥${it.total.toFixed(2)} <span class="hint">${new Date(it.t).toLocaleString()}</span> <span data-hi="${i}" style="color:var(--error);font-weight:700">✕</span></div>`).join(' ');
+      $('#wo-hist',body).querySelectorAll('[data-hi]').forEach(b=>b.onclick=()=>{ hist.splice(+b.dataset.hi,1); try{ localStorage.setItem(HK,JSON.stringify(hist)); }catch(_){} renderHist(); });
+    }
+    $('#wo-run',body).onclick=()=>{ const std=+$('#wo-std',body).value||8, rate=+$('#wo-rate',body).value, type=+$('#wo-type',body).value; const r=parse($('#wo-in',body).value+','+$('#wo-out',body).value+','+$('#wo-rest',body).value+','+type); if(!r){toast('时间格式有误');return;} const c=calc(r.hours,std,rate,type); lastResult={label:`${$('#wo-in',body).value}–${$('#wo-out',body).value} 午休${$('#wo-rest',body).value}分 · 倍率X${type}`, normalPay:c.normalPay,otPay:c.otPay,total:c.total}; $('#wo-save',body).disabled=false; $('#wo-out',body).innerHTML=`<div class="big-num">有效工时 ${c.hours.toFixed(2)} 小时（倍率 X${type}）</div><div class="row3"><div><b>正常工资</b><br>¥${c.normalPay.toFixed(2)}</div><div><b>加班费</b><br>¥${c.otPay.toFixed(2)}</div><div><b>合计</b><br>¥${c.total.toFixed(2)}</div></div>`; };
+    $('#wo-save',body).onclick=()=>{ if(!lastResult) return; hist.unshift(lastResult); if(hist.length>50)hist=hist.slice(0,50); try{ localStorage.setItem(HK,JSON.stringify(hist)); }catch(_){} renderHist(); toast('已保存本次记录'); };
+    $('#wo-histclear',body).onclick=()=>{ if(!hist.length){toast('暂无历史');return;} if(!confirm('确认清空全部历史记录？'))return; hist=[]; try{ localStorage.removeItem(HK); }catch(_){} renderHist(); };
     $('#wo-batchrun',body).onclick=()=>{ const lines=$('#wo-batch',body).value.trim().split('\n').filter(Boolean); let th=0,tp=0; const std=+$('#wo-std',body).value||8, rate=+$('#wo-rate',body).value; lines.forEach(ln=>{ const r=parse(ln); if(r){ th+=r.hours; tp+=calc(r.hours,std,rate,r.type).total; } }); $('#wo-batchout',body).innerHTML=`一周总工时 <b>${th.toFixed(2)}</b> 小时，总工资约 <b>¥${tp.toFixed(2)}</b>`; };
     $('#wo-mrun',body).onclick=()=>{ const d=+$('#wo-d',body).value, ot=+$('#wo-ot',body).value, type=+$('#wo-ott',body).value, std=+$('#wo-std',body).value||8, rate=+$('#wo-rate',body).value; const base=d*std*rate, otPay=ot*rate*type; $('#wo-mout',body).innerHTML=`月基本工资（${d}天×${std}h）≈ <b>¥${base.toFixed(2)}</b>；加班费（X${type}）≈ <b>¥${otPay.toFixed(2)}</b>；合计 ≈ <b>¥${(base+otPay).toFixed(2)}</b>`; };
+    renderHist();
   }
 };
 
@@ -7930,17 +8013,30 @@ AppTools['vision'] = {
 
 AppTools['deposit'] = {
   build(body){
+    let RATES={huo:0.2,3:1.15,6:1.35,12:1.45,24:1.65,36:1.95,60:2.0,big:1.9}, RATE_SRC='内置参考（主要国有大行挂牌利率均值）';
+    const MONS={huo:12,3:3,6:6,12:12,24:24,36:36,60:60,big:12}, LBL={huo:'活期',3:'3个月',6:'6个月',12:'1年',24:'2年',36:'3年',60:'5年',big:'大额存单1年'};
     body.innerHTML=`
       <div class="row mb"><div><label class="field-label">存款本金(元)</label><input type="number" class="inp" id="dp-prin" value="100000"></div>
         <div><label class="field-label">模式</label><select class="sel" id="dp-mode"><option value="huo">活期</option><option value="3">定期3个月</option><option value="6">定期6个月</option><option value="12" selected>定期1年</option><option value="24">定期2年</option><option value="36">定期3年</option><option value="60">定期5年</option><option value="big">大额存单(1年)</option></select></div></div>
-      <div class="row mb"><div><label class="field-label">年利率(%)</label><input type="number" step="0.01" class="inp" id="dp-rate" value="1.5"></div>
-        <div><label class="field-label">存期(月)</label><input type="number" class="inp" id="dp-mon" value="12"></div></div>
+      <div class="row mb"><div><label class="field-label">年利率(%)</label><input type="number" step="0.01" class="inp" id="dp-rate" value="1.45"></div>
+        <div><label class="field-label">存期(月)</label><input type="number" class="inp" id="dp-mon" value="12"></div>
+        <div><button class="btn ghost" id="dp-refresh">🔄 刷新实时利率</button></div></div>
+      <div id="dp-rateinfo" class="hint">利率来源：${RATE_SRC}</div>
       <div class="btn-row"><button class="btn" id="dp-run">计算本笔</button><button class="btn ghost" id="dp-cmp">对比各存期收益</button></div>
       <div id="dp-out" class="result-box">结果将显示在此</div>
       <div id="dp-cmpout" class="mt"></div>
-      <div class="hint">利率为示例值，请以银行实时挂牌利率为准；对比表按常见挂牌利率估算，仅供横向参考。</div>`;
-    const RATES={huo:0.2,3:1.05,6:1.25,12:1.5,24:2.1,36:2.35,60:2.5,big:1.9}, MONS={huo:12,3:3,6:6,12:12,24:24,36:36,60:60,big:12}, LBL={huo:'活期',3:'3个月',6:'6个月',12:'1年',24:'2年',36:'3年',60:'5年',big:'大额存单1年'};
-    $('#dp-mode',body).onchange=()=>{ const m=$('#dp-mode',body).value; $('#dp-rate',body).value=RATES[m]??1.5; $('#dp-mon',body).value=MONS[m]??12; };
+      <div class="hint">对比表按银行挂牌利率估算各存期利息，可一键「刷新实时利率」拉取最新挂牌均值；利率随政策调整，实际以各银行网点为准。</div>`;
+    function syncInputs(){ const m=$('#dp-mode',body).value; $('#dp-rate',body).value=RATES[m]??1.45; $('#dp-mon',body).value=MONS[m]??12; }
+    function updateInfo(){ $('#dp-rateinfo',body).textContent='利率来源：'+RATE_SRC; }
+    async function refreshRates(silent){
+      try{
+        const r=await fetch('https://cdn.jsdelivr.net/gh/panqingtool/panqingtool@main/deposit-rates.json?v='+Date.now(),{cache:'no-store'});
+        if(r.ok){ const j=await r.json(); if(j&&j.rates){ Object.assign(RATES,j.rates); RATE_SRC='实时（更新于 '+(j.updated||'?')+'）'; syncInputs(); updateInfo(); if(!silent) toast('已刷新实时挂牌利率'); } else if(!silent) toast('利率数据格式异常，已用内置参考','err'); }
+        else if(!silent) toast('实时利率获取失败，已用内置参考利率','err');
+      }catch(err){ if(!silent) toast('实时利率获取失败（可能离线），已用内置参考利率','err'); }
+    }
+    $('#dp-mode',body).onchange=()=>syncInputs();
+    $('#dp-refresh',body).onclick=()=>refreshRates(false);
     $('#dp-run',body).onclick=()=>{ const p=+$('#dp-prin',body).value, rate=+$('#dp-rate',body).value/100, mon=+$('#dp-mon',body).value; if(!(p>0)||!(mon>0)){toast('请输入有效本金与存期');return;} const interest=p*rate*(mon/12), total=p+interest; $('#dp-out',body).innerHTML=`<div class="big-num">到期利息 ¥${interest.toFixed(2)}</div><div class="row3"><div><b>本金</b><br>¥${p.toFixed(2)}</div><div><b>利息</b><br>¥${interest.toFixed(2)}</div><div><b>本息合计</b><br>¥${total.toFixed(2)}</div></div>`; };
     $('#dp-cmp',body).onclick=()=>{
       const p=+$('#dp-prin',body).value; if(!(p>0)){toast('请输入有效本金');return;}
@@ -7950,6 +8046,64 @@ AppTools['deposit'] = {
       html+='</tbody></table>';
       $('#dp-cmpout',body).innerHTML=html;
     };
+    refreshRates(true);
+  }
+};
+
+// 薪酬对比计算器（不同城市 / 不同薪资方案 的税后实际收入对比）
+AppTools['salary-cmp'] = {
+  build(body){
+    const CITIES={'全国平均':8000,'北京':11297,'上海':12183,'深圳':11620,'广州':10449,'重庆':6863,'成都':7076,'杭州':10453,'武汉':7489,'西安':6914,'苏州':9875,'天津':8355};
+    function iit(t){ if(t<=0) return 0; const b=[[36000,0.03,0],[144000,0.10,2520],[300000,0.20,16920],[420000,0.25,31920],[660000,0.30,52920],[960000,0.35,85920],[Infinity,0.45,181920]]; for(const [cap,rate,ded] of b){ if(t<=cap) return t*rate-ded; } return 0; }
+    let schemes=[];
+    body.innerHTML=`
+      <div class="hint mb">按「累计预扣 / 综合所得」估算个税：年免征额 6 万 + 五险一金 + 专项附加扣除；社保按养老8%/医疗2%/失业0.5%（个人）合计 10.5%，公积金比例可选；缴费基数按当地社平工资的 0.6~3 倍封顶。各地社平为近似参考值。</div>
+      <div class="card-soft mb">
+        <div class="row mb"><div style="flex:2"><label class="field-label">城市（决定社保缴费基数上限）</label><select class="sel" id="sc-city"></select></div>
+          <div id="sc-customwrap" style="flex:1;display:none"><label class="field-label">自定义社平工资(月)</label><input type="number" class="inp" id="sc-custom" value="8000"></div></div>
+        <div class="row mb"><div><label class="field-label">税前月薪(元)</label><input type="number" class="inp" id="sc-salary" value="10000"></div>
+          <div><label class="field-label">公积金比例(%)</label><input type="number" step="0.5" class="inp" id="sc-gj" value="12"></div>
+          <div><label class="field-label">专项附加扣除(月)</label><input type="number" class="inp" id="sc-sp" value="0"></div></div>
+        <div class="btn-row"><button class="btn" id="sc-add">＋ 添加方案</button><button class="btn ghost" id="sc-clear">清空方案</button></div>
+      </div>
+      <div id="sc-list" class="wrap-tags"></div>
+      <div id="sc-out" class="mt"></div>
+      <div class="hint">可添加多个方案（如「北京 10000 公积金12%」vs「重庆 12000 公积金7%」），一键对比税后月薪 / 年入，直观看出哪个到手更多。</div>`;
+    const citySel=$('#sc-city',body);
+    citySel.innerHTML=Object.keys(CITIES).map(c=>`<option value="${c}">${c}（社平≈¥${CITIES[c]}）</option>`).join('')+`<option value="__custom__">自定义社平工资</option>`;
+    citySel.onchange=()=>{ $('#sc-customwrap',body).style.display = citySel.value==='__custom__'?'':'none'; };
+    function social(salary, city){
+      const avg = city==='__custom__' ? (+$('#sc-custom',body).value||8000) : CITIES[city];
+      const low=avg*0.6, high=avg*3;
+      const base=Math.max(low, Math.min(salary, high));
+      return {base, low, high, avg};
+    }
+    function calc(c){
+      const s=social(c.salary, c.city);
+      const siMonth=s.base*0.105 + s.base*c.gj/100;
+      const siYear=siMonth*12;
+      const taxableYear=c.salary*12 - 60000 - siYear - c.sp*12;
+      const taxYear=Math.max(0, iit(taxableYear));
+      const netYear=c.salary*12 - siYear - taxYear;
+      return {base:s.base, siMonth, taxMonth:taxYear/12, netMonth:netYear/12, netYear};
+    }
+    function renderList(){ $('#sc-list',body).innerHTML=schemes.map((c,i)=>`<span class="mini-tag">方案${i+1}：${escapeHtml(c.city==='__custom__'?'自定义':c.city)} ¥${c.salary}/月·公${c.gj}% <a data-d="${i}" style="cursor:pointer">✕</a></span>`).join(' '); $('#sc-list',body).querySelectorAll('[data-d]').forEach(a=>a.onclick=()=>{ schemes.splice(+a.dataset.d,1); renderList(); }); }
+    $('#sc-add',body).onclick=()=>{
+      const salary=+$('#sc-salary',body).value, gj=+$('#sc-gj',body).value, sp=+$('#sc-sp',body).value, city=citySel.value;
+      if(!(salary>0)){ toast('请输入有效税前月薪','err'); return; }
+      schemes.push({salary,gj,sp,city}); renderList(); compare();
+    };
+    $('#sc-clear',body).onclick=()=>{ schemes=[]; renderList(); $('#sc-out',body).innerHTML=''; };
+    function compare(){
+      if(schemes.length<1){ $('#sc-out',body).innerHTML='<div class="hint">先添加至少一个方案。</div>'; return; }
+      let html='<table class="tbl-prev"><thead><tr><th>方案</th><th>税前月薪</th><th>五险一金/月</th><th>个税/月</th><th>税后月薪</th><th>税后年入</th></tr></thead><tbody>';
+      let best=-1,bestNet=-1;
+      schemes.forEach((c,i)=>{ const r=calc(c); if(r.netMonth>bestNet){bestNet=r.netMonth;best=i;} const label=c.city==='__custom__'?'自定义':c.city; html+=`<tr${i===best?' style="background:rgba(24,144,255,.08)"':''}><td>方案${i+1}·${escapeHtml(label)}</td><td>¥${c.salary.toFixed(0)}</td><td>¥${r.siMonth.toFixed(0)}</td><td>¥${r.taxMonth.toFixed(0)}</td><td><b>¥${r.netMonth.toFixed(0)}</b></td><td>¥${r.netYear.toFixed(0)}</td></tr>`; });
+      html+='</tbody></table>';
+      html+=`<div class="hint" style="margin-top:6px">🏆 到手最高：<b>方案${best+1}</b>（税后月薪 ¥${bestNet.toFixed(0)}）。注：公积金虽计入「五险一金」扣除，但属个人强制储蓄，部分场景可提取；以上为到手现金流估算，仅供参考，以工资条为准。</div>`;
+      $('#sc-out',body).innerHTML=html;
+    }
+    renderList();
   }
 };
 
@@ -7997,33 +8151,59 @@ AppTools['rmb-upper'] = {
 
 AppTools['electricity'] = {
   build(body){
+    const HK='pt_el_hist';
+    let hist=[]; try{ hist=JSON.parse(localStorage.getItem(HK)||'[]'); }catch(_){}
+    let lastResult=null;
     body.innerHTML=`
       <div class="row mb"><div><label class="field-label">电价(元/kWh)</label><input type="number" step="0.01" class="inp" id="el-price" value="0.56"></div>
         <div><label class="field-label">阶梯(可选：月阈值,如 200,400)</label><input type="text" class="inp" id="el-tier" placeholder="留空不启用"></div></div>
       <div class="card-soft mb"><label class="field-label">添加电器（功率W, 每日小时, 数量）</label>
         <div class="row"><input type="number" class="inp" id="el-pw" placeholder="功率W" value="100"><input type="number" step="0.1" class="inp" id="el-h" placeholder="小时/天" value="4"><input type="number" class="inp" id="el-n" placeholder="数量" value="1"><button class="btn" id="el-add">添加</button></div>
         <div id="el-list" class="wrap-tags"></div></div>
-      <button class="btn" id="el-run">计算</button><div id="el-out" class="result-box">结果将显示在此</div>`;
+      <div class="btn-row"><button class="btn" id="el-run">计算</button><button class="btn ghost" id="el-save" disabled>保存到历史</button></div>
+      <div id="el-out" class="result-box">结果将显示在此</div>
+      <div class="card-soft mt" id="el-histbox" style="display:none">
+        <div class="row" style="justify-content:space-between;align-items:center"><b>📋 历史记录（本地保存，可比较前后变化）</b><button class="btn-mini danger" id="el-histclear">清空</button></div>
+        <div id="el-hist" class="hint" style="margin-top:6px"></div></div>`;
     const items=[];
     const renderList=()=>{ $('#el-list',body).innerHTML=items.map((it,i)=>`<span class="mini-tag">${it.pw}W×${it.h}h×${it.n} <a data-del="${i}" style="cursor:pointer">✕</a></span>`).join(''); $('#el-list',body).querySelectorAll('[data-del]').forEach(a=>a.onclick=()=>{items.splice(+a.dataset.del,1);renderList();}); };
+    function renderHist(){
+      const box=$('#el-histbox',body); if(!hist.length){ box.style.display='none'; return; }
+      box.style.display=''; $('#el-hist',body).innerHTML=hist.map((it,i)=>`<div class="mini-tag" style="cursor:pointer;background:var(--bg);border:1px solid var(--border)"><b>${escapeHtml(it.label)}</b> · 月¥${it.cost.toFixed(2)}/年¥${it.yearCost.toFixed(2)} <span class="hint">${new Date(it.t).toLocaleString()}</span> <span data-hi="${i}" style="color:var(--error);font-weight:700">✕</span></div>`).join(' ');
+      $('#el-hist',body).querySelectorAll('[data-hi]').forEach(b=>b.onclick=()=>{ hist.splice(+b.dataset.hi,1); try{ localStorage.setItem(HK,JSON.stringify(hist)); }catch(_){} renderHist(); });
+    }
     $('#el-add',body).onclick=()=>{ const pw=+$('#el-pw',body).value,h=+$('#el-h',body).value,n=+$('#el-n',body).value||1; if(pw>0&&h>0){items.push({pw,h,n});renderList();} };
-    $('#el-run',body).onclick=()=>{ const price=+$('#el-price',body).value, tier=$('#el-tier',body).value.trim(); let kwhDay=0; items.forEach(it=>kwhDay+=it.pw/1000*it.h*it.n); const kwhMonth=kwhDay*30; let cost; if(tier){ const ts=tier.split(',').map(Number); let rem=kwhMonth,c=0,prev=0; const rates=[price,price*1.1,price*1.3]; for(let i=0;i<ts.length;i++){ const seg=Math.min(rem,ts[i]-prev); if(seg>0){c+=seg*rates[i];rem-=seg;} prev=ts[i]; } if(rem>0)c+=rem*rates[ts.length]; cost=c; } else cost=kwhMonth*price; $('#el-out',body).innerHTML=`<div class="big-num">月耗电 ${kwhMonth.toFixed(1)} kWh</div><div class="row3"><div><b>日耗电</b><br>${kwhDay.toFixed(2)} kWh</div><div><b>月电费</b><br>¥${cost.toFixed(2)}</div><div><b>年电费</b><br>¥${(cost*12).toFixed(2)}</div></div>`; };
+    $('#el-run',body).onclick=()=>{ const price=+$('#el-price',body).value, tier=$('#el-tier',body).value.trim(); let kwhDay=0; items.forEach(it=>kwhDay+=it.pw/1000*it.h*it.n); const kwhMonth=kwhDay*30; let cost; if(tier){ const ts=tier.split(',').map(Number); let rem=kwhMonth,c=0,prev=0; const rates=[price,price*1.1,price*1.3]; for(let i=0;i<ts.length;i++){ const seg=Math.min(rem,ts[i]-prev); if(seg>0){c+=seg*rates[i];rem-=seg;} prev=ts[i]; } if(rem>0)c+=rem*rates[ts.length]; cost=c; } else cost=kwhMonth*price; lastResult={label:`${items.length}件电器 · ¥${price}/kWh${tier?' 阶梯':''}`, kwhMonth, cost, yearCost:cost*12}; $('#el-save',body).disabled=false; $('#el-out',body).innerHTML=`<div class="big-num">月耗电 ${kwhMonth.toFixed(1)} kWh</div><div class="row3"><div><b>日耗电</b><br>${kwhDay.toFixed(2)} kWh</div><div><b>月电费</b><br>¥${cost.toFixed(2)}</div><div><b>年电费</b><br>¥${(cost*12).toFixed(2)}</div></div>`; };
+    $('#el-save',body).onclick=()=>{ if(!lastResult) return; hist.unshift(lastResult); if(hist.length>50)hist=hist.slice(0,50); try{ localStorage.setItem(HK,JSON.stringify(hist)); }catch(_){} renderHist(); toast('已保存本次记录'); };
+    $('#el-histclear',body).onclick=()=>{ if(!hist.length){toast('暂无历史');return;} if(!confirm('确认清空全部历史记录？'))return; hist=[]; try{ localStorage.removeItem(HK); }catch(_){} renderHist(); };
+    renderHist();
   }
 };
 
 AppTools['fuel'] = {
   build(body){
+    const HK='pt_fuel_hist';
+    let hist=[]; try{ hist=JSON.parse(localStorage.getItem(HK)||'[]'); }catch(_){}
+    let lastAgg=null;
     body.innerHTML=`
       <div class="row mb"><div><label class="field-label">加油金额(元)</label><input type="number" step="0.01" class="inp" id="fu-money" value="300"></div>
         <div><label class="field-label">油价(元/L)</label><input type="number" step="0.01" class="inp" id="fu-price" value="7.8"></div>
         <div><label class="field-label">里程(km)</label><input type="number" class="inp" id="fu-km" value="400"></div>
         <button class="btn" id="fu-add">记录</button></div>
       <div id="fu-list" class="wrap-tags"></div>
-      <div id="fu-out" class="result-box">结果将显示在此</div>`;
+      <div id="fu-out" class="result-box">结果将显示在此</div>
+      <div class="btn-row"><button class="btn ghost" id="fu-save" disabled>保存到历史</button></div>
+      <div class="card-soft mt" id="fu-histbox" style="display:none">
+        <div class="row" style="justify-content:space-between;align-items:center"><b>📋 历史记录（本地保存，可比较前后变化）</b><button class="btn-mini danger" id="fu-histclear">清空</button></div>
+        <div id="fu-hist" class="hint" style="margin-top:6px"></div></div>`;
     const recs=[];
+    function renderHist(){ const box=$('#fu-histbox',body); if(!hist.length){ box.style.display='none'; return; } box.style.display=''; $('#fu-hist',body).innerHTML=hist.map((it,i)=>`<div class="mini-tag" style="cursor:pointer;background:var(--bg);border:1px solid var(--border)"><b>${it.cnt}次</b> · 百公里${it.l100.toFixed(2)}L · 每公里¥${it.perkm.toFixed(2)} · 总${it.km}km <span class="hint">${new Date(it.t).toLocaleString()}</span> <span data-hi="${i}" style="color:var(--error);font-weight:700">✕</span></div>`).join(' '); $('#fu-hist',body).querySelectorAll('[data-hi]').forEach(b=>b.onclick=()=>{ hist.splice(+b.dataset.hi,1); try{ localStorage.setItem(HK,JSON.stringify(hist)); }catch(_){} renderHist(); }); }
     function render(){ $('#fu-list',body).innerHTML=recs.map((r,i)=>`<span class="mini-tag">#${i+1} ${r.m}元/${r.km}km <a data-d="${i}" style="cursor:pointer">✕</a></span>`).join(''); $('#fu-list',body).querySelectorAll('[data-d]').forEach(a=>a.onclick=()=>{recs.splice(+a.dataset.d,1);render();}); calc(); }
-    function calc(){ if(!recs.length){ $('#fu-out',body).innerHTML='暂无记录'; return; } let M=0,P=0,KM=0; recs.forEach(r=>{M+=r.m;P+=r.p;KM+=r.km;}); const l100=M/P/KM*100, perkm=M/KM; $('#fu-out',body).innerHTML=`<div class="big-num">百公里油耗 ${l100.toFixed(2)} L</div><div class="row3"><div><b>每公里</b><br>¥${perkm.toFixed(2)}</div><div><b>总里程</b><br>${KM} km</div><div><b>总油费</b><br>¥${M.toFixed(2)}</div></div>`; }
+    function calc(){ if(!recs.length){ $('#fu-out',body).innerHTML='暂无记录'; lastAgg=null; $('#fu-save',body).disabled=true; return; } let M=0,P=0,KM=0; recs.forEach(r=>{M+=r.m;P+=r.p;KM+=r.km;}); const l100=M/P/KM*100, perkm=M/KM; lastAgg={cnt:recs.length, l100, perkm, km:KM, m:M}; $('#fu-save',body).disabled=false; $('#fu-out',body).innerHTML=`<div class="big-num">百公里油耗 ${l100.toFixed(2)} L</div><div class="row3"><div><b>每公里</b><br>¥${perkm.toFixed(2)}</div><div><b>总里程</b><br>${KM} km</div><div><b>总油费</b><br>¥${M.toFixed(2)}</div></div>`; }
     $('#fu-add',body).onclick=()=>{ const m=+$('#fu-money',body).value,p=+$('#fu-price',body).value,km=+$('#fu-km',body).value; if(m>0&&p>0&&km>0){ recs.push({m,p,km}); render(); } };
+    $('#fu-save',body).onclick=()=>{ if(!lastAgg) return; hist.unshift(lastAgg); if(hist.length>50)hist=hist.slice(0,50); try{ localStorage.setItem(HK,JSON.stringify(hist)); }catch(_){} renderHist(); toast('已保存本次记录'); };
+    $('#fu-histclear',body).onclick=()=>{ if(!hist.length){toast('暂无历史');return;} if(!confirm('确认清空全部历史记录？'))return; hist=[]; try{ localStorage.removeItem(HK); }catch(_){} renderHist(); };
+    renderHist();
   }
 };
 
@@ -8300,20 +8480,71 @@ AppTools['video-gif'] = {
 AppTools['photo-measure'] = {
   build(body){
     body.innerHTML=`
-      <div class="mb"><label class="field-label">上传照片（或留空用摄像头）</label><input type="file" id="pm-file" class="inp" accept="image/*"></div>
-      <div class="row mb"><div><label class="field-label">模式</label><select class="sel" id="pm-mode"><option value="dist">测距</option><option value="height">测高</option></select></div>
-        <div><label class="field-label">标定参考物长度(cm)</label><input type="number" id="pm-ref" class="inp" value="29.7" step="0.1"></div>
-        <div><label class="field-label">单位</label><select class="sel" id="pm-unit"><option value="cm">厘米</option><option value="m">米</option><option value="inch">英寸</option></select></div></div>
-      <div class="hint">步骤：① 在图上标 2 点作为参考物两端（如一张 A4 纸）→ ② 再标 2 点测量距离（或物体顶/底测高）。点击画布加点，右键清空。</div>
-      <canvas id="pm-cv" class="prev-canvas" style="max-width:100%;border:1px solid #ddd;border-radius:8px;margin-top:8px;touch-action:none"></canvas>
-      <div id="pm-out" class="result-box">结果将显示在此</div>`;
-    const cv=$('#pm-cv',body), ctx=cv.getContext('2d'); let img=null, pts=[], scale=null;
-    function unitMul(u){ return u==='m'?0.01:u==='inch'?1/2.54:1; }
-    function draw(){ ctx.clearRect(0,0,cv.width,cv.height); if(img) ctx.drawImage(img,0,0); ctx.lineWidth=Math.max(2,cv.width/300); ctx.strokeStyle='#ff3b30'; ctx.fillStyle='#ff3b30'; pts.forEach((p,i)=>{ ctx.beginPath();ctx.arc(p.x,p.y,Math.max(4,cv.width/200),0,7);ctx.fill(); ctx.fillStyle='#fff';ctx.font='bold '+(Math.max(10,cv.width/40))+'px sans-serif';ctx.fillText(String(i+1),p.x+6,p.y-cv.width/200);ctx.fillStyle='#ff3b30'; }); if(pts.length>=2){ ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);ctx.stroke(); compute(); } }
-    function compute(){ if(!scale){ const d=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y); scale=d/(+$('#pm-ref',body).value); $('#pm-out',body).innerHTML='已标定：1cm ≈ '+scale.toFixed(2)+' px'; return; } if(pts.length>=4){ const a=pts[2],b=pts[3]; const dpx=Math.hypot(a.x-b.x,a.y-b.y); const real=(dpx/scale)*unitMul($('#pm-unit',body).value); const mode=$('#pm-mode',body).value; $('#pm-out',body).innerHTML=`<div class="big-num">${mode==='height'?'物体高度':'两点距离'} ≈ ${real.toFixed(2)} ${$('#pm-unit',body).value}</div><div class="hint">像素距离 ${dpx.toFixed(0)}px，比例 1cm≈${scale.toFixed(2)}px</div>`; } }
-    $('#pm-file',body).onchange=async e=>{ const f=e.target.files[0]; if(!f)return; img=await fileToImage(f); cv.width=img.naturalWidth; cv.height=img.naturalHeight; pts=[]; scale=null; draw(); };
-    cv.addEventListener('click',e=>{ if(!img){toast('请先上传照片');return;} const r=cv.getBoundingClientRect(); const x=(e.clientX-r.left)/r.width*cv.width, y=(e.clientY-r.top)/r.height*cv.height; pts.push({x,y}); if(pts.length>4) pts=pts.slice(-4); draw(); });
-    cv.addEventListener('contextmenu',e=>{ e.preventDefault(); pts=[];scale=null;draw(); });
+      <div class="photo-tool">
+        <div class="mb"><label class="field-label">上传照片（含参照物，如一张 A4 纸、一支笔、一个人）</label><input type="file" id="pm-file" class="inp" accept="image/*"></div>
+        <div class="row mb">
+          <div><label class="field-label">模式</label><select class="sel" id="pm-mode"><option value="dist">测距（两点间直线距离）</option><option value="height">测高（物体垂直高度）</option></select></div>
+          <div><label class="field-label">参照物真实长度</label><input type="number" id="pm-ref" class="inp" value="29.7" step="0.1"></div>
+          <div><label class="field-label">单位</label><select class="sel" id="pm-unit"><option value="cm">厘米</option><option value="m">米</option><option value="inch">英寸</option></select></div>
+        </div>
+        <div class="photo-hint" id="pm-step">① 在图上点 <b>2 点</b> 作为参照物两端 → ② 再点 <b>2 点</b> 测量（测距点首尾，测高点物体的顶/底）。点击画布加点，右键清空。</div>
+        <div class="photo-canvas-wrap" id="pm-wrap" hidden><canvas id="pm-cv"></canvas></div>
+        <div class="btn-row" style="margin-top:8px">
+          <button class="btn ghost" id="pm-dl" disabled>⬇️ 下载标注图</button>
+          <button class="btn ghost" id="pm-clear">清空标点</button>
+        </div>
+        <div id="pm-out" class="result-box">结果将显示在此</div>
+        <div class="card-soft mt" id="pm-info" style="display:none"></div>
+      </div>`;
+    const cv=$('#pm-cv',body), wrap=$('#pm-wrap',body), stepEl=$('#pm-step',body), out=$('#pm-out',body), info=$('#pm-info',body);
+    const ctx=cv.getContext('2d');
+    const labels=['①','②','③','④'];
+    let img=null, pts=[];
+    function unitMul(u){ return u==='m'?100:u==='inch'?2.54:1; } // 转成厘米系数（输入值→cm）
+    function mode(){ return $('#pm-mode',body).value; }
+    function resize(){ const s=Math.min(1, 1000/img.naturalWidth); cv.width=img.naturalWidth*s; cv.height=img.naturalHeight*s; }
+    function draw(){
+      if(!img) return; resize(); ctx.drawImage(img,0,0,cv.width,cv.height);
+      pts.forEach((p,i)=>{ ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(6,cv.width/200),0,7); ctx.fillStyle='#ff3b30'; ctx.fill(); ctx.fillStyle='#fff'; ctx.font='bold '+(Math.max(12,cv.width/40))+'px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(labels[i],p.x,p.y); });
+      if(pts.length>=2){ ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y); ctx.strokeStyle='#ff3b30'; ctx.lineWidth=Math.max(2,cv.width/300); ctx.stroke(); }
+      compute();
+    }
+    function compute(){
+      if(pts.length<2){ out.innerHTML='<span class="hint">请先点 2 点作为参照物两端</span>'; return; }
+      const refPx=Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+      if(refPx<=0){ out.innerHTML='<span class="hint">参照物两点重合，请重新点</span>'; return; }
+      const refCm=+$('#pm-ref',body).value*unitMul($('#pm-unit',body).value); // 参照物长度(cm)
+      if(pts.length<4){ out.innerHTML=`<div class="hint">已标定：参照物 ${+$('#pm-ref',body).value}${$('#pm-unit',body).value} ≈ ${refPx.toFixed(0)} px，请再点 2 点测量</div>`; return; }
+      const m=mode();
+      let realCm, ratioTxt;
+      if(m==='height'){
+        const refV=Math.abs(pts[1].y-pts[0].y), tarV=Math.abs(pts[3].y-pts[2].y);
+        if(refV<=0){ out.innerHTML='<span class="hint">参照物垂直像素为 0，请点它的顶/底两端</span>'; return; }
+        realCm=refCm*(tarV/refV);
+        ratioTxt=`竖直像素比 ${tarV.toFixed(0)}/${refV.toFixed(0)}`;
+      } else {
+        const mPx=Math.hypot(pts[2].x-pts[3].x, pts[2].y-pts[3].y);
+        realCm=refCm*(mPx/refPx);
+        ratioTxt=`像素比 ${mPx.toFixed(0)}/${refPx.toFixed(0)}`;
+      }
+      // 按所选单位回显
+      const u=$('#pm-unit',body).value, k=u==='m'?100:u==='inch'?2.54:1;
+      const real=realCm/k;
+      out.innerHTML=`<div class="big-num">${m==='height'?'物体高度':'两点距离'} ≈ ${real.toFixed(2)} ${u}</div><div class="hint">${ratioTxt}，参照物 ${+$('#pm-ref',body).value}${u} ≈ ${refPx.toFixed(0)}px</div>`;
+      info.style.display='block';
+      info.innerHTML = m==='height'
+        ? '原理：照片中<b>同距物体的高度与像素高度成正比</b>。参照物 '+($('#pm-ref',body).value)+u+' 对应 '+Math.abs(pts[1].y-pts[0].y).toFixed(0)+' 竖直像素，目标对应 '+Math.abs(pts[3].y-pts[2].y).toFixed(0)+' 像素，故目标高 = '+($('#pm-ref',body).value)+u+' ×（目标/参照竖直像素比）= <b>'+real.toFixed(2)+u+'</b>。请尽量让参照物与目标到相机距离相近，否则会有透视误差。'
+        : '原理：用参照物的「真实长度 / 像素长度」定标，再乘以测量两点的像素长度即得到真实距离。';
+      $('#pm-dl',body).disabled=false;
+    }
+    $('#pm-file',body).onchange=async e=>{ const f=e.target.files[0]; if(!f)return; try{ img=await fileToImage(f); pts=[]; wrap.hidden=false; draw(); stepEl.innerHTML='① 在图上点 <b>2 点</b> 作为参照物两端 → ② 再点 <b>2 点</b> 测量。点击画布加点，右键清空。'; out.innerHTML='请先点 2 点作为参照物两端'; info.style.display='none'; $('#pm-dl',body).disabled=true; }catch(err){ toast('图片读取失败：'+(err&&err.message?err.message:err),'err'); } };
+    cv.addEventListener('click',e=>{ if(!img){toast('请先上传照片');return;} if(pts.length>=4){ pts=[]; } const r=cv.getBoundingClientRect(); const x=(e.clientX-r.left)*(cv.width/r.width), y=(e.clientY-r.top)*(cv.height/r.height); pts.push({x,y}); draw(); });
+    cv.addEventListener('contextmenu',e=>{ e.preventDefault(); pts=[]; draw(); });
+    $('#pm-clear',body).onclick=()=>{ pts=[]; draw(); $('#pm-dl',body).disabled=true; };
+    $('#pm-mode',body).onchange=()=>{ if(pts.length>=2) compute(); };
+    $('#pm-ref',body).oninput=()=>{ if(pts.length>=4) compute(); };
+    $('#pm-unit',body).onchange=()=>{ if(pts.length>=4) compute(); };
+    $('#pm-dl',body).onclick=()=>{ if(!img) return; cv.toBlob(b=>{ if(b) downloadBlob(b,'photo-measure.png'); },'image/png'); };
   }
 };
 
@@ -8910,6 +9141,7 @@ AppTools['img-round'] = {
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
         <input type="file" class="vis-file-btn" id="ir-files" accept="image/*" multiple>
+        <div class="row" style="margin-top:6px;align-items:center;gap:10px"><span id="ir-count" class="hint">0 张</span><button class="btn ghost" id="ir-clear" disabled>清除全部</button></div>
       </div>
       <div class="mb">
         <label class="field-label"><input type="checkbox" id="ir-enable-crop"> 启用裁剪（先裁剪再圆角）</label>
@@ -9003,6 +9235,7 @@ AppTools['img-to-pdf'] = {
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，按顺序排列，可多次继续添加）</label>
         <input type="file" class="vis-file-btn" id="ip-files" accept="image/*" multiple>
+        <div class="row" style="margin-top:6px;align-items:center;gap:10px"><span id="ip-count" class="hint">0 张</span><button class="btn ghost" id="ip-clear" disabled>清除全部</button></div>
       </div>
       <div class="row mb">
         <div><label class="field-label">纸张</label><select class="sel" id="ip-size"><option value="a4">A4</option><option value="a3">A3</option><option value="letter">Letter</option><option value="fit">适应图片</option></select></div>
@@ -9456,63 +9689,6 @@ AppTools['photo-range'] = { build(body){
   }
   $('#pr-hcalc',body).onclick=()=>calc('h');
   $('#pr-dcalc',body).onclick=()=>calc('d');
-}};
-
-AppTools['photo-height'] = { build(body){
-  body.innerHTML = `
-    <div class="photo-tool">
-      <input type="file" id="ph-file" accept="image/*" class="inp" style="margin-bottom:8px;">
-      <div class="photo-hint" id="ph-step">🖼️ 从相册选择一张含参照物的照片（建议从相册选取，避免调用相机）：① 点「参照物顶」→ ②「参照物底」→ ③「目标顶」→ ④「目标底」。</div>
-      <div class="photo-canvas-wrap" id="ph-wrap" hidden><canvas id="ph-canvas"></canvas></div>
-      <div class="mb"><label class="field-label">参照物真实高度（米）</label><input class="inp" id="ph-ref" type="number" value="1.7" step="0.1"></div>
-      <div class="btn-row">
-        <button class="btn" id="ph-calc" disabled>📐 计算目标高度</button>
-        <button class="btn btn-ghost" id="ph-reset">重置标点</button>
-        <button class="btn btn-ghost" id="ph-dl" disabled>下载标注图</button>
-      </div>
-      <div class="photo-result" id="ph-out" style="display:none"></div>
-      <div class="card-soft mt" id="ph-info" style="display:none"></div>
-    </div>`;
-  const canvas=$('#ph-canvas',body), wrap=$('#ph-wrap',body), stepEl=$('#ph-step',body), out=$('#ph-out',body), info=$('#ph-info',body);
-  let img=null, pts=[], labels=['参照物顶','参照物底','目标顶','目标底'], cur=0;
-  const MAXW=700;
-  function draw(){
-    if(!img) return;
-    const scale=Math.min(1, MAXW/img.width);
-    canvas.width=img.width*scale; canvas.height=img.height*scale;
-    const cx=canvas.getContext('2d'); cx.drawImage(img,0,0,canvas.width,canvas.height);
-    const colors=['#1890ff','#1890ff','#f5222d','#f5222d'];
-    pts.forEach((p,i)=>{ cx.beginPath(); cx.arc(p.x,p.y,7,0,7); cx.fillStyle=colors[i]; cx.fill(); cx.fillStyle='#fff'; cx.font='11px sans-serif'; cx.textAlign='center'; cx.fillText(labels[i],p.x,p.y-12); });
-  }
-  $('#ph-file',body).onchange=async e=>{
-    const f=e.target.files[0]; if(!f) return;
-    try{
-      img=await fileToImage(f); pts=[]; cur=0; wrap.hidden=false; draw();
-      stepEl.textContent='点击顺序：'+labels.join(' → ');
-      $('#ph-calc',body).disabled=true; $('#ph-dl',body).disabled=true; out.style.display='none'; info.style.display='none';
-    }catch(err){ toast('图片读取失败：'+(err&&err.message?err.message:err),'err'); }
-  };
-  canvas.addEventListener('pointerdown',(ev)=>{
-    if(!img||cur>=4) return;
-    ev.preventDefault();
-    const r=canvas.getBoundingClientRect();
-    const x=(ev.clientX-r.left)*(canvas.width/r.width), y=(ev.clientY-r.top)*(canvas.height/r.height);
-    pts.push({x,y}); cur++;
-    if(cur<4) stepEl.textContent='下一步：点「'+labels[cur]+'」'; else stepEl.textContent='已标完 4 点，可计算。';
-    draw(); $('#ph-calc',body).disabled = cur<4;
-  });
-  $('#ph-reset',body).onclick=()=>{ pts=[]; cur=0; stepEl.textContent='点击顺序：'+labels.join(' → '); draw(); $('#ph-calc',body).disabled=true; out.style.display='none'; info.style.display='none'; };
-  $('#ph-calc',body).onclick=()=>{
-    if(pts.length<4){ toast('请先标完 4 个点','err'); return; }
-    const dRef=Math.abs(pts[1].y-pts[0].y), dTar=Math.abs(pts[3].y-pts[2].y);
-    const refH=parseFloat($('#ph-ref',body).value)||0;
-    if(dRef<=0){ toast('参照物像素高度为 0','err'); return; }
-    const H=refH*dTar/dRef;
-    out.style.display='block'; out.textContent='目标真实高度 ≈ '+H.toFixed(2)+' 米';
-    info.style.display='block'; info.innerHTML='原理：照片中<b>同距物体高度与像素高度成正比</b>。参照物 '+refH+' 米对应 '+dRef.toFixed(0)+' 像素，目标对应 '+dTar.toFixed(0)+' 像素，故目标高 = '+refH+' × ('+dTar.toFixed(0)+'/'+dRef.toFixed(0)+') = <b>'+H.toFixed(2)+' 米</b>。请确保参照物与目标到相机的距离大致相同，否则会有误差。';
-    $('#ph-dl',body).disabled=false;
-  };
-  $('#ph-dl',body).onclick=()=>{ if(!img) return; canvas.toBlob(b=>{ if(b) downloadBlob(b,'photo_height_marked.png'); },'image/png'); };
 }};
 
 AppTools['ar-area'] = { build(body){
