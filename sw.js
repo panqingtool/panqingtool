@@ -1,4 +1,4 @@
-/* 托托工具箱 · Service Worker v21
+/* 托托工具箱 · Service Worker v22
  *
  * 目标：PWA 快捷方式「稳定可访问 + 自动更新 + 秒开」。
  *
@@ -21,7 +21,7 @@
  *
  * activate 阶段自动删除所有「不含当前 VERSION」的旧缓存 → 旧缓存（含坏缓存壳）被自动清理。
  */
-const VERSION = 'v21';
+const VERSION = 'v22';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 
