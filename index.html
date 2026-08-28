@@ -2849,77 +2849,6 @@ AppTools['pdf-toimg'] = {
   }
 };
 
-// Word/Excel/PPT 转 PDF（浏览器打印另存）
-AppTools['office-to-pdf'] = {
-  build(body){
-    async function ensureMammoth(){ if(typeof mammoth!=='undefined') return mammoth; const urls=['https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js','https://unpkg.com/mammoth@1.9.0/mammoth.browser.min.js','https://esm.sh/mammoth@1.9.0/mammoth.browser.min.js']; for(const u of urls){ try{ await loadScriptSrc(u); if(window.mammoth) return window.mammoth; }catch(_){ } } throw new Error('Word 解析库加载失败，请联网后重试'); }
-    async function ensureHtml2canvas(){ if(typeof html2canvas!=='undefined') return html2canvas; const urls=['https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js','https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js','https://esm.sh/html2canvas@1.4.1/dist/html2canvas.min.js']; for(const u of urls){ try{ await loadScriptSrc(u); if(window.html2canvas) return window.html2canvas; }catch(_){ } } throw new Error('截图库加载失败，请联网后重试'); }
-    body.innerHTML = `
-      <div class="mb"><label class="field-label">选择 Word / Excel 文件（.docx / .xlsx，.doc / .xls / .ppt 等老格式暂不支持）</label>
-        <input type="file" class="inp" id="of-file" accept=".docx,.xlsx,.doc,.xls,.ppt,.pptx" aria-label="选择文件"></div>
-      <div class="hint">🔒 全程本地转换：Word 用内置解析器还原内容、Excel 转为表格，再渲染成 PDF 直接下载（无需弹打印框，不再依赖“另存为 PDF”）。老版 .doc/.xls/.ppt 请先用 Office/WPS 另存为新格式。</div>
-      <div id="of-preview" class="mb" style="max-height:46vh;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:10px;background:#f3f4f6"></div>
-      <div class="btn-row"><button class="btn" id="of-run" disabled>转换并下载 PDF</button></div>
-      <div id="of-result" class="hint"></div>`;
-    let file = null;
-    function renderPreview(html){
-      const box=$('#of-preview', body); box.innerHTML=html;
-    }
-    $('#of-file', body).onchange = async (e) => {
-      const f = e.target.files[0]; if(!f) return;
-      file = f; $('#of-run', body).disabled = false; $('#of-result', body).textContent='';
-      const name=f.name.toLowerCase();
-      try{
-        if(name.endsWith('.docx')){
-          const m=await ensureMammoth();
-          const res=await m.convertToHtml({arrayBuffer:await f.arrayBuffer()});
-          renderPreview(`<div style="background:#fff;color:#000;padding:20px;font-family:SimSun,serif;font-size:14px;line-height:1.7"><style>#of-preview table{border-collapse:collapse;width:100%}#of-preview td,#of-preview th{border:1px solid #999;padding:4px 6px}#of-preview img{max-width:100%}#of-preview h1,#of-preview h2,#of-preview h3{margin:10px 0 6px}</style>${res.value}</div>`);
-        } else if(name.endsWith('.xlsx')){
-          if(typeof XLSX==='undefined') throw new Error('表格解析库未加载，请联网后重试');
-          const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
-          let html='<style>#of-preview table{border-collapse:collapse;width:100%}#of-preview td,#of-preview th{border:1px solid #999;padding:4px 6px}#of-preview img{max-width:100%}</style>'; wb.SheetNames.forEach(sn=>{ html+=`<div style="background:#fff;color:#000;padding:12px;margin-bottom:10px"><h4 style="margin:0 0 6px">${escapeHtml(sn)}</h4>${XLSX.utils.sheet_to_html(wb.Sheets[sn])}</div>`; });
-          renderPreview(html);
-        } else if(name.endsWith('.doc')||name.endsWith('.xls')||name.endsWith('.ppt')||name.endsWith('.pptx')){
-          renderPreview('<div class="result-box err">老版 Office 格式（.doc/.xls/.ppt）无法在浏览器本地解析，请先用 Office/WPS「另存为」.docx / .xlsx 后再转换；.pptx 暂不支持。</div>');
-          $('#of-run', body).disabled = true;
-        } else { renderPreview('<div class="result-box err">不支持的文件类型</div>'); $('#of-run', body).disabled = true; }
-      }catch(err){ renderPreview(`<div class="result-box err">预览失败：${escapeHtml(errMsg(err))}</div>`); }
-    };
-    $('#of-run', body).onclick = async () => {
-      if(!file) return;
-      const btn=$('#of-run', body); btn.disabled=true; btn.innerHTML='<span class="loading"><span class="spinner"></span>转换中…</span>';
-      $('#of-result', body).textContent='';
-      try{
-        const h2c=await ensureHtml2canvas();
-        const PDFLib=await ntGetPDFLib();
-        const source=$('#of-preview', body).firstElementChild;
-        const holder=document.createElement('div');
-        holder.style.cssText='position:fixed;left:-99999px;top:0;width:794px;padding:28px;background:#fff;color:#000;font-family:SimSun,serif;font-size:14px;line-height:1.7;box-sizing:border-box;overflow:hidden';
-        holder.innerHTML=source.innerHTML; document.body.appendChild(holder);
-        try{
-          const pdf=await PDFLib.PDFDocument.create();
-          const canvas=await h2c(holder,{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:true,windowWidth:794});
-          const pngBytes=await new Promise(r=>canvas.toBlob(b=>r(b),'image/png'));
-          const png=await pdf.embedPng(await pngBytes.arrayBuffer());
-          const pw=595.28, phh=841.89;                 // A4（pt）
-          const scaleX=pw/canvas.width;               // 整图按 A4 宽度等比缩放
-          const sliceH=Math.round(phh/scaleX);        // 每页对应的源像素高度
-          let y=0;
-          while(y < canvas.height){
-            const page=pdf.addPage([pw, phh]);
-            // 整图按页高偏移绘制，仅当前页 [y, y+sliceH] 落入可视窗口，保持原排版与字体
-            page.drawImage(png,{x:0, y:-y*scaleX, width:pw, height:canvas.height*scaleX});
-            y+=sliceH;
-          }
-          const bytes=await pdf.save();
-          downloadBlob(new Blob([bytes],{type:'application/pdf'}), (file.name.replace(/\.[^.]+$/,'')||'office')+'.pdf');
-          $('#of-result', body).innerHTML='<div class="result-box ok">✅ 已按 A4 分页生成 PDF 并开始下载（保持原排版、字体与图片，逐页还原）。</div>';
-        } finally { document.body.removeChild(holder); }
-      }catch(err){ $('#of-result', body).innerHTML=`<div class="result-box err">转换失败：${escapeHtml(errMsg(err))}</div>`; }
-      btn.disabled=false; btn.textContent='转换并下载 PDF';
-    };
-  }
-};
 
 // 在线文本对比（LCS 行级 diff，可忽略大小写/空白、按词对比）
 AppTools['text-diff'] = {
@@ -7317,6 +7246,14 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
+  { date:'2026-08-28', items:[
+    '手机端卡片：改用 grid-auto-rows:1fr + height:100%，所有行等高、每张卡片面积一致，彻底修复「同屏面积差距过大」问题。',
+    '删除「文档转 PDF」应用；「在线 OCR 识字」移至文档工具、位于「表格识别与导出」旁。',
+    '「表格识别与导出」移除 PDF 文档提取，仅保留 Word 提取。',
+    '「特殊符号大全」移除 emoji 与显示不全 / 黑色问号符号，仅保留常用文本符号、全角、序号、框线等。',
+    '「文本加密解密」新增算法切换（AES / 凯撒 / 异或）与 Base64 编解码快捷按钮。',
+    '删除「随机段落生成」应用；「敏感词检测」自定义敏感词支持历史记录复用。',
+  ]},
   { date:'2026-08-27', items:[
     '手机号归属：修复运营商显示为空的问题（本期）。',
     '图片转 Base64：修复加载失败（元素缺失导致空引用，本期）。',
