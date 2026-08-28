@@ -581,7 +581,9 @@ th{background:var(--bg);}
 
 /* ============ 响应式 ============ */
 @media (max-width:1024px){
-  .tool-grid{grid-template-columns:repeat(2,1fr);grid-auto-rows:150px;}
+  .tool-grid{grid-template-columns:repeat(2,1fr);grid-auto-rows:128px;}
+  .tool-card{min-height:0;overflow:hidden;}
+  .tool-card .t-desc{display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 }
 @media (max-width:640px){
   .nav{padding:0 14px;}
@@ -594,14 +596,14 @@ th{background:var(--bg);}
   .hamburger{display:flex;align-items:center;justify-content:center;}
   .hero h1{font-size:26px;}
   .hero .slogan{font-size:15px;}
-  .tool-grid{grid-template-columns:repeat(3,1fr);gap:8px;grid-auto-rows:150px;}
-  .tool-card{padding:8px;min-height:128px;border-radius:10px;height:100%;}
+  .tool-grid{grid-template-columns:repeat(3,1fr);gap:8px;grid-auto-rows:104px;}
+  .tool-card{padding:7px 6px;min-height:0;border-radius:10px;height:100%;overflow:hidden;}
   .tool-card .t-icon{width:28px;height:28px;font-size:13px;border-radius:6px;}
   .tool-card .t-head .t-icon{width:28px;height:28px;font-size:13px;border-radius:6px;}
   .tool-card .t-name{font-size:12.5px;margin-bottom:2px;line-height:1.2;}
   .tool-card .t-cat{display:none;}
-  .tool-card .t-desc{font-size:10.5px;margin-bottom:6px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:32px;}
-  .tool-card .t-use{height:28px;font-size:11.5px;border-radius:6px;}
+  .tool-card .t-desc{display:none;}
+  .tool-card .t-use{height:26px;font-size:11px;border-radius:6px;}
   .tool-card .t-pconly{font-size:10px;padding:0 6px;margin:0;}
   .tool-card .t-monly{font-size:10px;padding:0 6px;margin:0;}
   .tool-card .t-batch{font-size:8px;top:-3px;right:-3px;padding:1px 3px;}
@@ -791,7 +793,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.28-c</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.28-d</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7276,7 +7278,8 @@ const CHANGELOG = [
     "【更新日志】8/20–8/27 各期精简为带【】概括。",
     "【清理缓存】Service Worker 升 v22，自动清除旧版本废弃缓存。",
     "【分类回调】决策转盘 / 随机抽签点名 / 比赛记分移回「生活实用」。",
-    "【手机卡片】移动端固定行高由 168/160px 统一缩小至 150px，每列应用面积更小且相等。"
+    "【手机卡片】移动端固定行高由 168/160px 统一缩小至 150px，每列应用面积更小且相等。",
+    "【手机卡片·二修】移动端行高再缩（手机 104px / 平板 128px）；卡片加 overflow:hidden、去掉 min-height 冲突，手机端隐藏描述（点卡片弹完整功能）；修复「全部 / 开发工具」等长描述导致的溢出排版问题，每列面积更小且相等。"
   ]},
   { date:'2026-08-27', items:[
     "【手机卡片】调整尺寸缩小同屏面积差距，布局更均衡。",
