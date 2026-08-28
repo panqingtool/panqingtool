@@ -594,8 +594,8 @@ th{background:var(--bg);}
   .hamburger{display:flex;align-items:center;justify-content:center;}
   .hero h1{font-size:26px;}
   .hero .slogan{font-size:15px;}
-  .tool-grid{grid-template-columns:repeat(3,1fr);gap:8px;}
-  .tool-card{padding:8px;min-height:128px;border-radius:10px;}
+  .tool-grid{grid-template-columns:repeat(3,1fr);gap:8px;grid-auto-rows:1fr;}
+  .tool-card{padding:8px;min-height:128px;border-radius:10px;height:100%;}
   .tool-card .t-icon{width:28px;height:28px;font-size:13px;border-radius:6px;}
   .tool-card .t-head .t-icon{width:28px;height:28px;font-size:13px;border-radius:6px;}
   .tool-card .t-name{font-size:12.5px;margin-bottom:2px;line-height:1.2;}
@@ -791,7 +791,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.27-e</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.28-a</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -3404,44 +3404,23 @@ AppTools['text-replace'] = {
   }
 };
 
-// 随机段落生成（中文乱数假文）
-AppTools['lorem'] = {
-  build(body){
-    body.innerHTML = `
-      <div class="row mb">
-        <div><label class="field-label">段落数</label><input type="number" class="inp" id="lo-n" value="3" min="1" max="20"></div>
-        <div><label class="field-label">每段落字数</label><input type="number" class="inp" id="lo-w" value="80" min="10" max="500"></div>
-      </div>
-      <button class="btn" id="lo-run">生成</button>
-      <div id="lo-result"></div>`;
-    $('#lo-run', body).onclick = () => {
-      const pool = '天地玄黄宇宙洪荒日月盈昃辰宿列张寒来暑往秋收冬藏闰余成岁律吕调阳云腾致雨露结为霜金生丽水玉出昆冈剑号巨阙珠称夜光果珍李柰菜重芥姜海咸河淡鳞潜羽翔龙师火帝鸟官人皇始制文字乃服衣裳推位让国有虞陶唐';
-      const n = +$('#lo-n', body).value, w = +$('#lo-w', body).value;
-      const paras = [];
-      for(let i=0;i<n;i++){ let s=''; for(let j=0;j<w;j++) s += pool[Math.floor(Math.random()*pool.length)]; paras.push(s); }
-      const out = paras.join('\n\n');
-      $('#lo-result', body).innerHTML = `<textarea class="txt" id="lo-out">${escapeHtml(out)}</textarea><div class="btn-row"><button class="btn" id="lo-copy">复制</button></div>`;
-      $('#lo-copy', body).onclick = () => copyText(out);
-    };
-  }
-};
 
-// 特殊符号大全
+
+// 特殊符号大全（纯文本符号，去除 emoji / 不渲染字符，避免显示黑色问号）
 AppTools['symbols'] = {
   build(body){
     const CURATED=[
-      ['图形形状','★☆●○◆◇■□▲△▼▽◢◣◤◥⬟⬠⬡⬢⬣✪✷❂❉❀✿❁☀☁☂❄⚡☕'],
-      ['箭头指向','←→↑↓↔⇐⇒⇑⇓➤➜➔➚➘➙➛➜⟶⟵⟷'],
-      ['标点符号','—–…‘’“”「」『』《》〈〉«»‹›「」¡¿′″§¶†‡※°•·…〜〰'],
+      ['图形形状','★☆●○◆◇■□▲△▼▽◢◣◤◥⬟⬠⬡⬢⬣✪✷❂❉❀✿❁'],
+      ['箭头指向','←→↑↓↔⇐⇒⇑⇓➤➜➔➚➘➙➛⟶⟵⟷'],
+      ['标点符号','—–…‘’“”「」『』《》〈〉«»‹›¡¿′″§¶†‡※°•·〜〰'],
       ['数学符号','×÷±≠≈≡≤≥∞∑∏√∫∮∂∇∆∀∃∈∉⊂⊆⊇⊃∪∩∅∧∨¬→↔∠⊥∥'],
-      ['希腊字母','αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩπΩ'],
-      ['单位货币','€£¥¢$₩₽₺₴¤℉℃°′″µ‰§'],
+      ['希腊字母','αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ'],
+      ['单位货币','€£¥¢$₩₽₺₴¤℉℃°′″µ‰'],
       ['星座生肖','♈♉♊♋♌♍♎♏♐♑♒♓♂♀⚤⚢⚣'],
-      ['音乐娱乐','♪♫♬♩♭♮♯🎵🎶⚽🏀🎲🎯🎮🎨🎬'],
-      ['情感符号','❤♡♥💔✓✔✗✘☹☺☻😀😁😂🤣😊😍😎🤔😜😭😡'],
-      ['实用图标','☎✉✂✏✒✔➔⚠⚡🔥🌟💡📌🚀⛔✅❌⭐🔔💡📎🔒🔓']
+      ['制表框线','─│┌┐└┘├┤┬┴┼═║╔╗╚╝╠╣╦╩╬■□▼▲◀▶'],
+      ['数字序号','①②③④⑤⑥⑦⑧⑨⑩⒈⒉⒊⒋⒌⒍⒎⒏⒐⒑⑴⑵⑶⑷⑸ⅰⅱⅲⅳⅴⅠⅡⅢⅣⅤ㈠㈡㈢']
     ];
-    function cpRange(s,e){ const a=[]; for(let c=s;c<=e;c++){ const ch=String.fromCodePoint(c); if(ch==='\uFE0F'||ch==='\u200D'||ch==='\uFE0E') continue; a.push(ch); } return a.join(''); }
+    function cpRange(s,e){ const a=[]; for(let c=s;c<=e;c++){ const ch=String.fromCodePoint(c); if(ch.length>1) continue; if(ch==='\uFE0F'||ch==='\u200D'||ch==='\uFE0E') continue; a.push(ch); } return a.join(''); }
     const BLOCKS=[
       ['一般标点',0x2000,0x206F],['货币符号',0x20A0,0x20CF],['数字形式',0x2150,0x218F],
       ['带圈字母数字',0x2460,0x24FF],['箭头符号',0x2190,0x21FF],['数学运算符',0x2200,0x22FF],
@@ -3449,10 +3428,7 @@ AppTools['symbols'] = {
       ['几何图形',0x25A0,0x25FF],['杂项符号',0x2600,0x26FF],['符号与装饰',0x2700,0x27BF],
       ['杂项符号与箭头',0x2B00,0x2BFF],['CJK标点',0x3000,0x303F],['全角字符',0xFF01,0xFF60],
       ['拉丁补充',0x00A0,0x00FF],['希腊字母(扩展)',0x0370,0x03FF],['西里尔字母',0x0400,0x04FF],
-      ['片假名',0x30A0,0x30FF],['平假名',0x3040,0x309F],['注音符号',0x3100,0x312F],
-      ['emoji·表情手势',0x1F300,0x1F64F],['emoji·人物活动',0x1F680,0x1F9FF],
-      ['emoji·动物自然',0x1F400,0x1F5FF],['emoji·食物植物',0x1F320,0x1F37F],
-      ['emoji·符号标志',0x1F000,0x1F0FF]
+      ['片假名',0x30A0,0x30FF],['平假名',0x3040,0x309F],['注音符号',0x3100,0x312F]
     ];
     const CATS = CURATED.concat(BLOCKS.map(([n,s,e])=>[n, cpRange(s,e)]));
     const all = CATS.map(c=>c[1]).join('').split('');
@@ -3475,33 +3451,69 @@ AppTools['symbols'] = {
   }
 };
 
-// 文本加密解密（AES，crypto-js）
+
+// 文本加密解密（AES / 凯撒 / 异或 + Base64，全部本地完成）
 AppTools['text-crypto'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">文本</label><textarea class="txt" id="tc-in"></textarea></div>
-      <div class="mb"><label class="field-label">密码</label><input type="text" class="inp" id="tc-key"></div>
+      <div class="mb"><label class="field-label">密码 / 密钥（AES 与异或必填；凯撒密码可留空，默认位移 3）</label><input type="text" class="inp" id="tc-key"></div>
+      <div class="mb"><label class="field-label">算法</label><select class="sel" id="tc-algo">
+        <option value="aes">AES 对称加密（推荐）</option>
+        <option value="caesar">凯撒密码（位移替换）</option>
+        <option value="xor">异或 XOR（按密钥循环）</option>
+      </select></div>
       <div class="btn-row">
         <button class="btn btn-ghost" id="tc-enc">加密</button>
         <button class="btn btn-ghost" id="tc-dec">解密</button>
+        <button class="btn btn-ghost" id="tc-b64e">Base64 编码</button>
+        <button class="btn btn-ghost" id="tc-b64d">Base64 解码</button>
       </div>
       <div id="tc-result"></div>`;
     function show(o){ $('#tc-result', body).innerHTML=`<textarea class="txt" id="tc-out">${escapeHtml(o)}</textarea><div class="btn-row"><button class="btn" id="tc-copy">复制</button></div>`; $('#tc-copy', body).onclick=()=>copyText(o); }
+    function b64enc(s){ return btoa(unescape(encodeURIComponent(s))); }
+    function b64dec(s){ return decodeURIComponent(escape(atob(s.trim()))); }
     $('#tc-enc', body).onclick = () => {
-      if(typeof CryptoJS==='undefined'){ toast('加密库未加载，请检查网络','err'); return; }
-      const k=$('#tc-key', body).value; if(!k){ toast('请输入密码','err'); return; }
-      show(CryptoJS.AES.encrypt($('#tc-in', body).value, k).toString());
+      const algo=$('#tc-algo', body).value, k=$('#tc-key', body).value, txt=$('#tc-in', body).value;
+      try{
+        if(algo==='aes'){
+          if(typeof CryptoJS==='undefined'){ toast('加密库未加载，请检查网络','err'); return; }
+          if(!k){ toast('请输入密码','err'); return; }
+          show(CryptoJS.AES.encrypt(txt, k).toString());
+        } else if(algo==='caesar'){
+          const sh = k && /^\d+$/.test(k) ? (parseInt(k,10)%95) : 3;
+          show(txt.replace(/[ -~]/g, ch => { let code=ch.charCodeAt(0)-32; code=(code+sh)%95; return String.fromCharCode(code+32); }));
+        } else {
+          if(!k){ toast('请输入密钥','err'); return; }
+          const bytes=Array.from(txt, c=>c.charCodeAt(0)); const kb=Array.from(k, c=>c.charCodeAt(0));
+          show(b64enc(bytes.map((b,i)=>String.fromCharCode(b ^ kb[i % kb.length])).join('')));
+        }
+      }catch(e){ $('#tc-result', body).innerHTML='<div class="result-box err">加密失败：'+escapeHtml(errMsg(e))+'</div>'; }
     };
     $('#tc-dec', body).onclick = () => {
-      if(typeof CryptoJS==='undefined'){ toast('加密库未加载，请检查网络','err'); return; }
+      const algo=$('#tc-algo', body).value, k=$('#tc-key', body).value, txt=$('#tc-in', body).value.trim();
       try{
-        const dec = CryptoJS.AES.decrypt($('#tc-in', body).value, $('#tc-key', body).value).toString(CryptoJS.enc.Utf8);
-        if(!dec) throw new Error('密码错误或数据损坏');
-        show(dec);
+        if(algo==='aes'){
+          if(typeof CryptoJS==='undefined'){ toast('加密库未加载，请检查网络','err'); return; }
+          if(!k){ toast('请输入密码','err'); return; }
+          const dec = CryptoJS.AES.decrypt(txt, k).toString(CryptoJS.enc.Utf8);
+          if(!dec) throw new Error('密码错误或数据损坏');
+          show(dec);
+        } else if(algo==='caesar'){
+          const sh = k && /^\d+$/.test(k) ? (parseInt(k,10)%95) : 3;
+          show(txt.replace(/[ -~]/g, ch => { let code=ch.charCodeAt(0)-32; code=(code-sh+95)%95; return String.fromCharCode(code+32); }));
+        } else {
+          if(!k){ toast('请输入密钥','err'); return; }
+          const raw=b64dec(txt); const bytes=Array.from(raw, c=>c.charCodeAt(0)); const kb=Array.from(k, c=>c.charCodeAt(0));
+          show(bytes.map((b,i)=>String.fromCharCode(b ^ kb[i % kb.length])).join(''));
+        }
       }catch(e){ $('#tc-result', body).innerHTML='<div class="result-box err">解密失败：'+escapeHtml(errMsg(e))+'</div>'; }
     };
+    $('#tc-b64e', body).onclick = () => { try{ show(b64enc($('#tc-in', body).value)); }catch(e){ $('#tc-result', body).innerHTML='<div class="result-box err">编码失败：'+escapeHtml(errMsg(e))+'</div>'; } };
+    $('#tc-b64d', body).onclick = () => { try{ show(b64dec($('#tc-in', body).value)); }catch(e){ $('#tc-result', body).innerHTML='<div class="result-box err">解码失败：Base64 格式错误</div>'; } };
   }
 };
+
 
 // 换行批量处理
 AppTools['line-process'] = {
@@ -6602,7 +6614,6 @@ AppTools['postal-code'] = {
 
 const TOOLS = [
   /* ============ 图片工具 ============ */
-  {id:'ocr',          name:'在线 OCR 识字',      icon:'👁️', cat:'image', desc:'支持图片与 PDF 扫描件（自动按页栅格化）一键转文字，支持中文+英文 / 日语 / 韩语 / 法语 / 德语 / 西语 / 俄语 / 葡语 / 意语 / 阿语等多语言识别，灰度 / 对比度 / 二值化预处理，逐张复制或打包 ZIP 下载 TXT；模型首次下载后可离线缓存。', batch:true},
   {id:'img-matting-manual', name:'手动框选抠图',   icon:'✂️', cat:'image', desc:'手动框选抠图，支持矩形 / 多边形 / 套索任意形状，撤销重做、画布缩放平移，同一张图可多次框选不同对象并打包导出，无需联网。', batch:true},
   {id:'img-idphoto',  name:'证件照裁剪',          icon:'🪪', cat:'image', desc:'一寸 / 二寸 / 小一寸 / 小二寸 / 大一寸 / 护照等常用证件尺寸预设，自动居中裁剪导出 PNG。'},
   {id:'img-upscale',  name:'图片放大',            icon:'🔍', cat:'image', desc:'按目标长边（原图 / 1080P / 2K / 4K / 8K）高质量重采样放大，支持批量；适合手机随拍 / 老照片放大（非 AI 超分，放大仍可能略糊）。', batch:true},
@@ -6631,24 +6642,23 @@ const TOOLS = [
   {id:'pdf-split',    name:'PDF 分割',            icon:'✂️', cat:'doc',   desc:'按页码范围（如 1,3,5-8、奇 / 偶、1-10/2）提取选中页为单个 PDF 并下载。'},
   {id:'pdf-toimg',    name:'PDF 转图片',          icon:'🖼️', cat:'doc',   desc:'PDF 页面转为 PNG，支持 100–600 DPI 高清渲染，逐页预览与下载；扫描件仅放大像素、不恢复细节。'},
   {id:'pdf-sign',     name:'PDF 签章 / 签名',      icon:'✍️', cat:'doc',   desc:'手写签名 / 电子章 / 骑缝章 / 上传图片（可去白底），支持 PDF / Word / Excel 添加，拖动定位并调大小后下载，本地合成不外传。'},
-  {id:'office-to-pdf',name:'文档转 PDF',          icon:'📄', cat:'doc',   desc:'本地将 Word(.docx)/Excel(.xlsx) 渲染为 PDF 直接下载（保持排版与图片，原文件不上传、不经过打印框）；老版 .doc/.xls/.ppt 请先用 Office/WPS 另存为新格式。'},
   {id:'text-diff',    name:'在线文本对比',        icon:'⇄', cat:'doc',   desc:'两段文本逐行 diff 高亮（新增 / 删除 / 修改），结果可复制，适合合同 / 代码校对。'},
   {id:'file-base64',  name:'文件 Base64',         icon:'🔣', cat:'doc',   desc:'文件与 Base64 / Data URL 互转，支持大文件进度与复制，粘贴 Base64 可还原下载文件。'},
   {id:'remove-blank', name:'去除空白行',          icon:'🧹', cat:'doc',   desc:'一键清理多余空行（保留非空内容），结果可复制，适合整理日志 / 名单。'},
-  {id:'img2excel',     name:'表格识别与导出',      icon:'📊', cat:'doc',   desc:'粘贴表格 / 图片 OCR / PDF·Word 提取，导出 CSV / xls / xlsx / docx / TXT，Markdown 可复制；OCR 支持中英文与版面容差，全程本地。'},
+  {id:'img2excel',     name:'表格识别与导出',      icon:'📊', cat:'doc',   desc:'粘贴表格 / 图片 OCR / Word 提取，导出 CSV / xls / xlsx / docx / TXT，Markdown 可复制；OCR 支持中英文与版面容差，全程本地。'},
+  {id:'ocr',          name:'在线 OCR 识字',      icon:'👁️', cat:'doc',   desc:'支持图片与 PDF 扫描件（自动按页栅格化）一键转文字，支持中文+英文 / 日语 / 韩语 / 法语 / 德语 / 西语 / 俄语 / 葡语 / 意语 / 阿语等多语言识别，灰度 / 对比度 / 二值化预处理，逐张复制或打包 ZIP 下载 TXT；模型首次下载后可离线缓存。', batch:true},
   {id:'pdf-watermark',name:'文档/图片加水印', icon:'🌟', cat:'doc',   desc:'给 PDF / Word(.docx) / 图片批量加文字或图片水印，支持字号 / 颜色 / 透明度 / 旋转 / 平铺 / 页码范围，图片输出 PNG / JPG / WebP，多文件打包 ZIP（Word 先转 PDF 再加水印）。', batch:true},
   {id:'md-to-html',   name:'Markdown 转 HTML',icon:'📝', cat:'doc',   desc:'实时渲染 Markdown 为 HTML，可复制 HTML / 富文本或下载 .html，适配公众号 / 博客。'},
   /* ============ 文本工具 ============ */
   {id:'cn-convert',   name:'繁简体转换',          icon:'🀄', cat:'text',  desc:'简繁中文互转，适合两岸三地稿件初步处理（逐字对照，专业名词建议人工复核）。'},
   {id:'tts',          name:'文字转语音',          icon:'🔊', cat:'text',  desc:'调用本机语音朗读（Web Speech API，仅电脑端），语速 / 音调可调、支持试听；另含麦克风录制校验（可下载录音样本）。', pcOnly:true},
   {id:'text-crypto',  name:'文本加密解密',        icon:'🔐', cat:'text',  desc:'AES 对称加密 / 解密保护文本，自定义密码，浏览器本地完成。'},
-  {id:'lorem',        name:'随机段落生成',        icon:'📜', cat:'text',  desc:'生成中文随机假文，可指定段数与每段落字数，适合占位 / 排版预览。'},
   {id:'word-count',   name:'字数统计',            icon:'🔢', cat:'text',  desc:'实时统计字符 / 中文字数 / 英文词数 / 行数 / 段落等，附阅读时长与英文词频图。'},
   {id:'text-dedupe',  name:'文字去重',            icon:'🔁', cat:'text',  desc:'按行去重，可选忽略大小写 / 首尾空格与同时删除空行，显示移除数，可复制或下载 TXT。'},
   {id:'case-convert', name:'大小写转换',          icon:'🔠', cat:'text',  desc:'全大写 / 全小写 / 首字母大写 / 标题大写，及 camelCase / PascalCase / snake_case / kebab-case 编程命名转换。'},
   {id:'text-replace', name:'文本替换',            icon:'🔃', cat:'text',  desc:'支持正则 / 普通文本与批量规则替换，结果随输入实时预览，可一键复制或下载 .txt。'},
   {id:'space-remove', name:'空格去除',            icon:'␠', cat:'text',  desc:'提供去首尾 / 去全部 / 合并多空格 / 去换行 / 删空行 / 全角转半角 / 制表符转空格等多种空格处理模式，结果可复制。'},
-  {id:'symbols',      name:'特殊符号大全',        icon:'✳️', cat:'text',  desc:'涵盖数学 / 箭头 / 几何 / 货币 / 希腊 / 西里尔 / 片假名 / CJK 标点 / 全角 / emoji 等 1000+ 符号，按分类点选即复制，支持按字符搜索。'},
+  {id:'symbols',      name:'特殊符号大全',        icon:'✳️', cat:'text',  desc:'涵盖数学 / 箭头 / 几何 / 货币 / 希腊 / 西里尔 / 片假名 / CJK 标点 / 全角 / 序号 / 框线等 900+ 常用符号，按分类点选即复制，支持按字符搜索。'},
   {id:'line-process', name:'换行批量处理',        icon:'📋', cat:'text',  desc:'加前后缀 / 排序 / 加序号 / 行反转 / 去重 / 大小写转换 / 按关键词增删行 / 按分隔符拆分 / 去标点，适合名单 / SQL / Markdown 整理。'},
   {id:'para-merge',   name:'段落合并拆分',        icon:'📑', cat:'text',  desc:'按自定义分隔符合并或拆分段落，含按句末标点智能分段，结果可复制。'},
   {id:'text-reverse', name:'文本反转倒序',   icon:'🔁', cat:'text',  desc:'全文反转 / 按行反转 / 逐行倒序 / 按词反转，适配特殊排版与趣味场景。'},
@@ -7538,14 +7548,14 @@ renderVisit();
   setTimeout(() => { renderVisit(); scheduleVisitRefresh(); }, next - now + 200);
 })();
 
-/* ---------- 表格识别与导出（粘贴 / 图片OCR / 文档PDF·Word 三合一，可预览、可导出） ---------- */
+/* ---------- 表格识别与导出（粘贴 / 图片OCR / 文档Word 提取，可预览、可导出） ---------- */
 AppTools['img2excel'] = {
   build(body){
     body.innerHTML = `
       <div class="tab-bar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
         <button class="tab tab-act" data-tab="paste">⌨️ 粘贴表格</button>
         <button class="tab" data-tab="ocr">📷 图片识别(OCR)</button>
-        <button class="tab" data-tab="doc">📄 文档提取(PDF/Word)</button>
+        <button class="tab" data-tab="doc">📄 文档提取(Word)</button>
       </div>
       <section data-pane="paste">
         <div class="mb"><label class="field-label">粘贴表格文本（可直接从 Excel 复制，或用逗号 / 制表符 / 分号分隔，每行一条；首行可作表头）</label>
@@ -7570,13 +7580,13 @@ AppTools['img2excel'] = {
         <div class="hint">🔒 本地 OCR（首次需联网下载语言模型）。采用「按词框坐标自动聚类行/列」重建表格，复杂表格请校对后再导出。</div>
       </section>
       <section data-pane="doc" hidden>
-        <div class="mb"><label class="field-label">上传文档（PDF 或 Word(.docx)）</label>
-          <input type="file" class="inp" id="ie-doc" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="上传文档"></div>
+        <div class="mb"><label class="field-label">上传 Word 文档（.docx）</label>
+          <input type="file" class="inp" id="ie-doc" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="上传 Word 文档"></div>
         <div class="mb"><label class="field-label">合并容差（单位，越大越能合并错位行/列）：<b id="ie-doctolv">8</b></label>
           <input type="range" id="ie-doctol" min="2" max="30" value="8"></div>
         <button class="btn" id="ie-docrun" disabled>提取表格</button>
         <div id="ie-docprog" class="hint"></div>
-        <div class="hint">🔒 本地解析（PDF 首次需联网加载解析库）。Word 提取其中的表格与段落，PDF 按文本坐标重建表格。</div>
+        <div class="hint">🔒 本地解析 Word(.docx) 提取其中的表格与段落，无需联网 OCR。</div>
       </section>
       <div id="ie-result"></div>
       <div class="hint">💡 三步：选来源 → 生成表格 → 一键导出。OCR / 文档识别不出时，用「粘贴表格」手动录入，完全离线可用。</div>`;
@@ -7714,28 +7724,13 @@ AppTools['img2excel'] = {
       try{
         const name = docFile.name.toLowerCase();
         let rows = [];
-        if(name.endsWith('.pdf')){
-          $('#ie-docprog', body).textContent = '正在联网加载 PDF 解析库…';
-          const pdfjs = await ensurePdfjs();
-          const buf = new Uint8Array(await docFile.arrayBuffer());
-          const pdf = await pdfjs.getDocument({data:buf}).promise;
-          const tol = +($('#ie-doctol', body).value);
-          for(let p=1; p<=pdf.numPages; p++){
-            const page = await pdf.getPage(p);
-            const tc = await page.getTextContent();
-            const items = (tc.items||[]).filter(it => it.str && it.str.trim());
-            const words = items.map(it => ({ x0:it.transform[4], y0:it.transform[5], w:it.width||0, h:it.height||0, text:it.str.trim() }));
-            const r = clusterWords(words, tol);
-            if(p>1 && r.length) rows.push([]);            // 页间留空行
-            rows = rows.concat(r);
-          }
-        } else if(name.endsWith('.docx')){
+        if(name.endsWith('.docx')){
           const m = await ensureMammoth();
           const arr = await docFile.arrayBuffer();
           const res = await m.convertToHtml({arrayBuffer:arr});
           rows = parseWordHtml(res.value);
         } else {
-          throw new Error('仅支持 PDF / Word(.docx) 文档');
+          throw new Error('仅支持 Word(.docx) 文档');
         }
         if(!rows.length) throw new Error('未提取到表格内容，请确认文档含表格或文本');
         table = rows; headerless = false; renderResult();
@@ -9937,12 +9932,20 @@ AppTools['sensitive-word'] = {
           <div style="margin-top:8px"><input type="file" id="sw-file" class="vis-file-btn" accept=".txt,.md,.csv,.json,.text,text/plain,text/*" multiple aria-label="选择文档"></div>
           <span class="mini-tag" id="sw-docinfo">支持 .txt / .md / .csv / .json / .text</span>
         </div></div>
-      <div class="mb"><label class="field-label">自定义敏感词（空格分隔，叠加在默认词库上）</label><input type="text" class="inp" id="sw-extra" value=""></div>
+      <div class="mb"><label class="field-label">自定义敏感词（空格分隔，叠加在默认词库上；下方可一键复用历史）</label><input type="text" class="inp" id="sw-extra" value="" list="sw-extra-hist" autocomplete="off"><datalist id="sw-extra-hist"></datalist></div>
+      <div class="wrap-tags mb" id="sw-hist"></div>
       <div class="btn-row"><button class="btn" id="sw-run">检测</button><button class="btn ghost" id="sw-clear">去除敏感词</button></div>
       <div id="sw-out" class="hint">输入文本或选择文档后点击检测</div>`;
+    const SW_HKEY='panqing_sw_extra_hist';
+    function swLoadHist(){ try{ return JSON.parse(localStorage.getItem(SW_HKEY)||'[]'); }catch(_){ return []; } }
+    function swSaveHist(words){ if(!words.length) return; const h=swLoadHist().filter(x=>x!==words.join(' ')); h.unshift(words.join(' ')); const top=h.slice(0,10); localStorage.setItem(SW_HKEY, JSON.stringify(top)); renderSwHist(); }
+    function renderSwHist(){ const h=swLoadHist(); const box=$('#sw-hist', body); if(!box) return; box.innerHTML = h.length? h.map((w,i)=>`<span class="mini-tag" data-sw="${i}" style="cursor:pointer">${escapeHtml(w)}</span>`).join('') : ''; box.querySelectorAll('[data-sw]').forEach(el=>el.onclick=()=>{ const cur=$('#sw-extra',body).value.trim(); const add=cur? cur+' '+h[+el.dataset.sw] : h[+el.dataset.sw]; $('#sw-extra',body).value=add; }); }
+    (function(){ const dl=$('#sw-extra-hist', body); if(dl){ swLoadHist().forEach(w=>{ const o=document.createElement('option'); o.value=w; dl.appendChild(o); }); } })();
+    renderSwHist();
     function dict(){ const extra=$('#sw-extra',body).value.trim().split(/\s+/).filter(Boolean); return [...new Set([...DEF,...extra])].filter(w=>w); }
     function esc(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
     $('#sw-run',body).onclick=()=>{
+      swSaveHist($('#sw-extra',body).value.trim().split(/\s+/).filter(Boolean));
       const text=$('#sw-in',body).value; const d=dict(); const found=[]; let out=escapeHtml(text);
       d.forEach(w=>{ if(text.includes(w)){ found.push(w); out=out.split(escapeHtml(w)).join('<mark>'+escapeHtml(w)+'</mark>'); } });
       const uniq=[...new Set(found)];
