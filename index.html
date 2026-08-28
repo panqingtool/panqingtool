@@ -595,12 +595,12 @@ th{background:var(--bg);}
   .hero h1{font-size:26px;}
   .hero .slogan{font-size:15px;}
   .tool-grid{grid-template-columns:repeat(3,1fr);gap:8px;}
-  .tool-card{padding:8px;min-height:auto;border-radius:10px;}
+  .tool-card{padding:8px;min-height:128px;border-radius:10px;}
   .tool-card .t-icon{width:28px;height:28px;font-size:13px;border-radius:6px;}
   .tool-card .t-head .t-icon{width:28px;height:28px;font-size:13px;border-radius:6px;}
   .tool-card .t-name{font-size:12.5px;margin-bottom:2px;line-height:1.2;}
   .tool-card .t-cat{display:none;}
-  .tool-card .t-desc{font-size:10.5px;margin-bottom:6px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .tool-card .t-desc{font-size:10.5px;margin-bottom:6px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:32px;}
   .tool-card .t-use{height:28px;font-size:11.5px;border-radius:6px;}
   .tool-card .t-pconly{font-size:10px;padding:0 6px;margin:0;}
   .tool-card .t-monly{font-size:10px;padding:0 6px;margin:0;}
@@ -791,7 +791,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.27-d</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.27-e</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -1291,7 +1291,7 @@ async function getPhoneDB(){
 function phoneQuery(number){
   const i = parseInt(number.slice(0,3),10), j = parseInt(number.slice(3,7),10);
   const info = _phoneDB.number[i] && _phoneDB.number[i][j];
-  if(info){ const a=(_phoneDB.area[info[0]]||'').split(/\s+/); return { province:a[0]||'-', city:a[1]||a[0]||'-', type:_phoneDB.type[info[1]]||'-' }; }
+  if(info){ const a=(_phoneDB.area[info[0]]||'').split(/\s+/); return { province:a[0]||'-', city:a[1]||a[0]||'-', operator:_phoneDB.type[info[1]]||'-' }; }
   return null;
 }
 AppTools['phone-lookup'] = {
@@ -4535,29 +4535,59 @@ AppTools['zodiac'] = {
 // 随机抽签 / 点名
 AppTools['draw'] = {
   build(body){
-    const KEY='pt_draw_list';
-    let saved=''; try{ saved=localStorage.getItem(KEY)||''; }catch(_){}
+    const KEY='pt_draw_lists';
+    const OLD='pt_draw_list';
+    let lists=[]; try{ lists=JSON.parse(localStorage.getItem(KEY)||'[]'); }catch(_){}
+    if(!Array.isArray(lists)) lists=[];
+    if(!lists.length){ let old=''; try{ old=localStorage.getItem(OLD)||''; }catch(_){} if(old && old.trim()){ lists=[{name:'名单 1', list:old}]; } }
+    const selOpts=()=> lists.map((x,i)=>`<option value="${i}">${escapeHtml(x.name)}（${x.list.split('\n').map(s=>s.trim()).filter(Boolean).length} 人）</option>`).join('');
     body.innerHTML = `
-      <div class="mb"><label class="field-label">候选名单（每行一个）</label><textarea class="txt" id="dr-list" placeholder="张三&#10;李四&#10;王五">${escapeHtml(saved)}</textarea>
+      <div class="card-soft mb">
+        <div class="row mb" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:160px"><label class="field-label">选择已存名单</label>
+            <select class="sel" id="dr-sel"><option value="-1">（新建一份名单）</option>${selOpts()}</select></div>
+          <button class="btn ghost" id="dr-del">删除当前</button>
+        </div>
+        <div class="mb"><label class="field-label">名单名称</label><input type="text" class="inp" id="dr-name" placeholder="如：第一组 / 点名表"></div>
+        <label class="field-label">候选名单（每行一个）</label>
+        <textarea class="txt" id="dr-list" placeholder="张三&#10;李四&#10;王五"></textarea>
         <div class="row" style="margin-top:6px;align-items:center;gap:12px;flex-wrap:wrap">
-          <label class="check" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="dr-keep" checked> 记住名单（下次自动载入）</label>
-          <button class="btn ghost" id="dr-clearhist">清空已存名单</button>
+          <button class="btn ghost" id="dr-save">保存 / 更新名单</button>
+          <button class="btn ghost" id="dr-clear">清空文本框</button>
           <span id="dr-num" class="hint"></span>
-        </div></div>
+        </div>
+      </div>
       <button class="btn" id="dr-run">随机抽签</button>
       <div id="dr-result" class="result-box" style="font-size:24px;text-align:center;margin-top:16px"></div>`;
-    const list=$('#dr-list', body), keep=$('#dr-keep', body), num=$('#dr-num', body);
-    const updNum=()=>{ const n=list.value.split('\n').map(s=>s.trim()).filter(Boolean).length; num.textContent= n? `当前 ${n} 人` : ''; };
-    const save=()=>{ if(keep.checked){ try{ localStorage.setItem(KEY, list.value); }catch(_){} } };
-    list.addEventListener('input',()=>{ updNum(); save(); });
-    keep.addEventListener('change',()=>{ if(keep.checked) save(); else try{ localStorage.removeItem(KEY); }catch(_){} });
-    $('#dr-clearhist', body).onclick=()=>{ try{ localStorage.removeItem(KEY); }catch(_){} list.value=''; keep.checked=false; updNum(); $('#dr-result', body).innerHTML=''; toast('已清空保存的名单'); };
+    const $sel=$('#dr-sel',body), $name=$('#dr-name',body), $list=$('#dr-list',body), $num=$('#dr-num',body), $res=$('#dr-result',body);
+    const updNum=()=>{ const n=$list.value.split('\n').map(s=>s.trim()).filter(Boolean).length; $num.textContent= n? `当前 ${n} 人` : ''; };
+    const refreshSel=(keepIdx)=>{ const idx=(keepIdx==null)? +$sel.value : keepIdx; $sel.innerHTML=`<option value="-1">（新建一份名单）</option>`+selOpts(); $sel.value = lists.length? String(Math.min(Math.max(idx,0), lists.length-1)) : '-1'; };
+    $sel.addEventListener('change',()=>{ const i=+$sel.value; if(i>=0 && lists[i]){ $name.value=lists[i].name; $list.value=lists[i].list; } else { $name.value=''; $list.value=''; } updNum(); });
+    if(lists.length){ $sel.value='0'; $name.value=lists[0].name; $list.value=lists[0].list; }
     updNum();
-    $('#dr-run', body).onclick = () => {
-      const arr = list.value.split('\n').map(s=>s.trim()).filter(Boolean);
+    $list.addEventListener('input', updNum);
+    $('#dr-save',body).onclick=()=>{
+      const text=$list.value; const name=($name.value||'').trim()||('名单 '+(lists.length+1));
+      const arr=text.split('\n').map(s=>s.trim()).filter(Boolean);
+      if(!arr.length){ toast('名单为空，无法保存','err'); return; }
+      const i=+$sel.value;
+      if(i>=0 && lists[i]){ lists[i]={name, list:text}; toast('已更新名单「'+name+'」'); }
+      else { lists.push({name, list:text}); toast('已保存新名单「'+name+'」'); }
+      try{ localStorage.setItem(KEY, JSON.stringify(lists)); }catch(_){}
+      refreshSel(lists.length-1); $sel.value=String(lists.length-1);
+    };
+    $('#dr-del',body).onclick=()=>{
+      const i=+$sel.value; if(i<0||!lists[i]){ toast('请先选择要删除的名单','err'); return; }
+      if(!confirm('确认删除名单「'+lists[i].name+'」？')) return;
+      lists.splice(i,1); try{ localStorage.setItem(KEY, JSON.stringify(lists)); }catch(_){}
+      refreshSel(i-1); toast('已删除');
+    };
+    $('#dr-clear',body).onclick=()=>{ $list.value=''; updNum(); };
+    $('#dr-run',body).onclick=()=>{
+      const arr=$list.value.split('\n').map(s=>s.trim()).filter(Boolean);
       if(!arr.length){ toast('请输入候选名单','err'); return; }
-      const pick = arr[Math.floor(Math.random()*arr.length)];
-      $('#dr-result', body).innerHTML = `🎯 ${escapeHtml(pick)}`;
+      const pick=arr[Math.floor(Math.random()*arr.length)];
+      $res.innerHTML=`🎯 ${escapeHtml(pick)}`;
     };
   }
 };
@@ -6661,6 +6691,10 @@ const TOOLS = [
   {id:'metal-price',  name:'贵金属价格换算',      icon:'🪙', cat:'money', desc:'按实时行情估算黄金 / 白银 / 铂金 / 钯金价值：取美元/盎司（gold-api.com）+ 美元兑人民币（open.er-api.com），换算每克人民币并按成色（999/925 等）算某重量的总价，附全金属速览表。'},
   {id:'renovation',   name:'装修预算估算',        icon:'🏗️', cat:'money', desc:'按面积与档次（简 / 精 / 豪装）估算总预算及分项占比，各项占比可自定义，附条形图可视化。'},
   /* ============ 生活实用 ============ */
+  {id:'cycle',        name:'经期排卵期计算',      icon:'🌸', cat:'life', desc:'按末次月经与周期推算排卵期 / 易孕期 / 下次经期，可选填年龄优化波动系数、加宽易孕窗口，支持自定义周期与经期天数（仅供参考）。'},
+  {id:'wheel',        name:'决策转盘',       icon:'🎡', cat:'life',   desc:'多选项转盘随机抽选，支持权重、快速等分、旋转时长 / 圈数、历史记录与导出 PNG；配色为固定调色板。'},
+  {id:'draw',         name:'随机抽签 / 点名',     icon:'🎲', cat:'life',  desc:'粘贴名单随机抽选 1 人，适合点名 / 抽奖；支持保存多份历史名单，可自由切换、重命名与删除。'},
+  {id:'bazi',         name:'八字排盘(四柱)',      icon:'☯️', cat:'life', desc:'输入出生年月日时排年 / 月 / 日 / 时四柱干支，含五行分布 / 纳音 / 日主说明，按性别顺逆排大运；可生成对比链接与好友看五行互补 / 日主关系 / 生肖相合（传统文化参考）。'},
   {id:'unit-convert', name:'单位换算',            icon:'📏', cat:'life',  desc:'长度 / 重量 / 温度 / 面积 / 体积 / 速度 / 时间 / 数据存储 / 压强 共九大类单位互转，结果可复制。'},
   {id:'lunar',        name:'公历农历互转',        icon:'🌗', cat:'life', desc:'公历↔农历互转（1900–2100），含干支 / 生肖 / 朝代 / 星期 / 星座 / 当日节气与传统节日，节气与节日附百科简介并可跳转百度百科，完全离线运行。'},
   {id:'date-diff',    name:'日期差计算',          icon:'📅', cat:'life',  desc:'计算两个日期相差的天 / 周 / 月 / 年数，支持剔除周末与法定节假日（含调休补班），可填入今天、支持倒序日期。'},
@@ -6670,20 +6704,16 @@ const TOOLS = [
   {id:'express',      name:'快递查询导航',        icon:'📦', cat:'life', desc:'选快递公司 + 单号，一键跳转官方查询页（内置 12 家，合规无抓取风险）。'},
   {id:'bmi',          name:'BMI 计算器',          icon:'⚖️', cat:'life', desc:'输入身高体重、性别与年龄算 BMI，按年龄段切换权威标准——成人/老年用 WS/T 428-2013、儿童青少年用 WHO 5–19 百分位，附标准依据、健康建议与适用提醒。'},
   {id:'bmr',          name:'基础代谢 BMR',        icon:'🔥', cat:'life', desc:'按 Harris-Benedict 或 Mifflin-St Jeor 公式算基础代谢与每日总热量，附减脂 / 增肌热量建议与今日能量结算。'},
-  {id:'cycle',        name:'经期排卵期计算',      icon:'🌸', cat:'life', desc:'按末次月经与周期推算排卵期 / 易孕期 / 下次经期，可选填年龄优化波动系数、加宽易孕窗口，支持自定义周期与经期天数（仅供参考）。'},
   {id:'due-date',     name:'预产期计算器',        icon:'🤰', cat:'life', desc:'末次月经或已知孕周推算预产期、当前孕周与关键产检节点，并显示距预产期天数（仅供参考）。'},
   {id:'blood-type',   name:'血型遗传计算器',      icon:'🩸', cat:'life', desc:'父母 ABO 与 Rh(D) 血型推算子女可能 / 不可能血型，附 ABO 遗传与罕见亚型说明。'},
   {id:'vision',       name:'视力度数换算',        icon:'👓', cat:'life', desc:'近视度数与视力表数值对照，含散光轴位、等效球镜与隐形眼镜换算建议（度数→视力单向对照）。'},
-  {id:'solar-term',   name:'二十四节气查询',      icon:'🌱', cat:'life', desc:'查 1900–2100 年间任意年份 24 节气日期与民俗养生，并显示距下一节气天数。'},
+  {id:'solar-term',   name:'二十四节气与节日',      icon:'🌱', cat:'life', desc:'查 1900–2100 年间任意年份 24 节气日期与民俗养生，并附公历 / 农历主要节日（含当年公历日期与简介）；显示距下一节气天数。'},
   {id:'ganzhi',       name:'干支纪年换算',        icon:'🀄', cat:'life', desc:'公历年份↔天干地支双向换算，含生肖与朝代；六十甲子全表速查。'},
-  {id:'bazi',         name:'八字排盘(四柱)',      icon:'☯️', cat:'life', desc:'输入出生年月日时排年 / 月 / 日 / 时四柱干支，含五行分布 / 纳音 / 日主说明，按性别顺逆排大运；可生成对比链接与好友看五行互补 / 日主关系 / 生肖相合（传统文化参考）。'},
   {id:'ip-lookup',    name:'IP 归属查询',         icon:'📡', cat:'life', desc:'查询任意 IP 的国家 / 地区 / 城市 / 运营商，或留空查当前网络出口 IP，由 Cloudflare Functions 代理。'},
   {id:'phone-lookup', name:'手机号归属',          icon:'📱', cat:'life', desc:'输入中国大陆 11 位手机号查归属地与运营商；内置离线号段数据库（约 31 万号段），本地解压查询，不上传、不联网，隐私优先。'},
   {id:'speedtest',    name:'网速测试',            icon:'🌐', cat:'life',  desc:'基于 Cloudflare 测速节点多次下载采样估算带宽（Mbps），取中位数更稳定，并显示均值 / 峰值与等级解读。'},
   {id:'audio-fix',     name:'修音（音频）',         icon:'🎵', cat:'life',  desc:'上传音频，支持变调 / 变速、自动校音（修五音不全）/ 电音 / 卡通效果，含混响与降噪，生成后可试听并导出 WAV（本地 Web Audio）。'},
-  {id:'draw',         name:'随机抽签 / 点名',     icon:'🎲', cat:'life',  desc:'粘贴名单随机抽选 1 人，适合点名 / 抽奖；建议配合手动排除实现不重复。'},
   {id:'rand-num',     name:'随机数字生成',        icon:'🎰', cat:'life',  desc:'支持整数 / 小数 / 字母 / 奇数 / 偶数 / 质数 / 合数随机生成，批量生成（上限 1000）并可一键复制；适合抽奖 / 验证码（非密码学安全）。'},
-  {id:'wheel',        name:'决策转盘',       icon:'🎡', cat:'life',   desc:'多选项转盘随机抽选，支持权重、快速等分、旋转时长 / 圈数、历史记录与导出 PNG；配色为固定调色板。'},
   {id:'scoreboard',   name:'比赛记分',       icon:'🏆', cat:'life',   desc:'多队伍实时计分、自动排名、倒计时与大屏模式，支持自定义加分并导出 CSV / PNG。'},
   {id:'mbti',         name:'MBTI 检测',      icon:'🧠', cat:'life',  desc:'16 题问卷测出 MBTI 类型与各维度百分比，附性格分析与职业建议，支持本地历史记录与结果卡 PNG 下载。'},
   {id:'ideal-type',   name:'理想型测试',     icon:'💞', cat:'life',  desc:'10 题趣味答题测出理想型画像与匹配度，附次要偏好与本地历史记录，结果卡可下载 PNG。'},
@@ -7278,31 +7308,16 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-08-27', items:[
-    '【四十七修】文档转 PDF：原名「Office 转 PDF」与实际功能不符，更名为「文档转 PDF」，说明改为本地将 Word(.docx)/Excel(.xlsx) 渲染为 PDF 直接下载（不经过打印框）。',
-    '【四十七修】在线文本对比：新增对比粒度（按行 / 按词 / 按字符）、忽略大小写、忽略首尾空白、忽略空行，并给出增/删/相同统计与一键交换原文对比文。',
-    '【四十七修】去除空白行：新增处理方式（删除所有空行 / 合并连续空行为 1 个 / 仅删首尾空行）、是否同时去每行首尾空白、是否删「伪空行」，并给出移除行数统计。',
-    '【四十七修】数学公式排版：导出 PNG / SVG 去除灰色边框（克隆节点截图时去掉 border 与 box-shadow），导出更干净。',
-    '【四十七修】二维码解析：修复无法识别——改为按需加载 jsQR（jsDelivr/UNPKG/ESM 三级容灾），并对原图 / 反色 / 二值化 / 放大 4 种策略逐一解码，识别率大幅提升，失败给出明确提示。',
-    '【四十七修】新增「贵金属价格换算」：按实时行情估算黄金 / 白银 / 铂金 / 钯金价值——取美元/盎司（gold-api.com）+ 美元兑人民币（open.er-api.com），换算每克人民币并按成色（999/925 等）算某重量总价，附全金属速览表；刷新失败用内置参考价兜底。',
-    '【四十七修】开发工具新增 5 个：JWT 解析调试器（三段解码 + 过期/剩余 + HS256 密钥校验）、代码对比 Diff（并排/统一、按行/按词、行号与增删改高亮）、SQL 格式化（sql-formatter 在线库 + 离线降级）、Markdown 编辑器（左编右览、工具栏、复制 HTML / 导出 .md）、User-Agent 解析（浏览器/内核/系统/设备启发式识别）。',
-    '【四十六修】抽签 / 点名：候选名单存 localStorage，下次自动载入，可一键清空已存名单。',
-    '【四十六修】修音（音频）：自动校音改用归一化自相关 + 八度保护 + 对数频率平滑，修五音不全更准更稳；电音改为半音强量化（真正 Auto-Tune 机器人质感）；混响升级多抽头梳状网络（不再是单回声）；WSOLA 重叠相加做窗能量归一，消除幅度涟漪。',
-    '【四十六修】AR 测面积 / 拍照类预览：放大后改为保持原比例（contain），不再拉伸变形。',
-    '【四十六修】新增「薪酬对比计算器」：按城市社平工资封顶社保基数、可选公积金比例与专项附加扣除，对比多方案个税与五险一金后的税后到手，高亮到手最高。',
-    '【四十六修】存款利息：新增「刷新实时利率」（项目自带 deposit-rates.json 经 jsDelivr 拉取，内置大行均值兜底），各存期收益按实时利率对比。',
-    '【四十六修】工时加班 / 家用耗电 / 汽车油耗：新增历史记录，用户可自由选择是否保存当次，便于前后比较。',
-    '【四十六修】图片圆角生成 / 图片转 PDF：修复加载失败（元素缺失导致 null onclick）。',
-    '【四十六修】PDF 签章：支持上传图片章（可去白底 + 调透明度）；整体预览区缩小更易看；骑缝章改为按操作页数竖向切片、每页取不同片段、保持原比例拼合成整章（不再每页相同 / 拉伸发花）。',
-    '【四十六修】拍照测距测高：由「图片工具」并入「生活实用」，并合并「拍照测高」（优先用测距测高清框架，吸收参照物真实高度与分步提示），代码无冲突。',
-    '【四十五修】手机号归属：上游淘宝 / 360 接口已失效，改为内置离线号段数据库（约 31 万号段，本地 gzip 解压查询），零外部请求、不上传，隐私优先；标注同步更新。',
-    '【四十五修】网速测试：改用 Cloudflare 测速节点（speed.cloudflare.com）4 轮 × 8MB 下载采样、取中位数，结果不再「一律较差」，并新增均值 / 峰值与等级解读（旧方案单次小文件下载易偏低）。',
-    '【四十五修】年龄计算器：新增「他人生日」输入，可算两人相差天数（约 X 年 Y 月 Z 天）与谁大谁小；并支持生成对比分享链接（?open=age#agecmp=），发给好友自动载入对比。',
-    '【四十五修】八字排盘：新增「对比」面板，可填乙方生日看五行互补 / 日主关系（生克比和）/ 生肖相合（六合·三合·六冲）解读；并支持生成对比分享链接（?open=bazi#bazicmp=）。',
-    '【四十五修】新增「邮政编码查询」：省/直辖市/自治区级标准邮编（准确），支持反向由 6 位邮编定位省区，并可跳转中国邮政官网查街道/乡镇级精确邮编。',
-    '【四十五修】BMI 计算器：解释升级为权威标准依据——成人/老年引 WS/T 428-2013、儿童青少年引 WHO 5–19 百分位，并补充「不区分肌肉脂肪、孕妇运动员不宜直接判断」的适用提醒。',
-    '【四十四修】BMI 计算器：新增年龄输入，按年龄段自动切换评估标准——5–18 岁用同龄同性别人群 BMI 百分位（Z 分数简化模拟）、18–65 岁用中国成人标准、65 岁以上采用 WS/T 428-2013 放宽正常范围，并附针对性健康建议。',
-    '【四十四修】经期排卵期计算：新增可选「年龄」高级选项，按年龄段调整周期波动系数并自动加宽易孕期窗口，提升预测准确性（仍仅供参考）。',
-    '【四十四修】随机数字生成：新增类型选项——小数、英文字母（大小写 / 混合）、奇数、偶数、质数（素数）、合数，支持批量生成与一键复制。',
+    '手机号归属：修复运营商显示为空的问题（本期）。',
+    '图片转 Base64：修复加载失败（元素缺失导致空引用，本期）。',
+    '随机抽签 / 点名：支持保存多份历史候选名单，可切换 / 重命名 / 删除（本期）。',
+    '生活实用前置：经期排卵期、决策转盘、随机抽签 / 点名、八字排盘移至该板块靠前（本期）。',
+    '二十四节气：更名为「二十四节气与节日」，新增公历与农历主要节日（本期）。',
+    '手机端卡片：调整尺寸，缩小同屏卡片面积差距，布局更均衡（本期）。',
+    '更新日志：去除「X 修」编号标签，条目改为简洁概括（本期）。',
+    '文档转 PDF 更名并改为本地渲染下载；文本对比 / 去空白行增强；公式导出去边框；二维码解析修复。',
+    '新增贵金属价格换算；开发工具新增 JWT 解析 / 代码 Diff / SQL 格式化 / Markdown 编辑器 / UA 解析。',
+    '手机号归属改内置离线号段库；网速测试改用 Cloudflare 节点；年龄 / 八字新增对比与分享；新增邮编查询、薪酬对比、修音与拍照类多项优化。',
   ]},
   { date:'2026-08-24', items:[
     '移动端取图：系统浏览器「添加到主屏幕」为受限裸 WebView，文件选择 / 摄像头 / 外链均不可用；仅 Edge / Chrome 重装快捷方式可用，全站已明示。',
@@ -8155,12 +8170,15 @@ AppTools['solar-term'] = {
   build(body){
     const TERM=['小寒','大寒','立春','雨水','惊蛰','春分','清明','谷雨','立夏','小满','芒种','夏至','小暑','大暑','立秋','处暑','白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至'];
     const LORE={'立春':'习俗：迎春、打春牛。养生：乍暖还寒，宜养肝、早睡早起。','雨水':'养生：健脾祛湿，少食生冷。','惊蛰':'养生：万物复苏，防春困。','春分':'养生：阴阳平衡，宜户外。','清明':'习俗：扫墓踏青。养生：慎吃发物。','谷雨':'养生：健脾利湿，防过敏。','立夏':'养生：养心、清淡。','小满':'养生：防湿热，忌贪凉。','芒种':'养生：劳逸结合，防暑。','夏至':'习俗：吃面。养生：养心安神，夜卧早起。','小暑':'养生：清热解暑。','大暑':'养生：防中暑，补水。','立秋':'养生：润肺，少辛增酸。','处暑':'养生：防秋燥。','白露':'养生：添衣防凉，润肺。','秋分':'养生：阴阳均衡，防燥。','寒露':'养生：保暖，润燥。','霜降':'养生：进补，防感冒。','立冬':'习俗：补冬。养生：养藏，温补。','小雪':'养生：温补肾阳。','大雪':'养生：防寒，适度运动。','冬至':'习俗：数九、吃饺子/汤圆。养生：养肾。','小寒':'养生：防寒保暖，温补。','大寒':'养生：年关进补，迎春。'};
+    const G_FEST=[['元旦',1,1,'新年第一天，世界多数国家法定假日。'],['情人节',2,14,'西方传统节日，表达爱意。'],['妇女节',3,8,'国际劳动妇女节，致敬女性权益。'],['植树节',3,12,'倡导绿化祖国、植树造林。'],['劳动节',5,1,'国际劳动节，致敬劳动者。'],['青年节',5,4,'五四青年节，纪念五四运动。'],['儿童节',6,1,'国际儿童节，关爱少年儿童。'],['建党节',7,1,'中国共产党成立纪念日。'],['建军节',8,1,'中国人民解放军建军节。'],['教师节',9,10,'感恩教师、尊师重教。'],['国庆节',10,1,'中华人民共和国国庆日。'],['记者节',11,8,'中国记者节。'],['国家宪法日',12,4,'弘扬宪法精神。'],['南京大屠杀死难者国家公祭日',12,13,'缅怀遇难同胞，珍爱和平。'],['圣诞节',12,25,'西方传统节日。']];
+    const L_FEST=[['春节',1,1,'农历新年，阖家团圆、贴春联守岁。'],['元宵节',1,15,'正月十五，赏灯吃汤圆。'],['龙抬头',2,2,'二月初二，理发春耕祈丰。'],['端午节',5,5,'五月初五，赛龙舟吃粽子。'],['七夕',7,7,'七月初七，乞巧与爱情传说。'],['中元节',7,15,'七月十五，祭祀祖先。'],['中秋节',8,15,'八月十五，赏月吃月饼。'],['重阳节',9,9,'九月初九，敬老登高。'],['腊八节',12,8,'腊月初八，喝腊八粥。'],['小年',12,23,'腊月廿三，祭灶扫尘迎新春。']];
     const thisYear=new Date().getFullYear();
     body.innerHTML=`
       <div class="row mb"><div><label class="field-label">年份</label><input type="number" class="inp" id="st-year" value="${thisYear}" min="1900" max="2100"></div>
         <button class="btn" id="st-run">查询</button></div>
-      <div id="st-out" class="hint">输入年份查询 24 节气</div>`;
+      <div id="st-out" class="hint">输入年份查询 24 节气与节日</div>`;
     async function loadSL(){ return window.solarlunar; }
+    function lunarToSolar(sl,Y,lm,ld){ let dt=sl.lunar2solar(Y,lm,ld,false); if(!dt && ld===30){ dt=sl.lunar2solar(Y,lm,29,false); } return dt; }
     $('#st-run',body).onclick=async()=>{
       const Y=+$('#st-year',body).value;
       $('#st-out',body).innerHTML='<span class="loading"><span class="spinner"></span>加载农历库…</span>';
@@ -8168,8 +8186,19 @@ AppTools['solar-term'] = {
         const sl=await loadSL();
         const rows=[];
         for(let m=1;m<=12;m++){ for(let d=1;d<=31;d++){ const r=sl.solar2lunar(Y,m,d); if(r && r.cMonth===m && r.cDay===d && r.isTerm && r.term) rows.push({name:r.term, m, d}); } }
-        let html='<table class="tbl-prev"><thead><tr><th>节气</th><th>日期</th><th>民俗/养生</th></tr></thead><tbody>';
+        let html='<h4 class="mt">📅 二十四节气（'+Y+' 年）</h4><table class="tbl-prev"><thead><tr><th>节气</th><th>日期</th><th>民俗/养生</th></tr></thead><tbody>';
         rows.forEach(t=>{ html+=`<tr><td>${t.name}</td><td>${Y}-${String(t.m).padStart(2,'0')}-${String(t.d).padStart(2,'0')}</td><td class="small">${LORE[t.name]||''}</td></tr>`; });
+        html+='</tbody></table>';
+        html+='<h4 class="mt">🎉 公历节日（'+Y+' 年）</h4><table class="tbl-prev"><thead><tr><th>节日</th><th>日期</th><th>简介</th></tr></thead><tbody>';
+        G_FEST.slice().sort((a,b)=>(a[1]*100+a[2])-(b[1]*100+b[2])).forEach(f=>{ html+=`<tr><td>${f[0]}</td><td>${Y}-${String(f[1]).padStart(2,'0')}-${String(f[2]).padStart(2,'0')}</td><td class="small">${f[3]}</td></tr>`; });
+        html+='</tbody></table>';
+        const lfRows=[];
+        L_FEST.forEach(f=>{ const dt=lunarToSolar(sl,Y,f[1],f[2]); if(dt) lfRows.push({name:f[0], y:dt.cYear, m:dt.cMonth, d:dt.cDay, info:f[3]}); });
+        const spring=lunarToSolar(sl,Y,1,1);
+        if(spring){ const sd=new Date(spring.cYear,spring.cMonth-1,spring.cDay-1); lfRows.push({name:'除夕', y:sd.getFullYear(), m:sd.getMonth()+1, d:sd.getDate(), info:'腊月最后一天，守岁团圆饭。'}); }
+        lfRows.sort((a,b)=>(a.m*100+a.d)-(b.m*100+b.d));
+        html+='<h4 class="mt">🏮 农历节日（'+Y+' 年公历日期）</h4><table class="tbl-prev"><thead><tr><th>节日</th><th>日期</th><th>简介</th></tr></thead><tbody>';
+        lfRows.forEach(f=>{ html+=`<tr><td>${f.name}</td><td>${f.y}-${String(f.m).padStart(2,'0')}-${String(f.d).padStart(2,'0')}</td><td class="small">${f.info}</td></tr>`; });
         html+='</tbody></table>';
         const now=new Date(); let next=null;
         for(const t of rows){ const dt=new Date(Y,t.m-1,t.d); if(dt>now){ next={name:t.name,dt}; break; } }
@@ -9721,6 +9750,7 @@ AppTools['img-base64'] = {
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片（可多选，可多次继续添加）</label>
         <input type="file" class="vis-file-btn" id="ib-files" accept="image/*" multiple>
+        <div class="row" style="margin-top:6px;align-items:center;gap:10px"><span id="ib-count" class="hint">0 张</span><button class="btn ghost" id="ib-clear" disabled>清除全部</button></div>
       </div>
       <div class="mb"><label class="field-label">输出格式</label><select class="sel" id="ib-fmt"><option value="dataurl">Data URL（可直接用于 &lt;img src&gt;）</option><option value="raw">仅 Base64 字符串</option></select></div>
       <div id="ib-out" class="hint">选择图片后自动生成（可继续添加更多）</div>`;
