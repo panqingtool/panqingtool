@@ -421,6 +421,7 @@ img{max-width:100%;}
 .tbl-prev{border-collapse:collapse;width:100%;font-size:13px;background:var(--card);}
 .tbl-prev th,.tbl-prev td{border:1px solid var(--border);padding:5px 8px;text-align:left;vertical-align:top;word-break:break-all;}
 .tbl-prev th{background:var(--bg);color:var(--title);position:sticky;top:0;}
+.tbl-prev td.hol{color:#e5432f;font-weight:600;white-space:nowrap;text-align:center;}
 .audio-prev{width:100%;border:1px solid var(--border);border-radius:8px;background:#1e1e1e;}
 .seal-prev-wrap{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;}
 .seal-canvas{border:1px solid var(--border);border-radius:8px;background:#fff;}
@@ -793,7 +794,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.28-f</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.28-g</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -1023,8 +1024,8 @@ function imageToBlob(img, type, quality, maxW){
 
 // 纯前端生成 ZIP（store 存储法，无压缩，无需第三方库），用于批量结果打包下载
 // 采用分块 Blob 拼接，避免一次性分配超大 TypedArray，提升大批量 / 大文件的稳定性与速度
-async function downloadZip(items, zipName){
-  if(!items.length){ toast('没有可打包的文件','err'); return; }
+async function buildZipBlob(items){
+  if(!items.length) throw new Error('没有可打包的文件');
   const enc = new TextEncoder();
   const crcTable = (() => { const t = []; for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); t[n]=c>>>0; } return t; })();
   const crc32 = (bytes) => { let c=0xFFFFFFFF; for(let i=0;i<bytes.length;i++) c = crcTable[(c ^ bytes[i]) & 0xFF] ^ (c>>>8); return (c ^ 0xFFFFFFFF)>>>0; };
@@ -1035,16 +1036,16 @@ async function downloadZip(items, zipName){
     const crc = crc32(data);
     // 本地文件头
     const lh = new Uint8Array(30 + nameBytes.length + data.length); const lh32 = new DataView(lh.buffer);
-    lh32.setUint32(0, 0x04034b50, true); lh32.setUint16(4, 20, true); lh32.setUint16(6, 0, true);
+    lh32.setUint32(0, 0x04034b50, true); lh32.setUint16(4, 20, true); lh32.setUint16(6, 0x0800, true);
     lh32.setUint16(8, 0, true); lh32.setUint16(10, 0, true); lh32.setUint16(12, 0, true);
     lh32.setUint32(16, crc, true); lh32.setUint32(20, data.length, true); lh32.setUint32(24, data.length, true);
-    lh32.setUint16(28, nameBytes.length, true); lh32.setUint16(30, 0, true);
-    lh.set(nameBytes, 32); lh.set(data, 32 + nameBytes.length);
+    lh32.setUint16(26, nameBytes.length, true); lh32.setUint16(28, 0, true);
+    lh.set(nameBytes, 30); lh.set(data, 30 + nameBytes.length);
     parts.push(lh);
     // 中央目录项
     const cd = new Uint8Array(46 + nameBytes.length); const cd32 = new DataView(cd.buffer);
     cd32.setUint32(0, 0x02014b50, true); cd32.setUint16(4, 20, true); cd32.setUint16(6, 20, true);
-    cd32.setUint16(8, 0, true); cd32.setUint16(10, 0, true); cd32.setUint16(12, 0, true); cd32.setUint16(14, 0, true);
+    cd32.setUint16(8, 0x0800, true); cd32.setUint16(10, 0, true); cd32.setUint16(12, 0, true); cd32.setUint16(14, 0, true);
     cd32.setUint32(16, crc, true); cd32.setUint32(20, data.length, true); cd32.setUint32(24, data.length, true);
     cd32.setUint16(28, nameBytes.length, true); cd32.setUint16(30, 0, true); cd32.setUint16(32, 0, true);
     cd32.setUint16(34, 0, true); cd32.setUint16(36, 0, true); cd32.setUint32(38, 0, true); cd32.setUint32(42, offset, true);
@@ -1055,8 +1056,31 @@ async function downloadZip(items, zipName){
   const end = new Uint8Array(22); const ed32 = new DataView(end.buffer);
   ed32.setUint32(0, 0x06054b50, true); ed32.setUint16(8, items.length, true); ed32.setUint16(10, items.length, true);
   ed32.setUint32(12, centralSize, true); ed32.setUint32(16, offset, true);
-  downloadBlob(new Blob([...parts, ...central, end], {type:'application/zip'}), zipName || 'download.zip');
+  return new Blob([...parts, ...central, end], {type:'application/zip'});
 }
+
+async function downloadZip(items, zipName){
+  if(!items.length){ toast('没有可打包的文件','err'); return; }
+  downloadBlob(await buildZipBlob(items), zipName || 'download.zip');
+}
+
+/* 本地 JSZip 兼容层：实现 new JSZip() / .file(name,data) / .generateAsync()，
+   让原本依赖 CDN 加载 JSZip 的导出点全部改为本地打包，无需联网、国内也不受 CDN 影响。 */
+(function(){
+  function LocalZip(){ if(!(this instanceof LocalZip)) return new LocalZip(); this._items = []; }
+  LocalZip.prototype.file = function(name, data){
+    var blob = data;
+    if(typeof data === 'string') blob = new Blob([data]);
+    else if(data instanceof Uint8Array || data instanceof ArrayBuffer) blob = new Blob([data]);
+    else if(!(blob instanceof Blob)) blob = new Blob([String(data)]);
+    this._items.push({ name:name, blob:blob });
+    return this;
+  };
+  LocalZip.prototype.folder = function(){ return this; };
+  LocalZip.prototype.generateAsync = function(){ return buildZipBlob(this._items); };
+  LocalZip.prototype.generate = LocalZip.prototype.generateAsync;
+  window.JSZip = LocalZip;
+})();
 
 // 批量结果画廊：items = [{name, blob}]，渲染缩略图 + 单张下载 + 打包 ZIP
 function renderBatchResults(container, items){
@@ -1739,35 +1763,140 @@ AppTools['img-merge'] = {
       <div class="mb"><label class="field-label">选择图片（按顺序；可多次添加）</label>
         <input type="file" class="vis-file-btn" id="mg-file" accept="image/*" multiple aria-label="选择图片">
       <div id="mg-list" class="fq-list"></div>
-      <div class="mb"><label class="field-label">拼接方向</label>
-        <select class="sel" id="mg-dir" aria-label="拼接方向">
-          <option value="h">横向</option><option value="v">纵向</option></select></div>
+      <div class="row mb">
+        <div><label class="field-label">拼接方向</label>
+          <select class="sel" id="mg-dir" aria-label="拼接方向">
+            <option value="h">横向</option><option value="v">纵向</option></select></div>
+        <div><label class="field-label">图片重叠</label>
+          <select class="sel" id="mg-ovl" aria-label="图片重叠">
+            <option value="0">不重叠（首尾相接）</option>
+            <option value="10">重叠 10%</option>
+            <option value="20">重叠 20%</option>
+            <option value="30">重叠 30%</option>
+            <option value="50">重叠 50%</option>
+            <option value="80">重叠 80%</option>
+          </select></div>
+        <div><label class="field-label">背景色（缝隙填充）</label>
+          <input type="color" class="inp" id="mg-bg" value="#ffffff" aria-label="背景色"></div>
+      </div>
       <button class="btn" id="mg-run" disabled>拼接</button>
       <div id="mg-result"></div>`;
     const q = mountFileQueue({ body, inputId:'mg-file', addId:'mg-add', listId:'mg-list', onChange:(items)=>{ $('#mg-run', body).disabled = items.length < 2; } });
+    if(body._mgCleanup) body._mgCleanup();
+    let oc = null, ctx2d = null, layout = [], activeIdx = -1, dragging = false, dragOff = null;
+    function redraw(){
+      if(!oc) return;
+      ctx2d.fillStyle = $('#mg-bg', body).value;
+      ctx2d.fillRect(0, 0, oc.width, oc.height);
+      layout.forEach(it => { ctx2d.drawImage(it.img, it.x + it.dx, it.y + it.dy); });
+      if(activeIdx >= 0 && layout[activeIdx]){
+        const it = layout[activeIdx];
+        ctx2d.save();
+        ctx2d.setLineDash([12, 8]); ctx2d.lineWidth = 4; ctx2d.strokeStyle = '#1890ff';
+        ctx2d.strokeRect(it.x + it.dx - 2, it.y + it.dy - 2, it.img.naturalWidth + 4, it.img.naturalHeight + 4);
+        ctx2d.restore();
+      }
+    }
+    function pick(px, py){
+      for(let i = layout.length - 1; i >= 0; i--){
+        const it = layout[i];
+        if(px >= it.x + it.dx && px <= it.x + it.dx + it.img.naturalWidth &&
+           py >= it.y + it.dy && py <= it.y + it.dy + it.img.naturalHeight) return i;
+      }
+      return -1;
+    }
+    function toCanvas(e){
+      const r = oc.getBoundingClientRect();
+      return { x:(e.clientX - r.left) * oc.width / r.width, y:(e.clientY - r.top) * oc.height / r.height };
+    }
+    function onDown(e){
+      if(!oc) return;
+      const pt = toCanvas(e);
+      const i = pick(pt.x, pt.y);
+      activeIdx = i;
+      if(i >= 0){ dragging = true; dragOff = {dx:pt.x - (layout[i].x + layout[i].dx), dy:pt.y - (layout[i].y + layout[i].dy)}; if(e.preventDefault) e.preventDefault(); }
+      redraw();
+    }
+    function onMove(e){
+      if(!oc) return;
+      const pt = toCanvas(e);
+      if(dragging && activeIdx >= 0){
+        const it = layout[activeIdx];
+        it.dx = Math.round(pt.x - dragOff.dx - it.x);
+        it.dy = Math.round(pt.y - dragOff.dy - it.y);
+        redraw(); if(e.preventDefault) e.preventDefault(); return;
+      }
+      oc.style.cursor = pick(pt.x, pt.y) >= 0 ? 'move' : 'default';
+    }
+    function onUp(){ if(dragging){ dragging = false; redraw(); } }
+    const _mv = (e) => onMove(e), _up = () => onUp();
+    window.addEventListener('pointermove', _mv, {passive:false});
+    window.addEventListener('pointerup', _up);
+    window.addEventListener('pointercancel', _up);
+    body._mgCleanup = () => {
+      window.removeEventListener('pointermove', _mv);
+      window.removeEventListener('pointerup', _up);
+      window.removeEventListener('pointercancel', _up);
+    };
+    $('#mg-bg', body).addEventListener('input', redraw);
     $('#mg-run', body).onclick = () => {
       const imgs = q.getItems().map(s=>s.img).filter(Boolean);
       if(imgs.length < 2){ toast('请至少选择 2 张图片'); return; }
       const dir = $('#mg-dir', body).value;
-      let W = 0, H = 0;
-      if(dir === 'h'){ H = Math.max(...imgs.map(i=>i.naturalHeight)); W = imgs.reduce((s,i)=>s+i.naturalWidth,0); }
-      else { W = Math.max(...imgs.map(i=>i.naturalWidth)); H = imgs.reduce((s,i)=>s+i.naturalHeight,0); }
-      const oc = document.createElement('canvas'); oc.width = W; oc.height = H;
-      const ctx = oc.getContext('2d');
-      let x = 0, y = 0;
-      imgs.forEach(i => {
-        const iw = dir==='h' ? i.naturalWidth : Math.round(i.naturalWidth*W/i.naturalWidth);
-        const ih = dir==='h' ? Math.round(i.naturalHeight*H/i.naturalHeight) : i.naturalHeight;
-        const dw = dir==='h' ? i.naturalWidth : W;
-        const dh = dir==='h' ? H : i.naturalHeight;
-        ctx.drawImage(i, x, y, dw, dh);
-        if(dir==='h') x += i.naturalWidth; else y += i.naturalHeight;
-      });
-      const url = oc.toDataURL('image/png');
+      const pct = (+$('#mg-ovl', body).value) / 100;
+      layout = [];
+      let W = 0, H = 0, cur = 0;
+      if(dir === 'h'){
+        H = Math.max(...imgs.map(i=>i.naturalHeight));
+        W = imgs[0].naturalWidth;
+        for(let i = 1; i < imgs.length; i++){
+          const ov = Math.round(Math.min(imgs[i-1].naturalWidth, imgs[i].naturalWidth) * pct);
+          W += imgs[i].naturalWidth - ov;
+        }
+        imgs.forEach((im, i) => {
+          if(i > 0){
+            const ov = Math.round(Math.min(imgs[i-1].naturalWidth, im.naturalWidth) * pct);
+            cur += imgs[i-1].naturalWidth - ov;
+          }
+          layout.push({ img:im, x:cur, y:Math.round((H - im.naturalHeight) / 2), dx:0, dy:0 });
+        });
+      } else {
+        W = Math.max(...imgs.map(i=>i.naturalWidth));
+        H = imgs[0].naturalHeight;
+        for(let i = 1; i < imgs.length; i++){
+          const ov = Math.round(Math.min(imgs[i-1].naturalHeight, imgs[i].naturalHeight) * pct);
+          H += imgs[i].naturalHeight - ov;
+        }
+        imgs.forEach((im, i) => {
+          if(i > 0){
+            const ov = Math.round(Math.min(imgs[i-1].naturalHeight, im.naturalHeight) * pct);
+            cur += imgs[i-1].naturalHeight - ov;
+          }
+          layout.push({ img:im, x:Math.round((W - im.naturalWidth) / 2), y:cur, dx:0, dy:0 });
+        });
+      }
+      oc = document.createElement('canvas'); oc.width = W; oc.height = H;
+      oc.style.maxWidth = '100%'; oc.style.height = 'auto'; oc.style.touchAction = 'none';
+      oc.style.borderRadius = '8px'; oc.style.display = 'block';
+      ctx2d = oc.getContext('2d');
+      oc.addEventListener('pointerdown', onDown);
+      activeIdx = -1; redraw();
       $('#mg-result', body).innerHTML = `<div class="result-box">拼接完成 ${W}×${H}（共 ${imgs.length} 张）</div>
-        <div class="btn-row"><button class="btn" id="mg-down">下载</button><button class="btn ghost" id="mg-prev">预览大图</button></div>`;
-      $('#mg-down', body).onclick = () => downloadURL(url, 'merged.png');
-      $('#mg-prev', body).onclick = () => openImagePreview(url, 'merged.png');
+        <div class="hint">💡 在图上<b>按住任意一张图拖动</b>，即可自由调整重叠位置（后添加的图在上层，选中时显示蓝色虚线框）。</div>
+        <div id="mg-canvas" class="mb"></div>
+        <div class="btn-row"><button class="btn" id="mg-reset">恢复自动排列</button><button class="btn" id="mg-down">下载</button><button class="btn" id="mg-prev">预览大图</button></div>`;
+      $('#mg-canvas', body).appendChild(oc);
+      $('#mg-reset', body).onclick = () => { layout.forEach(it => { it.dx = 0; it.dy = 0; }); activeIdx = -1; redraw(); toast('已恢复自动排列'); };
+      $('#mg-down', body).onclick = () => {
+        activeIdx = -1; redraw();
+        downloadURL(oc.toDataURL('image/png'), 'merged.png');
+        redraw();
+      };
+      $('#mg-prev', body).onclick = () => {
+        activeIdx = -1; redraw();
+        openImagePreview(oc.toDataURL('image/png'), 'merged.png');
+        redraw();
+      };
     };
   }
 };
@@ -1817,22 +1946,27 @@ AppTools['img-split'] = {
   }
 };
 
-// 表情包制作（支持：上/下/居中文字、多行、字号、颜色、经典描边、套路模板）
+// 表情包制作（支持：文字自由拖动、横排/竖排、字号、颜色、经典描边、套路模板）
 AppTools['img-meme'] = {
   build(body){
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择图片</label>
         <input type="file" class="inp" id="mm-file" accept="image/*" aria-label="选择图片"></div>
-      <div class="mb"><label class="field-label">上方文字（支持多行，Enter 换行）</label>
-        <textarea class="area" id="mm-top" placeholder="上方文字，如：当你发现代码能跑的时候" aria-label="上方文字" style="min-height:46px"></textarea></div>
-      <div class="mb"><label class="field-label">下方文字</label>
-        <textarea class="area" id="mm-bot" placeholder="下方文字，如：但它其实是个 bug" aria-label="下方文字" style="min-height:46px"></textarea></div>
+      <div class="mb"><label class="field-label">文字一（支持多行，Enter 换行；可在图片上自由拖动）</label>
+        <textarea class="area" id="mm-top" placeholder="如：当你发现代码能跑的时候" aria-label="文字一" style="min-height:46px"></textarea></div>
+      <div class="mb"><label class="field-label">文字二（可在图片上自由拖动）</label>
+        <textarea class="area" id="mm-bot" placeholder="如：但它其实是个 bug" aria-label="文字二" style="min-height:46px"></textarea></div>
       <div class="row mb">
         <div><label class="field-label">字号 <span id="mm-fsv">8</span>%</label>
           <input type="range" id="mm-fs" min="4" max="22" step="1" value="8" aria-label="字号"></div>
-        <div><label class="field-label">文字位置</label>
-          <select class="sel" id="mm-pos" aria-label="文字位置">
-            <option value="tb">上+下（经典）</option>
+        <div><label class="field-label">文字方向</label>
+          <select class="sel" id="mm-dir" aria-label="文字方向">
+            <option value="h">横排（正常）</option>
+            <option value="v">竖排（自上而下，行由右往左）</option>
+          </select></div>
+        <div><label class="field-label">预设位置</label>
+          <select class="sel" id="mm-pos" aria-label="预设位置">
+            <option value="tb">上 + 下（经典）</option>
             <option value="top">仅上方</option>
             <option value="bot">仅下方</option>
             <option value="center">居中</option>
@@ -1863,61 +1997,159 @@ AppTools['img-meme'] = {
           <button data-top="懂得都懂" data-bot="不懂的别问">懂得都懂</button>
         </div></div>
       <div id="mm-preview" class="mb"></div>
-      <button class="btn" id="mm-run" disabled>生成并下载</button>`;
+      <div class="hint">💡 在图片上<b>按住文字直接拖动</b>，即可把文字放到任意位置；选中时会出现蓝色虚线框。竖排为自上而下书写，多行（Enter 换行）时按行由右往左排列。</div>
+      <div class="btn-row"><button class="btn" id="mm-reset">重置位置</button><button class="btn" id="mm-run" disabled>生成并下载</button></div>`;
     let img = null, cv = null;
+    const P = { top:{x:.5,y:.13}, bot:{x:.5,y:.88} };
+    let active = null, dragging = false, dragOff = null;
+    if(body._mmCleanup) body._mmCleanup();
+    const fontStr = (px) => `bold ${px}px "Microsoft YaHei", "PingFang SC", sans-serif`;
+    const linesOf = (t) => String(t || '').split('\n').map(s => s.trim()).filter(Boolean);
+    const isVert = () => $('#mm-dir', body).value === 'v';
+    const fsPx = () => Math.max(12, Math.round(cv.width * (+$('#mm-fs', body).value) / 100));
+    const shown = (k) => {
+      const m = $('#mm-pos', body).value;
+      if(m === 'top' && k === 'bot') return false;
+      if(m === 'bot' && k === 'top') return false;
+      return linesOf($('#mm-' + k, body).value).length > 0;
+    };
+    function blockSize(txt, fpx){
+      const ctx = cv.getContext('2d'); ctx.font = fontStr(fpx);
+      const lines = linesOf(txt);
+      const lh = fpx * 1.2, colW = fpx * 1.35, charH = fpx * 1.1;
+      if(!lines.length) return {w:0,h:0,lh,colW,charH};
+      if(!isVert()){
+        let w = 0; lines.forEach(l => { w = Math.max(w, ctx.measureText(l).width); });
+        return {w, h:lines.length * lh, lh, colW, charH};
+      }
+      let mx = 0; lines.forEach(l => { mx = Math.max(mx, Array.from(l).length); });
+      return {w:lines.length * colW, h:mx * charH, lh, colW, charH};
+    }
     function draw(){
       if(!cv) return;
       const ctx = cv.getContext('2d');
       ctx.clearRect(0,0,cv.width,cv.height);
       ctx.drawImage(img, 0, 0);
-      const fsPct = +$('#mm-fs', body).value;
-      const fontPx = Math.max(12, Math.round(cv.width * fsPct / 100));
+      const fpx = fsPx();
       const colorMode = $('#mm-color', body).value;
       const fill = colorMode === 'custom' ? $('#mm-custom', body).value : colorMode;
       const stroke = $('#mm-stroke', body).value === 'outline';
       // 描边色自动取对比色（白字黑边 / 黑字白边 / 自定义取黑）
       const strokeColor = (fill.toLowerCase() === '#fff') ? '#000' : (fill.toLowerCase() === '#000' ? '#fff' : '#000');
-      ctx.font = `bold ${fontPx}px "Microsoft YaHei", "PingFang SC", sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.lineJoin = 'round';
-      const lw = Math.max(2, fontPx / 8);
-      function drawLines(text, y){
-        const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
-        const lh = fontPx * 1.2;
-        lines.forEach((line, i) => {
-          const yPos = y + i * lh;
-          if(stroke){ ctx.lineWidth = lw; ctx.strokeStyle = strokeColor; ctx.strokeText(line, cv.width/2, yPos); }
-          ctx.fillStyle = fill; ctx.fillText(line, cv.width/2, yPos);
-        });
+      ctx.font = fontStr(fpx);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+      const lw = Math.max(2, fpx / 8);
+      ['top','bot'].forEach(k => {
+        if(!shown(k)) return;
+        const txt = $('#mm-' + k, body).value;
+        const lines = linesOf(txt);
+        const sz = blockSize(txt, fpx);
+        const cx = P[k].x * cv.width, cy = P[k].y * cv.height;
+        if(!isVert()){
+          const startY = cy - (lines.length - 1) * sz.lh / 2;
+          lines.forEach((line, i) => {
+            const y = startY + i * sz.lh;
+            if(stroke){ ctx.lineWidth = lw; ctx.strokeStyle = strokeColor; ctx.strokeText(line, cx, y); }
+            ctx.fillStyle = fill; ctx.fillText(line, cx, y);
+          });
+        } else {
+          lines.forEach((line, i) => {
+            const x = cx + sz.w / 2 - (i + 0.5) * sz.colW;
+            const chs = Array.from(line);
+            const startY = cy - (chs.length - 1) * sz.charH / 2;
+            chs.forEach((c, j) => {
+              const y = startY + j * sz.charH;
+              if(stroke){ ctx.lineWidth = lw; ctx.strokeStyle = strokeColor; ctx.strokeText(c, x, y); }
+              ctx.fillStyle = fill; ctx.fillText(c, x, y);
+            });
+          });
+        }
+        if(active === k){
+          ctx.save();
+          ctx.setLineDash([Math.max(6, fpx / 3), Math.max(4, fpx / 4)]);
+          ctx.lineWidth = Math.max(2, fpx / 14); ctx.strokeStyle = '#1890ff';
+          ctx.strokeRect(cx - sz.w/2 - 8, cy - sz.h/2 - 8, sz.w + 16, sz.h + 16);
+          ctx.restore();
+        }
+      });
+    }
+    function pick(px, py){
+      if(!cv) return null;
+      const fpx = fsPx(); let best = null, bd = Infinity;
+      ['top','bot'].forEach(k => {
+        if(!shown(k)) return;
+        const sz = blockSize($('#mm-' + k, body).value, fpx);
+        const cx = P[k].x * cv.width, cy = P[k].y * cv.height;
+        const w = Math.max(sz.w, fpx * 2) + 20, h = Math.max(sz.h, fpx) + 20;
+        if(Math.abs(px - cx) <= w/2 && Math.abs(py - cy) <= h/2){
+          const d = Math.abs(px - cx) + Math.abs(py - cy);
+          if(d < bd){ bd = d; best = {k, cx, cy}; }
+        }
+      });
+      return best;
+    }
+    function toCanvas(e){
+      const r = cv.getBoundingClientRect();
+      return { x:(e.clientX - r.left) * cv.width / r.width, y:(e.clientY - r.top) * cv.height / r.height };
+    }
+    function onDown(e){
+      if(!cv) return;
+      const pt = toCanvas(e);
+      const hit = pick(pt.x, pt.y);
+      if(hit){ dragging = true; active = hit.k; dragOff = {dx:pt.x - hit.cx, dy:pt.y - hit.cy}; if(e.preventDefault) e.preventDefault(); }
+      else { active = null; }
+      draw();
+    }
+    function onMove(e){
+      if(!cv) return;
+      const pt = toCanvas(e);
+      if(dragging && active){
+        P[active].x = Math.min(1.05, Math.max(-0.05, (pt.x - dragOff.dx) / cv.width));
+        P[active].y = Math.min(1.05, Math.max(-0.05, (pt.y - dragOff.dy) / cv.height));
+        draw(); if(e.preventDefault) e.preventDefault(); return;
       }
-      const pos = $('#mm-pos', body).value;
-      const top = $('#mm-top', body).value, bot = $('#mm-bot', body).value;
-      if(pos === 'tb' || pos === 'top'){ if(top.trim()) drawLines(top, fontPx * 1.15); }
-      if(pos === 'tb' || pos === 'bot'){ if(bot.trim()) drawLines(bot, cv.height - fontPx * 0.5); }
-      if(pos === 'center'){
-        const all = [top, bot].filter(s => s.trim()).join('\n');
-        const lines = all.split('\n').map(s => s.trim()).filter(Boolean);
-        const lh = fontPx * 1.2;
-        const startY = cv.height/2 - (lines.length - 1) * lh / 2;
-        lines.forEach((line, i) => { const y = startY + i * lh; if(stroke){ ctx.lineWidth=lw; ctx.strokeStyle=strokeColor; ctx.strokeText(line, cv.width/2, y); } ctx.fillStyle=fill; ctx.fillText(line, cv.width/2, y); });
-      }
+      cv.style.cursor = pick(pt.x, pt.y) ? 'move' : 'default';
+    }
+    function onUp(){ if(dragging){ dragging = false; draw(); } }
+    function applyPreset(){
+      const m = $('#mm-pos', body).value;
+      if(m === 'top'){ P.top = {x:.5,y:.13}; P.bot = {x:.5,y:.5}; }
+      else if(m === 'bot'){ P.top = {x:.5,y:.5}; P.bot = {x:.5,y:.88}; }
+      else if(m === 'center'){ P.top = {x:.5,y:.40}; P.bot = {x:.5,y:.60}; }
+      else { P.top = {x:.5,y:.13}; P.bot = {x:.5,y:.88}; }
+      active = null;
     }
     $('#mm-file', body).onchange = async (e) => {
       const f = e.target.files[0]; if(!f) return;
       if(img && img._url) URL.revokeObjectURL(img._url);
       img = await fileToImage(f);
       cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+      cv.style.maxWidth = '100%'; cv.style.height = 'auto'; cv.style.touchAction = 'none';
+      cv.style.borderRadius = '8px'; cv.style.display = 'block';
+      cv.addEventListener('pointerdown', onDown);
       $('#mm-preview', body).innerHTML = ''; $('#mm-preview', body).appendChild(cv);
-      draw(); $('#mm-run', body).disabled = false;
+      applyPreset(); draw(); $('#mm-run', body).disabled = false;
     };
-    ['mm-top','mm-bot','mm-fs','mm-pos','mm-color','mm-stroke','mm-custom'].forEach(id => {
+    const _mv = (e) => onMove(e), _up = () => onUp();
+    window.addEventListener('pointermove', _mv, {passive:false});
+    window.addEventListener('pointerup', _up);
+    window.addEventListener('pointercancel', _up);
+    body._mmCleanup = () => {
+      window.removeEventListener('pointermove', _mv);
+      window.removeEventListener('pointerup', _up);
+      window.removeEventListener('pointercancel', _up);
+    };
+    ['mm-top','mm-bot','mm-fs','mm-dir','mm-color','mm-stroke','mm-custom'].forEach(id => {
       $('#'+id, body).addEventListener('input', draw);
       $('#'+id, body).addEventListener('change', draw);
     });
+    $('#mm-pos', body).addEventListener('change', () => { applyPreset(); draw(); });
     $('#mm-fs', body).addEventListener('input', () => $('#mm-fsv', body).textContent = $('#mm-fs', body).value);
+    $('#mm-reset', body).onclick = () => { applyPreset(); draw(); toast('文字位置已重置'); };
     body.querySelectorAll('[data-top]').forEach(b => b.onclick = () => {
       $('#mm-top', body).value = b.dataset.top; $('#mm-bot', body).value = b.dataset.bot; draw();
     });
-    $('#mm-run', body).onclick = () => { downloadURL(cv.toDataURL('image/png'), 'meme.png'); };
+    $('#mm-run', body).onclick = () => { active = null; draw(); downloadURL(cv.toDataURL('image/png'), 'meme.png'); draw(); };
   }
 };
 
@@ -5816,23 +6048,31 @@ AppTools['pdf-sign'] = {
           <option value="img">上传图片（公司章 / 签名照片）</option>
         </select></div>
       <div class="mb" id="ps-text-wrap"><label class="field-label">印章文字（电子章 / 骑缝章）</label>
-        <input type="text" class="inp" id="ps-text" value="攀清科技工作室" maxlength="20" aria-label="印章文字"></div>
+        <input type="text" class="inp" id="ps-text" value="攀清科技工作室" maxlength="20" aria-label="印章文字">
+        <label class="field-label" style="margin-top:8px">下方小字（可选，如「合同专用」「财务专用」，留空不显示）</label>
+        <input type="text" class="inp" id="ps-sub" value="" maxlength="12" aria-label="下方小字">
+        <label class="field-label" style="margin-top:8px">骑缝章重叠度（越大则每页印记越明显、相邻页重合越多）</label>
+        <select class="sel" id="ps-perfov" aria-label="骑缝章重叠度">
+          <option value="1.4">标准（1.4 倍）</option>
+          <option value="1.8" selected>明显（1.8 倍）</option>
+          <option value="2.4">很强（2.4 倍）</option>
+        </select></div>
       <div class="mb" id="ps-pad-wrap" style="display:none"><label class="field-label">在下方手写签名（鼠标/手指拖动）</label>
         <canvas id="ps-pad" width="400" height="160" style="border:1px solid var(--border);border-radius:8px;touch-action:none;background:#fff;width:100%;max-width:400px;"></canvas>
         <div class="btn-row"><button class="btn ghost" id="ps-clear">清除签名</button></div></div>
       <div class="mb" id="ps-img-wrap" style="display:none"><label class="field-label">上传印章 / 签名图片（PNG 透明最佳）</label>
         <input type="file" class="inp" id="ps-img" accept="image/*" aria-label="上传图片">
-        <div class="row mb" style="margin-top:8px"><label style="flex:1;display:flex;align-items:center;gap:6px"><input type="checkbox" id="ps-trans"> 去白底（背景不透明时启用）</label>
-          <div style="flex:1"><label class="field-label">图片透明度 <span id="ps-ov">0</span>%（越高越浅/透明）</label>
-          <input type="range" id="ps-o" min="0" max="100" value="0" aria-label="透明度"></div></div>
-        <div class="hint">若图片本身是白底（不透明），勾选「去白底」可把接近白色的部分变透明，避免遮挡正文；也可直接用透明度滑块微调。</div></div>
+        <div style="margin-top:8px"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="ps-trans"> 去白底（背景不透明时启用）</label></div>
+        <div class="hint">若图片本身是白底（不透明），勾选「去白底」可把接近白色的部分变透明，避免遮挡正文；透明度用下方统一的「印章透明度」滑块调节。</div></div>
       <div class="row mb">
         <div style="flex:1"><label class="field-label">操作页（留空=全部；支持 1,3,5-8 / 1- / -3 / 1-10/2 / 奇,偶）</label>
           <input type="text" class="inp" id="ps-pages" placeholder="如 1,2,4-5 或留空=全部" aria-label="操作页"></div>
         <div style="flex:1"><label class="field-label">大小（%，建议 10-60）：<span id="ps-sv">22</span></label>
           <input type="range" id="ps-s" min="10" max="60" value="22" aria-label="大小"></div>
+        <div style="flex:1"><label class="field-label">印章透明度：<span id="ps-opv">25</span>%（越高越淡，可透出下方正文）</label>
+          <input type="range" id="ps-op" min="0" max="80" value="25" aria-label="印章透明度"></div>
       </div>
-      <div class="hint">在预览页上用鼠标 / 手指拖动印章到合适位置（建议拖到空白处，不遮挡正文），滚轮可缩放；骑缝章自动贴在每页右缘。所有操作本地完成。</div>
+      <div class="hint">在预览页上用鼠标 / 手指拖动印章到合适位置（骑缝章同样可整体拖动），滚轮可缩放；设置合适透明度后即可盖在正文上而不遮住文字。所有操作本地完成。</div>
       <div id="ps-prog" class="hint"></div>
       <div id="ps-preview" class="mb" style="max-height:48vh;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:#f3f4f6"></div>
       <div class="btn-row"><button class="btn ghost" id="ps-ok">确定位置</button><button class="btn" id="ps-run" disabled>应用并下载</button></div>
@@ -5856,27 +6096,74 @@ AppTools['pdf-sign'] = {
 
     // ---- 圆形电子章 ----
     function drawStar(x,cx,cy,R,r,pts){ x.beginPath(); for(let i=0;i<pts*2;i++){ const rr=i%2?r:R; const a=-Math.PI/2+i*Math.PI/pts; const px=cx+Math.cos(a)*rr, py=cy+Math.sin(a)*rr; i?x.lineTo(px,py):x.moveTo(px,py);} x.closePath(); x.fill(); }
-    function makeStamp(text,size){
+    const SEAL_FONT = '"Microsoft YaHei","PingFang SC","Heiti SC",sans-serif';
+    function makeStamp(text,size,sub){
       const c=document.createElement('canvas'); c.width=size; c.height=size; const x=c.getContext('2d');
       x.clearRect(0,0,size,size); x.strokeStyle='#c8102e'; x.fillStyle='#c8102e';
-      x.lineWidth=size*0.035; x.beginPath(); x.arc(size/2,size/2,size*0.46,0,Math.PI*2); x.stroke();
-      x.beginPath(); x.arc(size/2,size/2,size*0.40,0,Math.PI*2); x.stroke();
-      drawStar(x,size/2,size/2,size*0.12,size*0.05,5);
-      x.font=`bold ${size*0.12}px sans-serif`; x.textAlign='center'; x.textBaseline='middle';
-      const chars=[...text]; const n=chars.length; const R=size*0.335; const step=n>1?0.32:0;
+      // 外圈粗、内圈细，文字与内外圈之间都留出明显留白，避免“字贴着圈”的紧凑感
+      x.lineWidth=size*0.028; x.beginPath(); x.arc(size/2,size/2,size*0.478,0,Math.PI*2); x.stroke();
+      x.lineWidth=size*0.007; x.beginPath(); x.arc(size/2,size/2,size*0.412,0,Math.PI*2); x.stroke();
+      drawStar(x,size/2,size/2,size*0.105,size*0.044,5);
+      // 主文字沿上半圆弧排列（字符随弧线旋转，底部朝圆心），与内圈保持足够间距
+      const chars=[...(text||' ')]; const n=chars.length;
+      const R=size*0.325;
+      const fs=Math.min(size*0.112, size*0.95/Math.max(5,n));
+      x.font=`bold ${fs}px ${SEAL_FONT}`; x.textAlign='center'; x.textBaseline='middle';
+      const step=n>1?Math.min(0.33, 1.45/n):0;
       const a0=-Math.PI/2-step*(n-1)/2;
-      chars.forEach((ch,i)=>{ const a=a0+step*i; x.fillText(ch, size/2+Math.cos(a)*R, size/2+Math.sin(a)*R); });
+      chars.forEach((ch,i)=>{
+        const a=a0+step*i;
+        x.save();
+        x.translate(size/2+Math.cos(a)*R, size/2+Math.sin(a)*R);
+        x.rotate(a+Math.PI/2);
+        x.fillText(ch,0,0);
+        x.restore();
+      });
+      // 下方小字：沿底部内弧排列，正向朝上（字多自动收紧、缩小）
+      const subTxt=(sub||'').trim();
+      if(subTxt){
+        const sc=[...subTxt]; const sn=sc.length;
+        const RR=size*0.245;
+        const sfs=Math.min(size*0.072, size*0.60/Math.max(4,sn));
+        x.font=`bold ${sfs}px ${SEAL_FONT}`;
+        const sstep=sn>1?Math.min(0.155, 0.58/sn):0;
+        const sa0=Math.PI/2+sstep*(sn-1)/2;
+        sc.forEach((ch,i)=>{
+          const a=sa0-sstep*i;
+          x.save();
+          x.translate(size/2+Math.cos(a)*RR, size/2+Math.sin(a)*RR);
+          x.rotate(a-Math.PI/2);
+          x.fillText(ch,0,0);
+          x.restore();
+        });
+      }
       return c;
     }
-    const stampCanvas = () => makeStamp($('#ps-text', body).value||' ', 1000);
-    // 骑缝章：把整枚印章按页数竖向切成 n 条，第 k 页取第 k 条；所有页按顺序拼起来即复原整章
+    const stampCanvas = () => makeStamp($('#ps-text', body).value||' ', 1000, $('#ps-sub', body).value||'');
+    // 骑缝章：整枚章按页数竖向切片；切片宽度按「重叠度」放大并居中于该页位置，
+    // 保证首页 / 末页同样有清晰印记，相邻页印记互相重合，拼起来可复原整章
+    function perfGeom(n){
+      const ov=parseFloat($('#ps-perfov', body).value)||1.8;
+      const share=Math.min(1, ov/Math.max(1,n));
+      return { share };
+    }
+    function perfRect(W,k,n){
+      const { share }=perfGeom(n);
+      const wFull=W*share;
+      const center=((k+0.5)/Math.max(1,n))*W;
+      let x0=Math.round(center-wFull/2);
+      if(x0<0) x0=0;
+      if(x0+wFull>W) x0=Math.max(0, Math.round(W-wFull));
+      return { x0, w:Math.max(1, Math.round(wFull)) };
+    }
     function perfSlice(srcCanvas, k, n){
       const W=srcCanvas.width, H=srcCanvas.height;
-      const x0=Math.floor(k*W/n), x1=Math.max(x0+1, Math.floor((k+1)*W/n));
-      const w=x1-x0; const sc=document.createElement('canvas'); sc.width=w; sc.height=H;
+      const { x0, w }=perfRect(W,k,n);
+      const sc=document.createElement('canvas'); sc.width=w; sc.height=H;
       sc.getContext('2d').drawImage(srcCanvas, x0,0,w,H, 0,0,w,H);
       return sc.toDataURL('image/png');
     }
+    function sealOpacity(){ return 1-(parseFloat($('#ps-op', body).value)||0)/100; }
     let imgDataUrl=null;
     function loadImage(file){
       const fr=new FileReader();
@@ -5901,12 +6188,19 @@ AppTools['pdf-sign'] = {
       $('#ps-pad-wrap', body).style.display = m==='sign' ? '' : 'none';
       $('#ps-text-wrap', body).style.display = (m==='sign'||m==='img') ? 'none' : '';
       $('#ps-img-wrap', body).style.display = m==='img' ? '' : 'none';
+      if(m==='perf'){ stamp.x=0.94; stamp.y=0.5; }        // 骑缝章默认贴右侧中部
+      else if(stamp.x>0.9){ stamp.x=0.72; stamp.y=0.82; } // 切回其他章时回到常规位置
       renderStamps();
     }
     $('#ps-mode', body).addEventListener('input', syncModeUI);
     $('#ps-img', body).addEventListener('change', (e)=>{ const f=e.target.files[0]; if(f) loadImage(f); });
     $('#ps-trans', body).addEventListener('change', ()=>{ if($('#ps-mode', body).value==='img') renderStamps(); });
-    $('#ps-o', body).addEventListener('input', ()=>{ $('#ps-ov', body).textContent=$('#ps-o', body).value; if($('#ps-mode', body).value==='img') renderStamps(); });
+    $('#ps-op', body).addEventListener('input', ()=>{
+      $('#ps-opv', body).textContent=$('#ps-op', body).value;
+      body.querySelectorAll('.stamp').forEach(el=>{ if(el.style.display!=='none') positionStamp(el); });
+    });
+    $('#ps-sub', body).addEventListener('input', ()=>{ const m=$('#ps-mode', body).value; if(m!=='sign'&&m!=='img') renderStamps(); });
+    $('#ps-perfov', body).addEventListener('change', ()=>{ if($('#ps-mode', body).value==='perf') renderStamps(); });
 
     const parsePages = parsePageRanges;
 
@@ -5984,14 +6278,18 @@ AppTools['pdf-sign'] = {
     function positionStamp(el){
       const m=$('#ps-mode', body).value;
       const ratio=(+$('#ps-s', body).value/100)*stamp.scale;
-      el.style.opacity = (m==='img') ? (1 - $('#ps-o', body).value/100) : '0.88';
+      el.style.opacity = String(sealOpacity());
       const pg=el.parentElement, pw=pg.clientWidth, ph=pg.clientHeight, base=Math.min(pw,ph);
       const pgNo=+el.dataset.pg;
       if(m==='perf'){
         const pages=parsePages($('#ps-pages', body).value, pageCount);
-        const n=Math.max(1, pages.length), k=(pages.indexOf(pgNo)>=0?pages.indexOf(pgNo):0);
-        const perfH=ph*0.85, perfW=perfH/n;   // 等分给每页，保持印章原比例不拉伸
-        el.style.left='auto'; el.style.right='0'; el.style.top=((ph-perfH)/2)+'px'; el.style.transform='none';
+        const n=Math.max(1, pages.length);
+        const { share }=perfGeom(n);
+        // 骑缝章与其他章一样可自由拖动；高度跟随「大小」滑块，宽度按切片占比保持原比例
+        const perfH=Math.min(ph*1.05, ph*0.85*Math.max(0.3, ratio/0.22));
+        const perfW=Math.max(6, perfH*share);
+        el.style.left=(stamp.x*100)+'%'; el.style.top=(stamp.y*100)+'%';
+        el.style.right='auto'; el.style.transform='translate(-50%,-50%)';
         el.style.width=perfW+'px'; el.style.height=perfH+'px';
         el.style.backgroundSize='100% 100%'; el.style.backgroundPosition='center';
       } else {
@@ -6007,7 +6305,6 @@ AppTools['pdf-sign'] = {
       if(st.dataset.dragBound) return; st.dataset.dragBound='1';
       const down=(e)=>{
         if(st.style.display==='none') return;
-        if($('#ps-mode', body).value==='perf') return; // 骑缝章固定位置
         e.preventDefault();
         const pg=st.parentElement.getBoundingClientRect();
         const pt=e.touches?e.touches[0]:e; const sx=pt.clientX, sy=pt.clientY; const ox=stamp.x, oy=stamp.y;
@@ -6041,13 +6338,14 @@ AppTools['pdf-sign'] = {
           const pdf=await PDFDocument.load(bytes);
           const all=pdf.getPages();
           const ratio=(+$('#ps-s',body).value/100)*stamp.scale;
+          const op=sealOpacity();
           if(m==='sign'){
             const sig=await (await new Promise(r=>pad.toBlob(r,'image/png'))).arrayBuffer();
             const img=await pdf.embedPng(sig);
             const ar=pad.height/pad.width;
             pages.forEach(pi=>{ const page=all[pi-1]; if(!page) return; const {width,height}=page.getSize();
               const dw=Math.min(width,height)*ratio, dh=dw*ar;
-              page.drawImage(img,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dh/2, width:dw, height:dh, opacity:0.88}); });
+              page.drawImage(img,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dh/2, width:dw, height:dh, opacity:op}); });
           } else {
             let stCanvas=null, stImg=null;
             if(m==='img'){
@@ -6058,24 +6356,24 @@ AppTools['pdf-sign'] = {
               stImg=await pdf.embedPng(await ntDataURLtoBlob(stCanvas.toDataURL()).arrayBuffer());
             }
             const n=all.length;
-            const op=(m==='img')?(1-$('#ps-o',body).value/100):0.88;
             for(const pi of pages){
               const page=all[pi-1]; if(!page) continue; const {width,height}=page.getSize();
               if(m==='perf'){
                 const n=pages.length, k=Math.max(0, pages.indexOf(pi));
-                const sliceW=stCanvas.width/n, x0=k*sliceW;
-                const sc=document.createElement('canvas'); sc.width=Math.max(1,Math.ceil(sliceW)); sc.height=stCanvas.height;
-                sc.getContext('2d').drawImage(stCanvas, x0,0,sliceW,stCanvas.height, 0,0,sc.width,sc.height);
+                const { x0, w }=perfRect(stCanvas.width, k, n);
+                const sc=document.createElement('canvas'); sc.width=w; sc.height=stCanvas.height;
+                sc.getContext('2d').drawImage(stCanvas, x0,0,w,stCanvas.height, 0,0,w,sc.height);
                 const scImg=await pdf.embedPng(await ntDataURLtoBlob(sc.toDataURL()).arrayBuffer());
-                const dh=height*0.85, dw=dh*(sliceW/stCanvas.height);   // 保持切片原比例，不拉伸变形
-                page.drawImage(scImg,{x:width-dw-6, y:(height-dh)/2, width:dw, height:dh, opacity:0.88});
+                const dh=Math.min(height*1.05, height*0.85*Math.max(0.3, ratio/0.22));
+                const dw=dh*(w/stCanvas.height);   // 保持切片原比例，不拉伸变形
+                page.drawImage(scImg,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dh/2, width:dw, height:dh, opacity:op});
               } else if(m==='img'){
                 const ar=stImg.height/stImg.width;
                 const dw=Math.min(width,height)*ratio, dh=dw*ar;
                 page.drawImage(stImg,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dh/2, width:dw, height:dh, opacity:op});
               } else {
                 const dw=Math.min(width,height)*ratio;
-                page.drawImage(stImg,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dw/2, width:dw, height:dw, opacity:0.88});
+                page.drawImage(stImg,{x:stamp.x*width-dw/2, y:(1-stamp.y)*height-dw/2, width:dw, height:dw, opacity:op});
               }
             }
           }
@@ -6352,6 +6650,11 @@ AppTools['math-formula'] = {
           </select></div>
           <div style="flex:1"><label class="field-label">编号前缀（章节式用，可留空）</label><input type="text" class="inp" id="mf-pre" value="1"></div>
         </div>
+        <div class="row mb">
+          <div style="flex:1;min-width:150px"><label class="field-label">行间距 <span id="mf-lh-v" class="hint">2.0</span></label><input type="range" id="mf-lh" min="1" max="4" step="0.1" value="2"></div>
+          <div style="flex:1;min-width:110px"><label class="field-label">数字/字母字号(px)</label><input type="number" id="mf-fs" class="inp" value="18" min="10" max="48"></div>
+          <div style="flex:1;min-width:110px"><label class="field-label">序号字号(px)</label><input type="number" id="mf-ns" class="inp" value="14" min="8" max="36"></div>
+        </div>
       </div>
       <div class="mb">
         <label class="field-label">常用模板（点击插入，含计量/经济论文常用）</label>
@@ -6430,7 +6733,19 @@ AppTools['math-formula'] = {
         try{ katex.render(t, el, { throwOnError:false, displayMode:true }); }
         catch(e){ el.innerHTML = '<span style="color:var(--error)">⚠ '+escapeHtml(errMsg(e))+'</span>'; }
       });
+      applyStyle();
     }
+    // ===== 排版：行间距 / 数字字母字号 / 序号字号 =====
+    function applyStyle(){
+      const lh=parseFloat($('#mf-lh',body).value)||2;
+      const fs=parseInt($('#mf-fs',body).value,10)||18;
+      const ns=parseInt($('#mf-ns',body).value,10)||14;
+      preview.style.lineHeight=String(lh);
+      preview.style.fontSize=fs+'px';
+      const lv=$('#mf-lh-v',body); if(lv) lv.textContent=lh.toFixed(1);
+      preview.querySelectorAll('.eq-num').forEach(el=>{ el.style.fontSize=ns+'px'; });
+    }
+    ['mf-lh','mf-fs','mf-ns'].forEach(id=>{ const el=$('#'+id,body); if(el) el.addEventListener('input', applyStyle); });
     src.addEventListener('input', render);
     $('#mf-num', body).addEventListener('change', render);
     render();
@@ -7282,7 +7597,15 @@ const CHANGELOG = [
     "【手机卡片·二修】移动端行高再缩（手机 104px / 平板 128px）；卡片加 overflow:hidden、去掉 min-height 冲突，手机端隐藏描述（点卡片弹完整功能）；修复「全部 / 开发工具」等长描述导致的溢出排版问题，每列面积更小且相等。",
     "【手机标注】恢复手机端应用名称下的功能标注（2 行截断、10px 小字），保持整齐等面积不变。",
     "【更名】「海拔高度检测」改名为「海拔高检测」。",
-    "【分类标注】更新六大工具分类每个板块的标注内容，并修正「生活实用」完整简介（移除已转入文本时娱的娱乐 / 时间类应用）。"
+    "【分类标注】更新六大工具分类每个板块的标注内容，并修正「生活实用」完整简介（移除已转入文本时娱的娱乐 / 时间类应用）。",
+    "【表情包制作】文字可在图片上自由拖动到任意位置，新增竖排（自上而下、行由右往左），选中显示虚线框、支持重置位置。",
+    "【批量导出 ZIP】修复 ZIP 本地文件头偏移错误与中文文件名乱码，「JSZ.file is not a function」报错修复；改为纯本地打包，不再依赖国外 CDN，手机 / 电脑均可正常导出。",
+    "【数学公式排版】新增行间距、数字字母字号、序号字号三组滑块，实时预览生效。",
+    "【比赛记分】加分 / 减分后不再重排队伍位置，队伍下方显示「当前排名 第 N 名」，大屏模式同步。",
+    "【决策转盘】支持像「随机抽签 / 点名」一样保存、切换、更新与删除多份选项名单。",
+    "【二十四节气与节日】春节 / 清明 / 劳动节 / 端午 / 中秋 / 国庆 / 元旦等标注国家法定放假天数（不含调休与周末）。",
+    "【图片拼接】新增图片重叠（10%–80%）与缝隙背景色，拼接结果上可逐张拖动自由调整重叠位置，支持恢复自动排列。",
+    "【PDF 签章 / 签名】电子章重绘：加粗外圈、细化内圈、文字沿弧线排列并与圆圈留出间距，可加「合同专用」等下方小字；骑缝章改为重叠切片，首页 / 末页都有清晰印记且整体可拖动；新增统一印章透明度滑块（默认 25%），盖章可压在正文上但不遮住文字。"
   ]},
   { date:'2026-08-27', items:[
     "【手机卡片】调整尺寸缩小同屏面积差距，布局更均衡。",
@@ -8093,8 +8416,8 @@ AppTools['solar-term'] = {
   build(body){
     const TERM=['小寒','大寒','立春','雨水','惊蛰','春分','清明','谷雨','立夏','小满','芒种','夏至','小暑','大暑','立秋','处暑','白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至'];
     const LORE={'立春':'习俗：迎春、打春牛。养生：乍暖还寒，宜养肝、早睡早起。','雨水':'养生：健脾祛湿，少食生冷。','惊蛰':'养生：万物复苏，防春困。','春分':'养生：阴阳平衡，宜户外。','清明':'习俗：扫墓踏青。养生：慎吃发物。','谷雨':'养生：健脾利湿，防过敏。','立夏':'养生：养心、清淡。','小满':'养生：防湿热，忌贪凉。','芒种':'养生：劳逸结合，防暑。','夏至':'习俗：吃面。养生：养心安神，夜卧早起。','小暑':'养生：清热解暑。','大暑':'养生：防中暑，补水。','立秋':'养生：润肺，少辛增酸。','处暑':'养生：防秋燥。','白露':'养生：添衣防凉，润肺。','秋分':'养生：阴阳均衡，防燥。','寒露':'养生：保暖，润燥。','霜降':'养生：进补，防感冒。','立冬':'习俗：补冬。养生：养藏，温补。','小雪':'养生：温补肾阳。','大雪':'养生：防寒，适度运动。','冬至':'习俗：数九、吃饺子/汤圆。养生：养肾。','小寒':'养生：防寒保暖，温补。','大寒':'养生：年关进补，迎春。'};
-    const G_FEST=[['元旦',1,1,'新年第一天，世界多数国家法定假日。'],['情人节',2,14,'西方传统节日，表达爱意。'],['妇女节',3,8,'国际劳动妇女节，致敬女性权益。'],['植树节',3,12,'倡导绿化祖国、植树造林。'],['劳动节',5,1,'国际劳动节，致敬劳动者。'],['青年节',5,4,'五四青年节，纪念五四运动。'],['儿童节',6,1,'国际儿童节，关爱少年儿童。'],['建党节',7,1,'中国共产党成立纪念日。'],['建军节',8,1,'中国人民解放军建军节。'],['教师节',9,10,'感恩教师、尊师重教。'],['国庆节',10,1,'中华人民共和国国庆日。'],['记者节',11,8,'中国记者节。'],['国家宪法日',12,4,'弘扬宪法精神。'],['南京大屠杀死难者国家公祭日',12,13,'缅怀遇难同胞，珍爱和平。'],['圣诞节',12,25,'西方传统节日。']];
-    const L_FEST=[['春节',1,1,'农历新年，阖家团圆、贴春联守岁。'],['元宵节',1,15,'正月十五，赏灯吃汤圆。'],['龙抬头',2,2,'二月初二，理发春耕祈丰。'],['端午节',5,5,'五月初五，赛龙舟吃粽子。'],['七夕',7,7,'七月初七，乞巧与爱情传说。'],['中元节',7,15,'七月十五，祭祀祖先。'],['中秋节',8,15,'八月十五，赏月吃月饼。'],['重阳节',9,9,'九月初九，敬老登高。'],['腊八节',12,8,'腊月初八，喝腊八粥。'],['小年',12,23,'腊月廿三，祭灶扫尘迎新春。']];
+    const G_FEST=[['元旦',1,1,'新年第一天，世界多数国家法定假日。',1],['情人节',2,14,'西方传统节日，表达爱意。'],['妇女节',3,8,'国际劳动妇女节，致敬女性权益。'],['植树节',3,12,'倡导绿化祖国、植树造林。'],['劳动节',5,1,'国际劳动节，致敬劳动者。',1],['青年节',5,4,'五四青年节，纪念五四运动。'],['儿童节',6,1,'国际儿童节，关爱少年儿童。'],['建党节',7,1,'中国共产党成立纪念日。'],['建军节',8,1,'中国人民解放军建军节。'],['教师节',9,10,'感恩教师、尊师重教。'],['国庆节',10,1,'中华人民共和国国庆日。',3],['记者节',11,8,'中国记者节。'],['国家宪法日',12,4,'弘扬宪法精神。'],['南京大屠杀死难者国家公祭日',12,13,'缅怀遇难同胞，珍爱和平。'],['圣诞节',12,25,'西方传统节日。']];
+    const L_FEST=[['春节',1,1,'农历新年，阖家团圆、贴春联守岁。',3],['元宵节',1,15,'正月十五，赏灯吃汤圆。'],['龙抬头',2,2,'二月初二，理发春耕祈丰。'],['端午节',5,5,'五月初五，赛龙舟吃粽子。',1],['七夕',7,7,'七月初七，乞巧与爱情传说。'],['中元节',7,15,'七月十五，祭祀祖先。'],['中秋节',8,15,'八月十五，赏月吃月饼。',1],['重阳节',9,9,'九月初九，敬老登高。'],['腊八节',12,8,'腊月初八，喝腊八粥。'],['小年',12,23,'腊月廿三，祭灶扫尘迎新春。']];
     const thisYear=new Date().getFullYear();
     body.innerHTML=`
       <div class="row mb"><div><label class="field-label">年份</label><input type="number" class="inp" id="st-year" value="${thisYear}" min="1900" max="2100"></div>
@@ -8109,20 +8432,21 @@ AppTools['solar-term'] = {
         const sl=await loadSL();
         const rows=[];
         for(let m=1;m<=12;m++){ for(let d=1;d<=31;d++){ const r=sl.solar2lunar(Y,m,d); if(r && r.cMonth===m && r.cDay===d && r.isTerm && r.term) rows.push({name:r.term, m, d}); } }
-        let html='<h4 class="mt">📅 二十四节气（'+Y+' 年）</h4><table class="tbl-prev"><thead><tr><th>节气</th><th>日期</th><th>民俗/养生</th></tr></thead><tbody>';
-        rows.forEach(t=>{ html+=`<tr><td>${t.name}</td><td>${Y}-${String(t.m).padStart(2,'0')}-${String(t.d).padStart(2,'0')}</td><td class="small">${LORE[t.name]||''}</td></tr>`; });
+        let html='<h4 class="mt">📅 二十四节气（'+Y+' 年）</h4><table class="tbl-prev"><thead><tr><th>节气</th><th>日期</th><th>放假</th><th>民俗/养生</th></tr></thead><tbody>';
+        rows.forEach(t=>{ const hd=(t.name==='清明')?1:0; html+=`<tr><td>${t.name}</td><td>${Y}-${String(t.m).padStart(2,'0')}-${String(t.d).padStart(2,'0')}</td><td${hd?' class="hol"':''}>${hd?hd+' 天':'—'}</td><td class="small">${LORE[t.name]||''}</td></tr>`; });
         html+='</tbody></table>';
-        html+='<h4 class="mt">🎉 公历节日（'+Y+' 年）</h4><table class="tbl-prev"><thead><tr><th>节日</th><th>日期</th><th>简介</th></tr></thead><tbody>';
-        G_FEST.slice().sort((a,b)=>(a[1]*100+a[2])-(b[1]*100+b[2])).forEach(f=>{ html+=`<tr><td>${f[0]}</td><td>${Y}-${String(f[1]).padStart(2,'0')}-${String(f[2]).padStart(2,'0')}</td><td class="small">${f[3]}</td></tr>`; });
+        html+='<h4 class="mt">🎉 公历节日（'+Y+' 年）</h4><table class="tbl-prev"><thead><tr><th>节日</th><th>日期</th><th>放假</th><th>简介</th></tr></thead><tbody>';
+        G_FEST.slice().sort((a,b)=>(a[1]*100+a[2])-(b[1]*100+b[2])).forEach(f=>{ const hd=f[4]||0; html+=`<tr><td>${f[0]}</td><td>${Y}-${String(f[1]).padStart(2,'0')}-${String(f[2]).padStart(2,'0')}</td><td${hd?' class="hol"':''}>${hd?hd+' 天':'—'}</td><td class="small">${f[3]}</td></tr>`; });
         html+='</tbody></table>';
         const lfRows=[];
-        L_FEST.forEach(f=>{ const dt=lunarToSolar(sl,Y,f[1],f[2]); if(dt) lfRows.push({name:f[0], y:dt.cYear, m:dt.cMonth, d:dt.cDay, info:f[3]}); });
+        L_FEST.forEach(f=>{ const dt=lunarToSolar(sl,Y,f[1],f[2]); if(dt) lfRows.push({name:f[0], y:dt.cYear, m:dt.cMonth, d:dt.cDay, info:f[3], hol:f[4]||0}); });
         const spring=lunarToSolar(sl,Y,1,1);
-        if(spring){ const sd=new Date(spring.cYear,spring.cMonth-1,spring.cDay-1); lfRows.push({name:'除夕', y:sd.getFullYear(), m:sd.getMonth()+1, d:sd.getDate(), info:'腊月最后一天，守岁团圆饭。'}); }
+        if(spring){ const sd=new Date(spring.cYear,spring.cMonth-1,spring.cDay-1); lfRows.push({name:'除夕', y:sd.getFullYear(), m:sd.getMonth()+1, d:sd.getDate(), info:'腊月最后一天，守岁团圆饭。', hol:0}); }
         lfRows.sort((a,b)=>(a.m*100+a.d)-(b.m*100+b.d));
-        html+='<h4 class="mt">🏮 农历节日（'+Y+' 年公历日期）</h4><table class="tbl-prev"><thead><tr><th>节日</th><th>日期</th><th>简介</th></tr></thead><tbody>';
-        lfRows.forEach(f=>{ html+=`<tr><td>${f.name}</td><td>${f.y}-${String(f.m).padStart(2,'0')}-${String(f.d).padStart(2,'0')}</td><td class="small">${f.info}</td></tr>`; });
+        html+='<h4 class="mt">🏮 农历节日（'+Y+' 年公历日期）</h4><table class="tbl-prev"><thead><tr><th>节日</th><th>日期</th><th>放假</th><th>简介</th></tr></thead><tbody>';
+        lfRows.forEach(f=>{ const hd=f.hol||0; html+=`<tr><td>${f.name}</td><td>${f.y}-${String(f.m).padStart(2,'0')}-${String(f.d).padStart(2,'0')}</td><td${hd?' class="hol"':''}>${hd?hd+' 天':'—'}</td><td class="small">${f.info}</td></tr>`; });
         html+='</tbody></table>';
+        html+='<div class="hint">📌 放假天数为国家法定节假日天数（不含调休与周末），实际安排以当年国务院放假通知为准。</div>';
         const now=new Date(); let next=null;
         for(const t of rows){ const dt=new Date(Y,t.m-1,t.d); if(dt>now){ next={name:t.name,dt}; break; } }
         if(!next && rows[0]) next={name:rows[0].name, dt:new Date(Y+1,rows[0].m-1,rows[0].d)};
@@ -8776,7 +9100,7 @@ AppTools['img-watermark'] = {
       if(!files.length){toast('请先上传图片');return;}
       $('#wm-out',body).innerHTML='<span class="loading"><span class="spinner"></span>处理中…</span>';
       try{
-        const useZip=files.length>1; const JSZ=useZip?await getZip():null; const fmt=$('#wm-fmt',body).value,q=+$('#wm-q',body).value/100,pre=$('#wm-pre',body).value;
+        const useZip=files.length>1; const JSZ=useZip?new (await getZip())():null; const fmt=$('#wm-fmt',body).value,q=+$('#wm-q',body).value/100,pre=$('#wm-pre',body).value;
         const out=[];
         for(let i=0;i<files.length;i++){
           const im=imgs[i]||await fileToImage(files[i]); const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight; const x=c.getContext('2d'); x.drawImage(im,0,0);
@@ -8839,7 +9163,7 @@ AppTools['img-blur'] = {
     cv.ontouchmove=e=>{ if(!dragging) return; const t=e.touches[0]; const rc=cv.getBoundingClientRect(); const x=(t.clientX-rc.left)*(cv.width/rc.width), y=(t.clientY-rc.top)*(cv.height/rc.height); const rx=Math.min(sx,x), ry=Math.min(sy,y); blRectFrac={fx:rx/cv.width,fy:ry/cv.height,fw:Math.abs(x-sx)/cv.width,fh:Math.abs(y-sy)/cv.height}; render(); e.preventDefault(); };
     $('#bl-run',body).onclick=()=>{ cv.style.display='block'; render(); };
     $('#bl-export',body).onclick=async()=>{ if(!files.length){toast('请先上传');return;} $('#bl-out',body).innerHTML='<span class="loading"><span class="spinner"></span>处理中…</span>';
-      try{ const useZip=files.length>1; const JSZ=useZip?await getZip():null; const fmt=$('#bl-fmt',body).value,q=+$('#bl-q',body).value/100; const out=[];
+      try{ const useZip=files.length>1; const JSZ=useZip?new (await getZip())():null; const fmt=$('#bl-fmt',body).value,q=+$('#bl-q',body).value/100; const out=[];
         for(let i=0;i<files.length;i++){ const im=imgs[i]||await fileToImage(files[i]); const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight; const x=c.getContext('2d'); applyBlur(x,c.width,c.height,im); const blob=await new Promise(r=>c.toBlob(r,fmt,q)); const name=files[i].name.replace(/\.[^.]+$/,'')+'_blur.'+(fmt==='image/jpeg'?'jpg':fmt==='image/png'?'png':'webp'); if(JSZ)JSZ.file(name,blob); else out.push({name,blob}); }
         if(JSZ){ const b=await JSZ.generateAsync({type:'blob'}); downloadBlob(b,'blur_'+Date.now()+'.zip'); $('#bl-out',body).innerHTML='已打包 '+files.length+' 张 ZIP'; }
         else { out.forEach(o=>downloadBlob(o.blob,o.name)); $('#bl-out',body).innerHTML='已下载 '+files.length+' 张'; }
@@ -8867,7 +9191,7 @@ AppTools['img-tojpg'] = {
     async function toImage(f){ let src=f; if(f.type==='image/heic'||f.name.match(/\.heic$/i)){ if(!window.heic2any){toast('HEIC 需联网加载解码库');await ensureCDNLib('heic2any',['https://cdn.jsdelivr.net/npm/heic2any@0.0.5/dist/heic2any.min.js']);} const blob=await window.heic2any({blob:f,toType:'image/jpeg'}); src=new File([blob],f.name,{type:'image/jpeg'}); } return fileToImage(src); }
     ntBatchAddUI(body,'tj-files',(all)=>{ files=all; $('#tj-list',body).textContent='已选 '+all.length+' 张'; });
     $('#tj-export',body).onclick=async()=>{ if(!files.length){toast('请先上传');return;} $('#tj-out',body).innerHTML='<span class="loading"><span class="spinner"></span>转换中…</span>';
-      try{ const JSZ=await getZip(); const q=+$('#tj-q',body).value/100, bg=$('#tj-bg',body).value;
+      try{ const JSZ=new (await getZip())(); const q=+$('#tj-q',body).value/100, bg=$('#tj-bg',body).value;
         for(let i=0;i<files.length;i++){ const im=await toImage(files[i]); let W=im.naturalWidth,H=im.naturalHeight; const sm=+$('#tj-size',body).value; if(sm===1){W=W/2;H=H/2;} else if(sm===2){const s=1024/Math.max(W,H);W*=s;H*=s;} else if(sm===3){const s=1920/Math.max(W,H);W*=s;H*=s;} const c=document.createElement('canvas');c.width=Math.round(W);c.height=Math.round(H);const x=c.getContext('2d'); x.fillStyle=bg; x.fillRect(0,0,c.width,c.height); x.drawImage(im,0,0,c.width,c.height); const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',q)); const name=files[i].name.replace(/\.[^.]+$/,'')+'.jpg'; JSZ.file(name,blob); }
         const b=await JSZ.generateAsync({type:'blob'}); downloadBlob(b,'jpg_'+Date.now()+'.zip'); $('#tj-out',body).innerHTML='已转换 '+files.length+' 张并打包 ZIP';
       }catch(err){ $('#tj-out',body).innerHTML='<span class="tag-red">出错：'+(err.message||err)+'</span>'; }
@@ -8899,7 +9223,7 @@ AppTools['gif-split'] = {
       }catch(err){ $('#gs-info',body).innerHTML='<span class="tag-red">解析失败：'+(err.message||err)+'（GIF 库需联网加载）</span>'; }
     };
     $('#gs-export',body).onclick=async()=>{ if(!frames.length){toast('请先上传 GIF');return;} let idx=[]; const v=$('#gs-range',body).value; if(v==='all') idx=frames.map((_,i)=>i); else if(v==='part'){ const s=Math.max(0,(+$('#gs-start',body).value||1)-1), e=Math.min(frames.length,(+$('#gs-end',body).value||frames.length)); for(let i=s;i<e;i++)idx.push(i);} else { const st=+$('#gs-step',body).value||2; for(let i=0;i<frames.length;i+=st)idx.push(i); }
-      try{ const JSZ=await getZip(); const fmt=$('#gs-fmt',body).value,q=+$('#gs-q',body).value/100; for(const i of idx){ const blob=await new Promise(r=>frames[i].toBlob(r,fmt,q)); const ext=fmt==='image/jpeg'?'jpg':fmt==='image/png'?'png':'webp'; JSZ.file('frame_'+String(i+1).padStart(4,'0')+'.'+ext,blob); } const b=await JSZ.generateAsync({type:'blob'}); downloadBlob(b,'gif_frames_'+Date.now()+'.zip'); $('#gs-out',body).innerHTML='已导出 '+idx.length+' 帧 ZIP'; }
+      try{ const JSZ=new (await getZip())(); const fmt=$('#gs-fmt',body).value,q=+$('#gs-q',body).value/100; for(const i of idx){ const blob=await new Promise(r=>frames[i].toBlob(r,fmt,q)); const ext=fmt==='image/jpeg'?'jpg':fmt==='image/png'?'png':'webp'; JSZ.file('frame_'+String(i+1).padStart(4,'0')+'.'+ext,blob); } const b=await JSZ.generateAsync({type:'blob'}); downloadBlob(b,'gif_frames_'+Date.now()+'.zip'); $('#gs-out',body).innerHTML='已导出 '+idx.length+' 帧 ZIP'; }
       catch(err){ $('#gs-out',body).innerHTML='<span class="tag-red">出错：'+(err.message||err)+'</span>'; }
     };
   }
@@ -9009,7 +9333,23 @@ AppTools['photo-measure'] = {
 /* ---------- 决策转盘 ---------- */
 AppTools['wheel'] = {
   build(body){
+    const LKEY='pt_wheel_lists';
+    let lists=[]; try{ lists=JSON.parse(localStorage.getItem(LKEY)||'[]'); }catch(_){ lists=[]; }
+    if(!Array.isArray(lists)) lists=[];
+    const whSelOpts=()=> lists.map((x,i)=>`<option value="${i}">${escapeHtml(x.name)}（${x.list.split('\n').map(s=>s.trim()).filter(Boolean).length} 项）</option>`).join('');
     body.innerHTML=`
+      <div class="card-soft mb">
+        <div class="row mb" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:160px"><label class="field-label">选择已存名单</label>
+            <select class="sel" id="wh-lsel"><option value="-1">（新建一份名单）</option>${whSelOpts()}</select></div>
+          <button class="btn ghost" id="wh-ldel">删除当前</button>
+        </div>
+        <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:140px"><label class="field-label">名单名称</label><input type="text" class="inp" id="wh-lname" placeholder="如：抽奖名单 / 午餐选啥"></div>
+          <button class="btn ghost" id="wh-lsave">保存 / 更新名单</button>
+        </div>
+        <div class="hint" style="margin:6px 0 0">保存后可随时在上方切换、更新或删除，名单永久保存在本机浏览器（与「随机抽签 / 点名」一样）。</div>
+      </div>
       <div class="mb"><label class="field-label">选项（每行一个，可加权重 名称:权重，如 张三:3）</label><textarea id="wh-opts" class="area" style="height:96px">选项A\n选项B\n选项C\n选项D</textarea></div>
       <div class="card-soft mb"><div class="row"><div style="flex:2"><label class="field-label">快速等分生成（如分成 51 份）</label><input type="number" id="wh-n" class="inp" value="0" min="0" max="200" placeholder="0=不生成"></div><button class="btn ghost" id="wh-gen">生成等分</button></div><div class="hint" style="margin:6px 0 0">输入份数后点「生成等分」可一键生成等量选项（如抽奖 51 人各一份）。</div></div>
       <div class="row mb"><div><label class="field-label">旋转时长(秒)</label><input type="number" id="wh-dur" class="inp" value="4" min="1" max="20"></div>
@@ -9078,6 +9418,29 @@ AppTools['wheel'] = {
     $('#wh-rm',body).onchange=()=>{ parse(); };
     $('#wh-spin',body).onclick=()=>{ if(!opts.length)parse(); if(!opts.length){toast('请先输入选项');return;} const idx=pick(); const n=opts.length, seg=2*Math.PI/n; const turns=+$('#wh-turns',body).value; const dur=+$('#wh-dur',body).value*1000; const finalRot=turns*2*Math.PI + (-Math.PI/2 - (idx+0.5)*seg); const start=performance.now(); const base=finalRot; function step(t){ const p=Math.min(1,(t-start)/dur); const e=1-Math.pow(1-p,3); drawWheel(e*base, -1); if(p<1)requestAnimationFrame(step); else { const name=opts[idx].name; drawWheel(base, idx); updateResult('🎉 '+name); lastPick={idx, name, rot:base% (2*Math.PI)}; hist.unshift({name, t:Date.now()}); if(hist.length>50)hist=hist.slice(0,50); saveHist(); if($('#wh-rm',body).checked){ removed.push(name); saveRemoved(); opts.splice(idx,1); colors.splice(idx,1); setTimeout(()=>{ drawWheel(0,-1); },600); } renderHist(); } } requestAnimationFrame(step); };
     function updateResult(txt){ $('#wh-result',body).textContent=txt; }
+    // ===== 名单保存 / 切换 / 删除（与「随机抽签 / 点名」一致）=====
+    const $lsel=$('#wh-lsel',body), $lname=$('#wh-lname',body), $lopts=$('#wh-opts',body);
+    const refreshLSel=(keepIdx)=>{ const idx=(keepIdx==null)? +$lsel.value : keepIdx; $lsel.innerHTML=`<option value="-1">（新建一份名单）</option>`+whSelOpts(); $lsel.value = lists.length? String(Math.min(Math.max(idx,0), lists.length-1)) : '-1'; };
+    $lsel.addEventListener('change',()=>{ const i=+$lsel.value; if(i>=0 && lists[i]){ $lname.value=lists[i].name; $lopts.value=lists[i].list; parse(); } else { $lname.value=''; } });
+    if(lists.length){ $lsel.value='0'; $lname.value=lists[0].name; $lopts.value=lists[0].list; }
+    $('#wh-lsave',body).onclick=()=>{
+      const text=$lopts.value; const name=($lname.value||'').trim()||('名单 '+(lists.length+1));
+      const arr=text.split('\n').map(s=>s.trim()).filter(Boolean);
+      if(!arr.length){ toast('名单为空，无法保存','err'); return; }
+      const i=+$lsel.value;
+      if(i>=0 && lists[i]){ lists[i]={name, list:text}; toast('已更新名单「'+name+'」'); }
+      else { lists.push({name, list:text}); toast('已保存新名单「'+name+'」'); }
+      try{ localStorage.setItem(LKEY, JSON.stringify(lists)); }catch(_){}
+      refreshLSel(lists.length-1); $lsel.value=String(lists.length-1); $lname.value=name;
+    };
+    $('#wh-ldel',body).onclick=()=>{
+      const i=+$lsel.value; if(i<0||!lists[i]){ toast('请先选择要删除的名单','err'); return; }
+      if(!confirm('确认删除名单「'+lists[i].name+'」？')) return;
+      lists.splice(i,1); try{ localStorage.setItem(LKEY, JSON.stringify(lists)); }catch(_){}
+      refreshLSel(i-1);
+      const j=+$lsel.value; if(j>=0 && lists[j]){ $lname.value=lists[j].name; $lopts.value=lists[j].list; } else { $lname.value=''; }
+      toast('已删除');
+    };
     $('#wh-reset',body).onclick=()=>{ parse(); lastPick=null; };
     $('#wh-histclear',body).onclick=()=>{ if(!hist.length){toast('暂无历史记录');return;} if(!confirm('确认清空全部历史？已中选项将全部恢复为可选中。'))return; hist=[]; removed=[]; saveHist(); saveRemoved(); renderHist(); parse(); toast('已清空历史，全部选项恢复可选中'); };
     $('#wh-export',body).onclick=()=>{
@@ -9111,12 +9474,12 @@ AppTools['scoreboard'] = {
       <div class="card-soft mt"><div class="row"><div style="flex:1"><label class="field-label">计时(秒)</label><input type="number" id="sb-timer" class="inp" value="60"></div><button class="btn" id="sb-tstart">开始</button><button class="btn ghost" id="sb-tpause">暂停</button></div><div id="sb-clock" class="big-num">00:00</div></div>
       <div class="btn-row"><button class="btn ghost" id="sb-csv">导出CSV</button></div>`;
     let players=[], timer=null, remain=0;
-    function render(){ const b=$('#sb-board',body); players.sort((a,c)=>c.score-a.score); b.innerHTML=players.map((p,i)=>`<div class="card-soft" style="min-width:140px;text-align:center"><div style="font-weight:700">${escapeHtml(p.name)}</div><div class="big-num">${p.score}</div><div class="row" style="justify-content:center;gap:6px"><button class="btn ghost" data-i="${i}" data-d="-1">-1</button><button class="btn ghost" data-i="${i}" data-d="1">+1</button><button class="btn ghost" data-i="${i}" data-d="5">+5</button></div><input class="inp" style="width:64px;margin-top:4px" data-custom="${i}" placeholder="自定义"></div>`).join(''); b.querySelectorAll('button[data-d]').forEach(btn=>btn.onclick=()=>{ players[+btn.dataset.i].score+=+btn.dataset.d; render(); }); b.querySelectorAll('input[data-custom]').forEach(inp=>inp.onchange=()=>{ const v=+inp.value; if(!isNaN(v)){ players[+inp.dataset.custom].score+=v; inp.value=''; render(); } }); };
+    function render(){ const b=$('#sb-board',body); b.innerHTML=players.map((p,i)=>`<div class="card-soft" style="min-width:140px;text-align:center"><div style="font-weight:700">${escapeHtml(p.name)}</div><div class="big-num">${p.score}</div><div style="font-size:12px;font-weight:700;color:#e5432f;background:#fff1f0;border-radius:10px;padding:1px 8px;display:inline-block;margin:2px 0 6px">当前排名 第 ${1+players.filter(q=>q.score>p.score).length} 名</div><div class="row" style="justify-content:center;gap:6px"><button class="btn ghost" data-i="${i}" data-d="-1">-1</button><button class="btn ghost" data-i="${i}" data-d="1">+1</button><button class="btn ghost" data-i="${i}" data-d="5">+5</button></div><input class="inp" style="width:64px;margin-top:4px" data-custom="${i}" placeholder="自定义"></div>`).join(''); b.querySelectorAll('button[data-d]').forEach(btn=>btn.onclick=()=>{ players[+btn.dataset.i].score+=+btn.dataset.d; render(); }); b.querySelectorAll('input[data-custom]').forEach(inp=>inp.onchange=()=>{ const v=+inp.value; if(!isNaN(v)){ players[+inp.dataset.custom].score+=v; inp.value=''; render(); } }); };
     function fmt(s){ const m=Math.floor(s/60),ss=s%60; return String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0'); }
     $('#sb-init',body).onclick=()=>{ players=$('#sb-seeds',body).value.split('\n').map(s=>s.trim()).filter(Boolean).map(s=>{ const i=s.lastIndexOf(':'); if(i>0&&!isNaN(+s.slice(i+1))){return {name:s.slice(0,i),score:+s.slice(i+1)};} return {name:s,score:0}; }); render(); };
     $('#sb-gen',body).onclick=()=>{ const n=+$('#sb-n',body).value; if(n>0){ $('#sb-seeds',body).value=Array.from({length:n},(_,i)=>'队伍'+(i+1)).join('\n'); $('#sb-init',body).click(); toast('已生成 '+n+' 支队伍'); } };
     $('#sb-reset',body).onclick=()=>{ players.forEach(p=>p.score=0); render(); };
-    $('#sb-big',body).onclick=()=>{ const w=window.open('','_blank'); if(!w){toast('请允许弹窗');return;} w.document.write('<style>body{background:#111;color:#fff;font-family:sans-serif;text-align:center}#b{display:flex;flex-wrap:wrap;gap:20px;justify-content:center;margin-top:40px}.p{background:#222;padding:20px 30px;border-radius:14px;min-width:160px}.n{font-size:20px}.s{font-size:48px;font-weight:800}</style><h1>记分板</h1><div id="b"></div>'); const upd=()=>{ w.document.getElementById('b').innerHTML=players.slice().sort((a,c)=>c.score-a.score).map(p=>`<div class="p"><div class="n">${p.name}</div><div class="s">${p.score}</div></div>`).join(''); }; const iv=setInterval(upd,500); upd(); };
+    $('#sb-big',body).onclick=()=>{ const w=window.open('','_blank'); if(!w){toast('请允许弹窗');return;} w.document.write('<style>body{background:#111;color:#fff;font-family:sans-serif;text-align:center}#b{display:flex;flex-wrap:wrap;gap:20px;justify-content:center;margin-top:40px}.p{background:#222;padding:20px 30px;border-radius:14px;min-width:160px}.n{font-size:20px}.s{font-size:48px;font-weight:800}.r{font-size:15px;color:#ffd666;margin-top:6px}</style><h1>记分板</h1><div id="b"></div>'); const upd=()=>{ w.document.getElementById('b').innerHTML=players.map(p=>`<div class="p"><div class="n">${p.name}</div><div class="s">${p.score}</div><div class="r">第 ${1+players.filter(q=>q.score>p.score).length} 名</div></div>`).join(''); }; const iv=setInterval(upd,500); upd(); };
     $('#sb-tstart',body).onclick=()=>{ if(timer)return; remain=+$('#sb-timer',body).value; const tick=()=>{ $('#sb-clock',body).textContent=fmt(remain); if(remain<=0){clearInterval(timer);timer=null;toast('时间到');return;} remain--; }; tick(); timer=setInterval(tick,1000); };
     $('#sb-tpause',body).onclick=()=>{ if(timer){clearInterval(timer);timer=null;} };
     $('#sb-csv',body).onclick=()=>{ const rows=[['排名','名称','分数'],...players.slice().sort((a,c)=>c.score-a.score).map((p,i)=>[i+1,p.name,p.score])]; downloadBlob(new Blob([rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}),'scoreboard.csv'); };
