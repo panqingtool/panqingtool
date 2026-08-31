@@ -353,9 +353,13 @@ img{max-width:100%;}
 .t-fav.on{color:#f5a623;}
 .t-fav.on:hover{color:#fa8c16;}
 /* ============ 公式编号排版 ============ */
-.eq-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;}
+/* .eq-row 行间距完全由 JS（applyStyle 的 marginTop/marginBottom）驱动，故此处不设固定 margin，
+   否则会被 10px 下边距托底、导致滑块调小后行距仍为「最小 1」的效果 */
+.eq-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}
 .eq-tex{flex:1;text-align:center;}
 .eq-num{color:var(--text-2);font-size:14px;white-space:nowrap;}
+/* 去掉 KaTeX displayMode 自带 1em 上下外边距，否则会盖过 .eq-row 的块间距、行距无法真正收紧 */
+#mf-preview .katex-display{margin:0;}
 
 /* ============ 模态框 ============ */
 .modal-overlay{
@@ -794,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.31-c</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.31-d</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6785,9 +6789,10 @@ AppTools['math-formula'] = {
       const lv=$('#mf-lh-v',body); if(lv) lv.textContent=lh.toFixed(1);
       preview.querySelectorAll('.eq-num').forEach(el=>{ el.style.fontSize=ns+'px'; });
       // 多行模式：每个公式是独立块级 .eq-row，lineHeight 只影响行内文本、不影响块间距，
-      // 故行间距必须用块间距控制，lh<1 才能真正收紧甚至重叠（修复“最小还是 1 的效果”）
-      const offset = Math.round((lh - 1) * fs * 1.2 + fs * 0.4); // 行距=1→0.4fs；<1 收紧/重叠
-      preview.querySelectorAll('.eq-row').forEach(el => { el.style.marginBottom = offset + 'px'; });
+      // 故行间距必须用块间距控制；KaTeX display 自带 1em 外边距已在 CSS 内清零，这里直接驱动上下 margin，
+      // lh<1 时 offset 为负 → 公式真正收紧甚至重叠（修复“最小还是 1 的效果”）
+      const offset = Math.round((lh - 1) * fs * 1.2 + fs * 0.4); // 行距=1→0.4fs；<1 收紧/重叠；>1 放宽
+      preview.querySelectorAll('.eq-row').forEach(el => { el.style.marginTop = '0px'; el.style.marginBottom = offset + 'px'; });
     }
     ['mf-lh','mf-fs','mf-ns'].forEach(id=>{ const el=$('#'+id,body); if(el) el.addEventListener('input', applyStyle); });
     src.addEventListener('input', render);
