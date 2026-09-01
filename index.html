@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.01-a</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.01-b</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7032,7 +7032,7 @@ const TOOLS = [
   {id:'ar-area',      name:'AR 测面积',       icon:'🟦', cat:'life', desc:'选照片后用「自由套索」或「多边形」框选区域，输入图中一条已知边长即可按比例尺算出实际面积。'},
   {id:'photo-count',  name:'拍照计数',        icon:'🔢', cat:'life', desc:'选照片后逐一轻点目标即可自动计数（人数 / 物品数），带标记点与撤销，适合清点。'},
   {id:'postal-code',  name:'邮政编码查询',     icon:'📮', cat:'life', desc:'省/直辖市/自治区级标准邮编查询（准确），支持反向由 6 位邮编定位省区，并可跳转中国邮政官网查街道/乡镇级精确邮编。'},
-  {id:'long-shot',    name:'长截图 / 滚动截图', icon:'📜', cat:'image', desc:'把滚动内容拼成超长高清图：电脑端授权后自动滚动逐帧截取整页；手机端可选多张截图自动识别重叠、竖向拼接，也可单屏截图；纯本地不上传。'},
+  {id:'long-shot',    name:'长截图 / 滚动截图', icon:'📜', cat:'image', desc:'把滚动内容拼成超长高清图：①本页自动滚动截取；②其它网站/窗口/整屏长图（手动滚动+逐帧拼接，可截别的网页）；③单屏截图；④多图拼接。纯本地不上传。'},
 
 ];;
 
@@ -7636,7 +7636,7 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-09-01', items:[
-    "【新增 · 长截图 / 滚动截图】把滚动中的内容拼成一张超长高清图。电脑端（Edge / Chrome）授权后自动滚动页面、逐帧只取新露出的部分，无缝拼接出整页长图；手机端可选多张截图，自动识别相邻两张的重叠区域并去掉重复后竖向拼接；另有「单屏截图」可截任意窗口 / 屏幕 / 标签页。全程本地处理、不上传，不依赖任何外部库。"
+    "【长截图 / 滚动截图】修复「只能截本站、截不到其它网站」的问题，新增四种方式：①本页自动滚动截取（电脑端授权后自动滚完整页）；②其它网页 / 窗口 / 整屏长图——弹窗里可选任意其它标签页 / 窗口，边滚边「截一帧」、工具自动按重叠拼接成长图；③单屏截图（可截任意来源）；④多图拼接（手机端边滚边连截后自动去重叠拼长图）。全程本地处理、不上传、不依赖外部库。"
   ]},
   { date:'2026-08-31', items:[
     "【表情包制作】文字可在图上自由拖动到任意位置，新增竖排模式，选中显示虚线框并可一键重置。",
@@ -10787,12 +10787,17 @@ AppTools['long-shot'] = { build(body){
   const MAX_FRAMES = 160, MAX_H = 40000;
   body.innerHTML = `
     <div class="mb-sm" style="color:var(--text-2);font-size:13px;line-height:1.7;">
-      把滚动中的内容拼成一张超长图。<b>电脑（Edge / Chrome）</b>可用「自动滚动截取」一键截下整个网页；<b>手机</b>浏览器不支持屏幕授权，请边滚动边连续截几张图，再用「多图拼接」自动识别重叠、拼成长图。全流程本地处理，不上传任何内容。
+      把滚动内容拼成一张超长图，<b>纯本地处理、不上传</b>。四种方式：<br>
+      ① <b>本页自动滚动</b>：电脑（Edge / Chrome）授权后自动滚完整个网页（仅当前标签页）；<br>
+      ② <b>其它网页长图</b>：截取<b>任意其它标签页 / 窗口 / 整屏</b>——网页应用无法自动滚动别人的页面，需你边滚边「截一帧」自动拼接；<br>
+      ③ <b>单屏截图</b>：截取屏幕 / 窗口 / 标签页当前可见区域一张；<br>
+      ④ <b>多图拼接</b>：手机等不支持屏幕授权的设备，可边滚边连截几张，再自动识别重叠拼成长图。
     </div>
     <div class="row mb">
-      <button class="btn primary" id="ls-tab-auto">🖥️ 自动滚动截取</button>
-      <button class="btn" id="ls-tab-stitch">🧩 多图拼接</button>
+      <button class="btn primary" id="ls-tab-auto">🖥️ 本页自动滚动</button>
+      <button class="btn" id="ls-tab-other">🌐 其它网页长图</button>
       <button class="btn" id="ls-tab-one">📷 单屏截图</button>
+      <button class="btn" id="ls-tab-stitch">🧩 多图拼接</button>
     </div>
 
     <div id="ls-p-auto">
@@ -10811,6 +10816,21 @@ AppTools['long-shot'] = { build(body){
       </div>
     </div>
 
+    <div id="ls-p-other" style="display:none">
+      <div class="mb-sm" style="color:var(--text-2);font-size:12px;line-height:1.75;">
+        用于截取<b>其它网站 / 窗口 / 整个屏幕</b>的超长图（网页应用无法自动滚动别人的页面，需你手动配合）：<br>
+        ① 点「开始共享」并在弹窗选择要截的<b>其它标签页 / 窗口</b>；② 切到那个页面慢慢往下滚一点，回来点「截一帧」；③ 重复「滚动 + 截一帧」直到截完；④ 点「完成并下载」，工具自动按重叠拼接成长图。
+      </div>
+      <button class="btn primary" id="ls-other-start">开始共享</button>
+      <div id="ls-other-ctrl" style="display:none" class="row mb">
+        <button class="btn" id="ls-other-grab">📸 截一帧</button>
+        <button class="btn" id="ls-other-undo">↩️ 撤销一帧</button>
+        <button class="btn primary" id="ls-other-done">✅ 完成并下载</button>
+      </div>
+      <div id="ls-other-info" class="mb-sm" style="font-size:12px;color:var(--text-2);"></div>
+      <div id="ls-other-prev" class="mb"></div>
+    </div>
+
     <div id="ls-p-stitch" style="display:none">
       <div class="mb"><label class="field-label">按顺序选择多张截图（可多选）</label>
         <input type="file" class="inp" id="ls-files" accept="image/*" multiple aria-label="选择多张截图"></div>
@@ -10823,7 +10843,7 @@ AppTools['long-shot'] = { build(body){
 
     <div id="ls-p-one" style="display:none">
       <div class="mb-sm" style="color:var(--text-2);font-size:12px;line-height:1.6;">
-        截取屏幕 / 窗口 / 标签页当前可见区域一张（不滚动）。点击后在弹窗里选择要截取的来源即可。
+        截取屏幕 / 窗口 / 标签页当前可见区域一张（不滚动）。点击后在弹窗里选择要截取的来源即可（可截其它网站 / 窗口）。
       </div>
       <button class="btn primary" id="ls-one-run">开始截图</button>
     </div>
@@ -10831,9 +10851,13 @@ AppTools['long-shot'] = { build(body){
     <div id="ls-result" class="mt"></div>`;
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let stream = null, otherV = null, manualFrames = [];   // 屏幕流 / 其它网页模式的状态
 
   function showPanel(n){
-    ['auto','stitch','one'].forEach(k => {
+    stopStream(); otherV = null; manualFrames = [];
+    const oc = $('#ls-other-ctrl', body); if(oc) oc.style.display = 'none';
+    const os = $('#ls-other-start', body); if(os){ os.style.display = ''; os.disabled = false; os.textContent = '开始共享'; }
+    ['auto','other','one','stitch'].forEach(k => {
       const p = $('#ls-p-' + k, body); if(p) p.style.display = (k === n ? '' : 'none');
       const b = $('#ls-tab-' + k, body); if(b) b.className = 'btn' + (k === n ? ' primary' : '');
     });
@@ -10844,12 +10868,13 @@ AppTools['long-shot'] = { build(body){
   showPanel('auto');
 
   /* ---- 屏幕流（getDisplayMedia + video 取帧，无需任何外部库） ---- */
-  let stream = null;
-  async function openStream(){
+  async function openStream(preferCurrent){
     if(!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)){
       throw new Error('当前浏览器不支持屏幕截取，请用电脑版 Edge / Chrome 打开');
     }
-    stream = await navigator.mediaDevices.getDisplayMedia({ video:{ frameRate:30 }, audio:false, preferCurrentTab:true });
+    const opt = { video:{ frameRate:30 }, audio:false };
+    if(preferCurrent) opt.preferCurrentTab = true;   // 本页自动滚动用 current tab；其它网页/单屏不限制，可选手任意来源
+    stream = await navigator.mediaDevices.getDisplayMedia(opt);
     const v = document.createElement('video');
     v.srcObject = stream; v.muted = true; v.playsInline = true;
     await v.play();
@@ -10900,11 +10925,13 @@ AppTools['long-shot'] = { build(body){
     const origScroll = window.scrollY || window.pageYOffset || 0;
     try{
       btn.disabled = true; btn.innerHTML = '<span class="loading"><span class="spinner"></span>准备中…</span>';
-      const v = await openStream();
+      const v = await openStream(true);
       await sleep(320);
       // 临时环境：关平滑滚动 / 解锁 body 滚动 / 隐藏弹窗（否则会被截进去）
+      // 关平滑滚动（否则截到滚动动画中间帧）+ 关弹窗过渡：
+      // .modal-overlay 的 visibility 自带 .2s transition，CSS 规定过渡到 hidden 期间仍为 visible，不关会残影入镜
       stEl = document.createElement('style'); stEl.id = 'ls-nosmooth';
-      stEl.textContent = 'html{scroll-behavior:auto !important;}';
+      stEl.textContent = 'html{scroll-behavior:auto !important;} .modal-overlay{transition:none !important;}';
       document.head.appendChild(stEl);
       prevOverflow = document.body.style.overflow;
       prevVis = overlay.style.visibility;
@@ -10974,14 +11001,18 @@ AppTools['long-shot'] = { build(body){
   /* ================= ② 单屏截图（任意来源，不滚动） ================= */
   $('#ls-one-run', body).onclick = async () => {
     const btn = $('#ls-one-run', body);
-    let prevVis = '';
+    let prevVis = '', stEl = null;
     try{
       btn.disabled = true; btn.innerHTML = '<span class="loading"><span class="spinner"></span>准备中…</span>';
-      const v = await openStream();
+      const v = await openStream(false);
       await sleep(400);
+      // 关掉弹窗过渡，否则 visibility 在 .2s 过渡期内仍为 visible，会把工具窗口截进去
+      stEl = document.createElement('style'); stEl.id = 'ls-nosmooth';
+      stEl.textContent = '.modal-overlay{transition:none !important;}';
+      document.head.appendChild(stEl);
       prevVis = overlay.style.visibility;
-      overlay.style.visibility = 'hidden';                       // 避免把工具弹窗截进去
-      await sleep(160);
+      overlay.style.visibility = 'hidden';
+      await sleep(240);
       showResult(grabFrame(v), 'screenshot_' + Date.now());
       toast('截图完成');
     }catch(e){
@@ -10990,8 +11021,81 @@ AppTools['long-shot'] = { build(body){
       else toast('截图失败：' + m, 'err');
     }finally{
       stopStream();
+      try{ if(stEl && stEl.parentNode) stEl.remove(); }catch(_){ }
       try{ overlay.style.visibility = prevVis; }catch(_){ }
       btn.disabled = false; btn.textContent = '开始截图';
+    }
+  };
+
+  /* ================= ② 其它网页长图（手动滚动 + 逐帧拼接） =================
+     网页应用无法自动滚动别人的标签页，故让用户共享任意来源（其它标签页 / 窗口 / 整屏），
+     边滚边「截一帧」，再用 buildSigs/findOverlap 自动按重叠拼接成一张长图。 */
+  $('#ls-other-start', body).onclick = async () => {
+    const btn = $('#ls-other-start', body);
+    try{
+      btn.disabled = true; btn.innerHTML = '<span class="loading"><span class="spinner"></span>授权中…</span>';
+      const v = await openStream(false);            // 不限制来源，可在弹窗里选其它标签页 / 窗口
+      otherV = v;
+      try{ stream.getVideoTracks()[0].addEventListener('ended', () => {
+        otherV = null; manualFrames = [];
+        const c = $('#ls-other-ctrl', body); if(c) c.style.display = 'none';
+        const s = $('#ls-other-start', body); if(s){ s.style.display = ''; s.disabled = false; s.textContent = '开始共享'; }
+        const info = $('#ls-other-info', body); if(info) info.textContent = '共享已结束，可重新「开始共享」。';
+      }); }catch(_){ }
+      const ctrl = $('#ls-other-ctrl', body); if(ctrl) ctrl.style.display = '';
+      btn.style.display = 'none';
+      const info = $('#ls-other-info', body); if(info) info.textContent = '已共享：切到目标页滚动后点「截一帧」';
+    }catch(e){
+      const m = (e && e.message) || '未知错误';
+      if(/NotAllowedError|用户|denied|Permission/i.test(m)) toast('已取消授权','err');
+      else toast('共享失败：' + m, 'err');
+      btn.disabled = false; btn.textContent = '开始共享';
+    }
+  };
+  function updateOtherInfo(){
+    const info = $('#ls-other-info', body); if(!info) return;
+    info.textContent = '已截 ' + manualFrames.length + ' 帧' + (manualFrames.length ? ('（末帧 ' + manualFrames[manualFrames.length-1].width + '×' + manualFrames[manualFrames.length-1].height + '）') : '');
+  }
+  $('#ls-other-grab', body).onclick = () => {
+    if(!otherV){ toast('请先「开始共享」','err'); return; }
+    const c = grabFrame(otherV);
+    manualFrames.push(c);
+    updateOtherInfo();
+    const k = Math.min(1, 220 / c.width), tw = Math.max(1, Math.round(c.width * k)), th = Math.max(1, Math.round(c.height * k));
+    const t = document.createElement('canvas'); t.width = tw; t.height = th;
+    t.getContext('2d').drawImage(c, 0, 0, tw, th);
+    const prev = $('#ls-other-prev', body); if(prev) prev.innerHTML = '<img src="' + t.toDataURL('image/png') + '" style="max-width:100%;max-height:200px;border:1px solid var(--border);border-radius:8px;background:#fff;">';
+  };
+  $('#ls-other-undo', body).onclick = () => {
+    if(manualFrames.length){ manualFrames.pop(); updateOtherInfo(); }
+    else toast('没有可撤销的帧', 'info');
+  };
+  $('#ls-other-done', body).onclick = () => {
+    if(manualFrames.length < 1){ toast('还没有截到任何帧','err'); return; }
+    try{
+      let maxW = 0; manualFrames.forEach(c => maxW = Math.max(maxW, c.width));
+      const list = manualFrames.map(c => {
+        const w = maxW, h = Math.max(1, Math.round(c.height * maxW / c.width));
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(c, 0, 0, w, h);
+        return cv;
+      });
+      const sigs = list.map(buildSigs);
+      const ovs = [];
+      for(let i = 1; i < list.length; i++) ovs.push(findOverlap(sigs[i-1], sigs[i]));
+      const totalH = list.reduce((s, c) => s + c.height, 0) - ovs.reduce((s, v) => s + v, 0);
+      if(totalH <= 0){ toast('拼接高度异常','err'); return; }
+      if(totalH > MAX_H){ toast('拼接后超高（上限 ' + MAX_H + 'px），请减少帧数','err'); return; }
+      const out = document.createElement('canvas'); out.width = maxW; out.height = totalH;
+      const oc = out.getContext('2d'); oc.fillStyle = '#ffffff'; oc.fillRect(0, 0, maxW, totalH);
+      let y = 0; list.forEach((c, i) => { oc.drawImage(c, 0, y); y += c.height - (ovs[i] || 0); });
+      showResult(out, 'longshot_' + Date.now());
+      toast('拼接完成，共 ' + list.length + ' 帧，自动去重叠 ' + ovs.filter(v => v > 0).length + ' 处');
+    }catch(e){ toast('拼接失败：' + ((e && e.message) || '未知错误'), 'err'); }
+    finally{
+      stopStream(); otherV = null; manualFrames = [];
+      const ctrl = $('#ls-other-ctrl', body); if(ctrl) ctrl.style.display = 'none';
+      const s = $('#ls-other-start', body); if(s){ s.style.display = ''; s.disabled = false; s.textContent = '开始共享'; }
     }
   };
 
