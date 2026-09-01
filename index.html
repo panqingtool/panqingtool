@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.01-b</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.01-c</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7636,6 +7636,7 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-09-01', items:[
+    "【长截图 / 滚动截图】新增「电脑版小程序」方案：网页版受浏览器安全限制截不到浏览器外的软件窗口，项目 <code>desktop-capture/</code> 提供 Windows 原生小程序（scroll_capture.py + README），可截 Word / WPS / 微信 / 资源管理器等任意窗口的整窗长图，逐屏滚动 + 重叠拼接 + 一键保存 PNG。网页内已加引导说明。",
     "【长截图 / 滚动截图】修复「只能截本站、截不到其它网站」的问题，新增四种方式：①本页自动滚动截取（电脑端授权后自动滚完整页）；②其它网页 / 窗口 / 整屏长图——弹窗里可选任意其它标签页 / 窗口，边滚边「截一帧」、工具自动按重叠拼接成长图；③单屏截图（可截任意来源）；④多图拼接（手机端边滚边连截后自动去重叠拼长图）。全程本地处理、不上传、不依赖外部库。"
   ]},
   { date:'2026-08-31', items:[
@@ -10792,6 +10793,9 @@ AppTools['long-shot'] = { build(body){
       ② <b>其它网页长图</b>：截取<b>任意其它标签页 / 窗口 / 整屏</b>——网页应用无法自动滚动别人的页面，需你边滚边「截一帧」自动拼接；<br>
       ③ <b>单屏截图</b>：截取屏幕 / 窗口 / 标签页当前可见区域一张；<br>
       ④ <b>多图拼接</b>：手机等不支持屏幕授权的设备，可边滚边连截几张，再自动识别重叠拼成长图。
+    </div>
+    <div style="margin-top:10px;background:#e6f4ff;border:1px solid #91caff;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.75;color:#0958d9;">
+      💡 想截 <b>Word / WPS / 微信 / 资源管理器</b> 等软件窗口或桌面的整窗长图？浏览器网页受安全限制<b>截不到浏览器外的窗口</b>，请用配套的<b>电脑版小程序</b>：项目里的 <code style="background:#fff;padding:1px 5px;border-radius:4px;">desktop-capture/</code> 文件夹（含 README 使用说明），装好依赖双击运行即可截电脑上任意窗口的长图。
     </div>
     <div class="row mb">
       <button class="btn primary" id="ls-tab-auto">🖥️ 本页自动滚动</button>
