@@ -16,7 +16,7 @@
 <meta name="format-detection" content="telephone=no">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- 冗余 CSP（与 _headers 保持一致；用于不支持 _headers 的部署平台） -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.gold-api.com https://api.dictionaryapi.dev https://ipwho.is https://speed.cloudflare.com https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob: https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: mediastream: data: https://cdn.jsdelivr.net https://unpkg.com https://esm.sh; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com https://api.open-meteo.com https://api.frankfurter.app https://open.er-api.com https://api.gold-api.com https://api.dictionaryapi.dev https://ipwho.is https://speed.cloudflare.com https://tcc.taobao.com https://*.wikipedia.org; worker-src 'self' blob: https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://staticimgly.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <link rel="manifest" href="manifest.webmanifest?v=20260822">
 <link rel="icon" href="icons/icon-192.png?v=20260822" sizes="192x192" type="image/png">
@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.08.31-d</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.01-a</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7032,6 +7032,7 @@ const TOOLS = [
   {id:'ar-area',      name:'AR 测面积',       icon:'🟦', cat:'life', desc:'选照片后用「自由套索」或「多边形」框选区域，输入图中一条已知边长即可按比例尺算出实际面积。'},
   {id:'photo-count',  name:'拍照计数',        icon:'🔢', cat:'life', desc:'选照片后逐一轻点目标即可自动计数（人数 / 物品数），带标记点与撤销，适合清点。'},
   {id:'postal-code',  name:'邮政编码查询',     icon:'📮', cat:'life', desc:'省/直辖市/自治区级标准邮编查询（准确），支持反向由 6 位邮编定位省区，并可跳转中国邮政官网查街道/乡镇级精确邮编。'},
+  {id:'long-shot',    name:'长截图 / 滚动截图', icon:'📜', cat:'image', desc:'把滚动内容拼成超长高清图：电脑端授权后自动滚动逐帧截取整页；手机端可选多张截图自动识别重叠、竖向拼接，也可单屏截图；纯本地不上传。'},
 
 ];;
 
@@ -7634,6 +7635,9 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
+  { date:'2026-09-01', items:[
+    "【新增 · 长截图 / 滚动截图】把滚动中的内容拼成一张超长高清图。电脑端（Edge / Chrome）授权后自动滚动页面、逐帧只取新露出的部分，无缝拼接出整页长图；手机端可选多张截图，自动识别相邻两张的重叠区域并去掉重复后竖向拼接；另有「单屏截图」可截任意窗口 / 屏幕 / 标签页。全程本地处理、不上传，不依赖任何外部库。"
+  ]},
   { date:'2026-08-31', items:[
     "【表情包制作】文字可在图上自由拖动到任意位置，新增竖排模式，选中显示虚线框并可一键重置。",
     "【批量导出 ZIP】修复本地文件头偏移与中文名乱码、JSZ 报错；改为纯本地打包，不再依赖国外 CDN，手机电脑均可正常导出。",
@@ -10775,6 +10779,311 @@ AppTools['photo-count'] = { build(body){
   $('#pc-finish',body).onclick = () => {
     if(!pts.length){ toast('请先点击照片上的目标'); return; }
     toast('已计数 ' + pts.length + ' 个目标，可点击「下载计数图」导出 PNG');
+  };
+}};
+
+/* ============ 长截图 / 滚动截图（纯本地：屏幕授权 + 自动滚动逐帧拼接 / 多图去重叠拼接） ============ */
+AppTools['long-shot'] = { build(body){
+  const MAX_FRAMES = 160, MAX_H = 40000;
+  body.innerHTML = `
+    <div class="mb-sm" style="color:var(--text-2);font-size:13px;line-height:1.7;">
+      把滚动中的内容拼成一张超长图。<b>电脑（Edge / Chrome）</b>可用「自动滚动截取」一键截下整个网页；<b>手机</b>浏览器不支持屏幕授权，请边滚动边连续截几张图，再用「多图拼接」自动识别重叠、拼成长图。全流程本地处理，不上传任何内容。
+    </div>
+    <div class="row mb">
+      <button class="btn primary" id="ls-tab-auto">🖥️ 自动滚动截取</button>
+      <button class="btn" id="ls-tab-stitch">🧩 多图拼接</button>
+      <button class="btn" id="ls-tab-one">📷 单屏截图</button>
+    </div>
+
+    <div id="ls-p-auto">
+      <div class="row mb">
+        <div><label class="field-label">每帧等待（毫秒）</label><input type="number" class="inp" id="ls-wait" value="220" min="60" step="20" aria-label="每帧等待毫秒"></div>
+        <div><label class="field-label">每次滚动比例</label>
+          <select class="inp" id="ls-step" aria-label="每次滚动比例">
+            <option value="0.9">90%（慢·更稳）</option>
+            <option value="0.8" selected>80%（推荐）</option>
+            <option value="0.6">60%（快）</option>
+          </select></div>
+      </div>
+      <button class="btn primary" id="ls-run">开始截取（自动滚动）</button>
+      <div class="mb-sm" style="color:var(--text-2);font-size:12px;line-height:1.6;margin-top:6px;">
+        点击后请在浏览器弹窗里选择 <b>「此标签页」</b> 再点「分享 / 允许」。截取时工具窗口会临时隐藏、页面自动滚动，请勿操作鼠标键盘，滚到页面底部会自动结束并弹出结果。
+      </div>
+    </div>
+
+    <div id="ls-p-stitch" style="display:none">
+      <div class="mb"><label class="field-label">按顺序选择多张截图（可多选）</label>
+        <input type="file" class="inp" id="ls-files" accept="image/*" multiple aria-label="选择多张截图"></div>
+      <label class="mb-sm"><input type="checkbox" id="ls-auto" checked> 自动识别相邻两张的重叠区域（去掉重复部分）</label>
+      <div class="mb-sm"><label class="field-label">手动重叠像素（取消上面勾选时生效）</label>
+        <input type="number" class="inp" id="ls-ov" value="0" min="0" aria-label="手动重叠像素"></div>
+      <button class="btn primary" id="ls-stitch-run">开始拼接</button>
+      <div id="ls-order" class="mb-sm" style="font-size:12px;color:var(--text-2);line-height:1.6;"></div>
+    </div>
+
+    <div id="ls-p-one" style="display:none">
+      <div class="mb-sm" style="color:var(--text-2);font-size:12px;line-height:1.6;">
+        截取屏幕 / 窗口 / 标签页当前可见区域一张（不滚动）。点击后在弹窗里选择要截取的来源即可。
+      </div>
+      <button class="btn primary" id="ls-one-run">开始截图</button>
+    </div>
+
+    <div id="ls-result" class="mt"></div>`;
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function showPanel(n){
+    ['auto','stitch','one'].forEach(k => {
+      const p = $('#ls-p-' + k, body); if(p) p.style.display = (k === n ? '' : 'none');
+      const b = $('#ls-tab-' + k, body); if(b) b.className = 'btn' + (k === n ? ' primary' : '');
+    });
+  }
+  $('#ls-tab-auto', body).onclick = () => showPanel('auto');
+  $('#ls-tab-stitch', body).onclick = () => showPanel('stitch');
+  $('#ls-tab-one', body).onclick = () => showPanel('one');
+  showPanel('auto');
+
+  /* ---- 屏幕流（getDisplayMedia + video 取帧，无需任何外部库） ---- */
+  let stream = null;
+  async function openStream(){
+    if(!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)){
+      throw new Error('当前浏览器不支持屏幕截取，请用电脑版 Edge / Chrome 打开');
+    }
+    stream = await navigator.mediaDevices.getDisplayMedia({ video:{ frameRate:30 }, audio:false, preferCurrentTab:true });
+    const v = document.createElement('video');
+    v.srcObject = stream; v.muted = true; v.playsInline = true;
+    await v.play();
+    return v;
+  }
+  function stopStream(){
+    try{ if(stream) stream.getTracks().forEach(t => t.stop()); }catch(_){ }
+    stream = null;
+  }
+  function grabFrame(v){
+    const w = v.videoWidth || 1, h = v.videoHeight || 1;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(v, 0, 0, w, h);
+    return c;
+  }
+  window.__toolCleanup = stopStream;   // 关闭 / 最小化工具时释放屏幕共享
+
+  /* ---- 结果展示（用缩略图预览，避免超大 dataURL 卡死） ---- */
+  function showResult(canvas, name){
+    const k = Math.min(360 / canvas.width, 420 / canvas.height, 1);
+    const tw = Math.max(1, Math.round(canvas.width * k)), th = Math.max(1, Math.round(canvas.height * k));
+    const t = document.createElement('canvas'); t.width = tw; t.height = th;
+    const tc = t.getContext('2d'); tc.imageSmoothingQuality = 'high';
+    tc.drawImage(canvas, 0, 0, tw, th);
+    let url = '';
+    try{ url = t.toDataURL('image/jpeg', 0.85); }catch(_){ url = t.toDataURL('image/png'); }
+    $('#ls-result', body).innerHTML = `
+      <div class="result-box" style="text-align:center;">
+        <div style="font-size:13px;color:var(--text-2);margin-bottom:8px;">✅ 完成，尺寸 <b>${canvas.width} × ${canvas.height}</b> 像素${canvas.height > 6000 ? '（超长图，建议下载后查看）' : ''}</div>
+        <img src="${url}" alt="长截图预览" style="max-width:100%;max-height:420px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+        <div class="row" style="justify-content:center;margin-top:10px;">
+          <button class="btn primary" id="ls-dl">⬇️ 下载 PNG</button>
+          <button class="btn" id="ls-dl-jpg">下载 JPG</button>
+        </div>
+      </div>`;
+    $('#ls-dl', body).onclick = () => canvas.toBlob(b => { if(b) downloadBlob(b, name + '.png'); }, 'image/png');
+    $('#ls-dl-jpg', body).onclick = () => canvas.toBlob(b => { if(b) downloadBlob(b, name + '.jpg'); }, 'image/jpeg', 0.92);
+  }
+
+  /* ================= ① 自动滚动截取（当前页面） =================
+     原理：授权截取本标签页 → 临时隐藏工具弹窗并解锁滚动 → 逐步滚动 → 按「实际滚动量」
+     只取每帧新露出的底部切片拼接到长画布，故拼接处严丝合缝、无重叠重复。 */
+  $('#ls-run', body).onclick = async () => {
+    const btn = $('#ls-run', body);
+    const wait = Math.max(60, Math.min(2000, parseInt($('#ls-wait', body).value, 10) || 220));
+    const ratio = parseFloat($('#ls-step', body).value) || 0.8;
+    let stEl = null, prevOverflow = '', prevVis = '';
+    const origScroll = window.scrollY || window.pageYOffset || 0;
+    try{
+      btn.disabled = true; btn.innerHTML = '<span class="loading"><span class="spinner"></span>准备中…</span>';
+      const v = await openStream();
+      await sleep(320);
+      // 临时环境：关平滑滚动 / 解锁 body 滚动 / 隐藏弹窗（否则会被截进去）
+      stEl = document.createElement('style'); stEl.id = 'ls-nosmooth';
+      stEl.textContent = 'html{scroll-behavior:auto !important;}';
+      document.head.appendChild(stEl);
+      prevOverflow = document.body.style.overflow;
+      prevVis = overlay.style.visibility;
+      document.body.style.overflow = '';
+      overlay.style.visibility = 'hidden';
+      await sleep(150);
+
+      const capW = v.videoWidth, capH = v.videoHeight;
+      if(!capW || !capH) throw new Error('未能获取到画面，请重新选择「此标签页」');
+      const vh = window.innerHeight;
+      const scale = capH / vh;                                  // 设备像素 / CSS 像素
+      if(!(scale > 0.2 && scale < 8)) throw new Error('截取来源与页面尺寸不匹配，请在弹窗中选择「此标签页」');
+      const maxScroll = Math.max(0, document.documentElement.scrollHeight - vh);
+      const estH = Math.min(MAX_H, Math.ceil((maxScroll + vh) * scale));
+      const out = document.createElement('canvas');
+      out.width = capW; out.height = estH;
+      const octx = out.getContext('2d');
+      octx.fillStyle = '#ffffff'; octx.fillRect(0, 0, capW, estH);
+      const stepCss = Math.max(80, Math.round(vh * ratio));
+
+      window.scrollTo(0, 0);
+      await sleep(wait);
+      let prevTop = null, outY = 0, frames = 0;
+      for(;;){
+        const curTop = Math.round(window.scrollY || window.pageYOffset || 0);
+        const f = grabFrame(v);
+        if(prevTop === null){                                    // 首帧：整屏
+          octx.drawImage(f, 0, 0);
+          outY = capH;
+        }else{                                                   // 后续帧：只取新露出的底部切片
+          const delta = curTop - prevTop;
+          if(delta > 0){
+            const dDev = Math.min(capH, Math.round(delta * scale));
+            if(dDev > 0 && outY + dDev <= estH){
+              octx.drawImage(f, 0, capH - dDev, capW, dDev, 0, outY, capW, dDev);
+              outY += dDev;
+            }
+          }
+        }
+        frames++;
+        if(curTop >= maxScroll - 1 || frames >= MAX_FRAMES || outY >= estH) break;
+        prevTop = curTop;
+        window.scrollTo(0, Math.min(maxScroll, curTop + stepCss));
+        await sleep(wait);
+      }
+      const fc = document.createElement('canvas');               // 裁掉预分配的空白
+      fc.width = capW; fc.height = Math.max(1, Math.min(outY, estH));
+      fc.getContext('2d').drawImage(out, 0, 0, capW, fc.height, 0, 0, capW, fc.height);
+      showResult(fc, 'longshot_' + Date.now());
+      toast('长截图完成，共 ' + frames + ' 帧');
+    }catch(e){
+      const m = (e && e.message) || '未知错误';
+      if(/NotAllowedError|用户|denied|Permission/i.test(m)) toast('已取消授权或未选择来源','err');
+      else toast('截取失败：' + m, 'err');
+    }finally{
+      stopStream();
+      try{ if(stEl && stEl.parentNode) stEl.remove(); }catch(_){ }
+      try{
+        document.body.style.overflow = prevOverflow;
+        overlay.style.visibility = prevVis;
+        window.scrollTo(0, origScroll);
+      }catch(_){ }
+      btn.disabled = false; btn.textContent = '开始截取（自动滚动）';
+    }
+  };
+
+  /* ================= ② 单屏截图（任意来源，不滚动） ================= */
+  $('#ls-one-run', body).onclick = async () => {
+    const btn = $('#ls-one-run', body);
+    let prevVis = '';
+    try{
+      btn.disabled = true; btn.innerHTML = '<span class="loading"><span class="spinner"></span>准备中…</span>';
+      const v = await openStream();
+      await sleep(400);
+      prevVis = overlay.style.visibility;
+      overlay.style.visibility = 'hidden';                       // 避免把工具弹窗截进去
+      await sleep(160);
+      showResult(grabFrame(v), 'screenshot_' + Date.now());
+      toast('截图完成');
+    }catch(e){
+      const m = (e && e.message) || '未知错误';
+      if(/NotAllowedError|用户|denied|Permission/i.test(m)) toast('已取消授权或未选择来源','err');
+      else toast('截图失败：' + m, 'err');
+    }finally{
+      stopStream();
+      try{ overlay.style.visibility = prevVis; }catch(_){ }
+      btn.disabled = false; btn.textContent = '开始截图';
+    }
+  };
+
+  /* ================= ③ 多图拼接（全平台，含手机） ================= */
+  $('#ls-files', body).onchange = () => {
+    const fs = Array.from(($('#ls-files', body).files) || []);
+    const box = $('#ls-order', body);
+    if(!box) return;
+    box.innerHTML = fs.length
+      ? '已选 ' + fs.length + ' 张，按此顺序拼接：<br>' + fs.map((f, i) => (i + 1) + '. ' + escapeHtml(f.name)).join('<br>')
+      : '';
+  };
+  // 逐行采样签名（约 400 行 × 32 点），用于快速比对重叠
+  function buildSigs(cv){
+    const w = cv.width, h = cv.height;
+    const d = cv.getContext('2d').getImageData(0, 0, w, h).data;
+    const S = 32, step = Math.max(1, Math.round(h / 400));
+    const xs = []; for(let i = 0; i < S; i++) xs.push(Math.floor((i + 0.5) * w / S));
+    const sigs = [];
+    for(let y = 0; y < h; y += step){
+      const a = new Float32Array(S * 3);
+      for(let i = 0; i < S; i++){ const p = (y * w + xs[i]) * 4; a[i*3] = d[p]; a[i*3+1] = d[p+1]; a[i*3+2] = d[p+2]; }
+      sigs.push(a);
+    }
+    return { sigs, step, h, w };
+  }
+  // A 的底部与 B 的顶部重合了多少像素
+  function findOverlap(A, B){
+    const maxOv = Math.min(A.h, B.h, 2000);
+    if(maxOv < 10) return 0;
+    let best = 0, bestErr = Infinity;
+    const NS = 16;
+    for(let ov = 10; ov <= maxOv; ov += 2){
+      let err = 0, n = 0;
+      for(let s = 0; s < NS; s++){
+        const k = Math.floor(ov * (s + 0.5) / NS);
+        const ra = Math.floor((A.h - ov + k) / A.step), rb = Math.floor(k / B.step);
+        if(ra < 0 || ra >= A.sigs.length || rb < 0 || rb >= B.sigs.length) continue;
+        const sa = A.sigs[ra], sb = B.sigs[rb];
+        for(let i = 0; i < sa.length; i++){ const dv = sa[i] - sb[i]; err += dv < 0 ? -dv : dv; n++; }
+      }
+      if(n > 0){ err /= n; if(err < bestErr){ bestErr = err; best = ov; } }
+    }
+    return bestErr < 10 ? best : 0;    // 阈值：平均差 <10 才认为真的重合
+  }
+  $('#ls-stitch-run', body).onclick = async () => {
+    const files = Array.from(($('#ls-files', body).files) || []);
+    if(files.length < 2){ toast('请至少选择 2 张截图','err'); return; }
+    const btn = $('#ls-stitch-run', body);
+    btn.disabled = true; btn.innerHTML = '<span class="loading"><span class="spinner"></span>拼接中…</span>';
+    try{
+      const cvs = [];
+      for(const f of files){
+        const im = await fileToImage(f);
+        cvs.push(im);
+      }
+      // 宽度统一：差距 >2% 时按比例缩到最宽，避免拼接错位
+      let maxW = 0, minW = Infinity;
+      cvs.forEach(im => { maxW = Math.max(maxW, im.naturalWidth); minW = Math.min(minW, im.naturalWidth); });
+      const needScale = maxW / Math.max(1, minW) > 1.02;
+      const list = cvs.map(im => {
+        const w = needScale ? maxW : im.naturalWidth;
+        const h = needScale ? Math.max(1, Math.round(im.naturalHeight * maxW / im.naturalWidth)) : im.naturalHeight;
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const cx = c.getContext('2d'); cx.imageSmoothingQuality = 'high';
+        cx.drawImage(im, 0, 0, w, h);
+        return c;
+      });
+      const auto = $('#ls-auto', body).checked;
+      const manualOv = Math.max(0, parseInt($('#ls-ov', body).value, 10) || 0);
+      const sigs = auto ? list.map(buildSigs) : null;
+      const ovs = [];
+      for(let i = 1; i < list.length; i++){
+        ovs.push(auto ? findOverlap(sigs[i-1], sigs[i]) : Math.min(manualOv, list[i-1].height, list[i].height));
+      }
+      const totalH = list.reduce((s, c) => s + c.height, 0) - ovs.reduce((s, v) => s + v, 0);
+      if(totalH <= 0){ toast('拼接高度异常','err'); return; }
+      if(totalH > MAX_H){ toast('拼接后超高（上限 ' + MAX_H + 'px），请减少图片数量','err'); return; }
+      const out = document.createElement('canvas');
+      out.width = maxW; out.height = totalH;
+      const oc = out.getContext('2d');
+      oc.fillStyle = '#ffffff'; oc.fillRect(0, 0, maxW, totalH);
+      let y = 0;
+      list.forEach((c, i) => { oc.drawImage(c, 0, y); y += c.height - (ovs[i] || 0); });
+      showResult(out, 'longshot_' + Date.now());
+      const found = ovs.filter(v => v > 0).length;
+      toast('拼接完成' + (auto ? ('，自动去除重叠 ' + found + ' 处') : ''));
+    }catch(e){
+      toast('拼接失败：' + ((e && e.message) || '未知错误'), 'err');
+    }finally{
+      btn.disabled = false; btn.textContent = '开始拼接';
+    }
   };
 }};
 
