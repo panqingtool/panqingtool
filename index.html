@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.02-a</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.02-b</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6808,40 +6808,88 @@ AppTools['math-formula'] = {
       render();
     });
 
-    // 将 KaTeX 预览 DOM 转 PNG（用 html2canvas，比 MathJax tex2svg 更稳定）
-    async function previewToPng(){
-      if(!window.html2canvas) await loadScriptSrc('https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js');
-      // 用克隆节点截图，避免改变原始 DOM
-      const clone = preview.cloneNode(true);
-      clone.style.position = 'absolute'; clone.style.left = '-99999px'; clone.style.top = '0';
-      clone.style.background = '#ffffff'; clone.style.padding = '12px 20px';
-      clone.style.border = 'none'; clone.style.boxShadow = 'none'; clone.style.margin = '0';
-      document.body.appendChild(clone);
-      try{
-        const canvas = await html2canvas(clone, { backgroundColor:'#ffffff', scale:3, logging:false, useCORS:true });
-        return await new Promise(r=>canvas.toBlob(b=>r(b), 'image/png'));
-      } finally { clone.remove(); }
+    // ===== 导出：用 SVG <foreignObject> + 内联 KaTeX 字体，彻底解决 html2canvas 白板 / 错乱 =====
+    // 关键：html2canvas 1.4.1 对 KaTeX 的 position:absolute/clip 排版支持差、且克隆到屏幕外易截到空白；
+    //       改用浏览器原生渲染 SVG → 再把字体以 data: URI 内联进 SVG，导出 PNG/SVG 自包含、不依赖外网即可显示。
+    let _katexFontCss = null;
+    function bufToB64(buf){
+      let bin = ''; const bytes = new Uint8Array(buf); const chunk = 0x8000;
+      for(let i = 0; i < bytes.length; i += chunk){ bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk)); }
+      return btoa(bin);
     }
-    // 将 KaTeX 预览 DOM 转为 SVG（SVG 内嵌 base64 PNG 图像，兼容 Word / 浏览器）
+    // 拉取 KaTeX CSS 并把所有 @font-face 字体（woff2）改写为 data: URI（缓存；仅首次导出联网）
+    async function getKatexCssWithFonts(){
+      if(_katexFontCss) return _katexFontCss;
+      const base = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/';
+      const res = await fetch(base + 'katex.min.css'); if(!res.ok) throw new Error('KaTeX 样式加载失败');
+      let css = await res.text();
+      const fontRe = /url\(\s*(['"]?)(fonts\/[^)'"]+?\.woff2)\1\s*\)/g;
+      const rels = new Set(); let m; while((m = fontRe.exec(css))) rels.add(m[2]);
+      const fontMap = {};
+      await Promise.all([...rels].map(async rel => {
+        try{
+          const fr = await fetch(base + rel); if(!fr.ok) return;
+          const buf = await fr.arrayBuffer();
+          fontMap[rel] = 'data:font/woff2;base64,' + bufToB64(buf);
+        }catch(_){ }
+      }));
+      css = css.replace(fontRe, (full, q, rel) => fontMap[rel] ? 'url(' + fontMap[rel] + ')' : full);
+      // 追加本站公式排版所需的类样式（innerHTML 不含这些类规则，缺了会导致编号错位/不居中）
+      css += '\n.eq-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}' +
+             '\n.eq-tex{flex:1;text-align:center;}' +
+             '\n.eq-num{color:#555;font-size:14px;white-space:nowrap;}' +
+             '\n#mf-preview .katex-display{margin:0;}\n';
+      _katexFontCss = css; return css;
+    }
+    // 把预览 HTML 包成自包含 SVG（foreignObject + 内联 KaTeX 字体）
+    async function buildFormulaSvg(){
+      const css = await getKatexCssWithFonts();
+      const cs = getComputedStyle(preview);
+      const w = Math.max(preview.scrollWidth, preview.clientWidth);
+      const h = Math.max(preview.scrollHeight, preview.clientHeight);
+      const html = preview.innerHTML;
+      return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+        '<foreignObject x="0" y="0" width="' + w + '" height="' + h + '">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="background:#ffffff;padding:' + cs.padding + ';box-sizing:border-box;">' +
+        '<style>' + css + '</style>' + html + '</div></foreignObject></svg>';
+    }
+    // 把自包含 SVG 光栅化为高清 PNG（字体已内联，canvas 不会被污染，可正常 toBlob）
+    async function renderToPng(){
+      const svg = await buildFormulaSvg();
+      const blob = new Blob([svg], { type:'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      try{
+        const img = new Image(); img.decoding = 'sync';
+        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('SVG 渲染失败')); img.src = url; });
+        const w = img.naturalWidth || preview.clientWidth, h = img.naturalHeight || preview.clientHeight;
+        const scale = 3;
+        const canvas = document.createElement('canvas'); canvas.width = w * scale; canvas.height = h * scale;
+        const ctx = canvas.getContext('2d'); ctx.scale(scale, scale);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+        const png = await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('PNG 生成失败')), 'image/png'));
+        return { blob: png, w, h };
+      } finally { URL.revokeObjectURL(url); }
+    }
+    async function previewToPng(){ const r = await renderToPng(); return r.blob; }
+    // SVG 导出：内嵌正确 PNG（Word / PDF / 浏览器均可靠显示，避免纯 foreignObject 在 Office 中空白）
     async function previewToSvg(){
-      if(!window.html2canvas) await loadScriptSrc('https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js');
-      const clone = preview.cloneNode(true);
-      clone.style.position = 'absolute'; clone.style.left = '-99999px'; clone.style.top = '0';
-      clone.style.background = '#ffffff'; clone.style.padding = '12px 20px';
-      clone.style.border = 'none'; clone.style.boxShadow = 'none'; clone.style.margin = '0';
-      document.body.appendChild(clone);
-      try{
-        const canvas = await html2canvas(clone, { backgroundColor:'#ffffff', scale:3, logging:false, useCORS:true });
-        const dataUrl = canvas.toDataURL('image/png');
-        const w = canvas.width, h = canvas.height;
-        // SVG 内嵌 PNG（确保 Word 也能正常显示）
-        return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w/3}" height="${h/3}" viewBox="0 0 ${w/3} ${h/3}"><image width="${w/3}" height="${h/3}" xlink:href="${dataUrl}"/></svg>`;
-      } finally { clone.remove(); }
+      const { blob, w, h } = await renderToPng();
+      const dataUrl = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+      return '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+        '<rect width="' + w + '" height="' + h + '" fill="#ffffff"/>' +
+        '<image width="' + w + '" height="' + h + '" xlink:href="' + dataUrl + '"/></svg>';
     }
-    async function combinedToPng(){ return await previewToPng(); }
 
     $('#mf-copy-tex', body).onclick = () => copyText(src.value);
-    $('#mf-copy-html', body).onclick = () => copyText(preview.innerHTML);
+    $('#mf-copy-html', body).onclick = async () => {
+      try{
+        const css = await getKatexCssWithFonts();
+        const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + css + '</style></head>' +
+          '<body style="background:#ffffff;padding:16px 24px;margin:0;">' + preview.innerHTML + '</body></html>';
+        copyText(html); toast('已复制自包含 HTML（含公式样式，粘到网页编辑器可正常显示）');
+      }catch(e){ copyText(preview.innerHTML); toast('已复制公式 HTML（样式需联网加载 KaTeX）'); }
+    };
     $('#mf-svg', body).onclick = async () => {
       if(!src.value.trim()){ toast('请输入公式','err'); return; }
       const btn = $('#mf-svg', body); btn.disabled = true; const old = btn.textContent; btn.textContent = '渲染中…';
@@ -7637,6 +7685,9 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 const CHANGELOG = [
   { date:'2026-09-02', items:[
     "【长截图 / 滚动截图】移除网页版「本页自动滚动」与「其它网页长图」两个功能（浏览器无法自动滚动非当前页、且截不到浏览器外的软件窗口）；现网页版仅保留「单屏截图」与「多图拼接」。截任意软件窗口（Word / WPS / 微信 / 资源管理器 / 桌面）的整窗长图，请用配套的电脑版小程序：应用内点「⬇️ 下载电脑版小程序（安装包）」即可获取（desktop-capture.zip，含一键安装运行脚本，双击 build_exe.bat 可生成免安装 exe）。"
+  ]},
+  { date:'2026-09-02-b', items:[
+    "【数学公式排版】修复导出白板 / 复制错乱：原 html2canvas 克隆到屏幕外易截到空白、且对 KaTeX 排版支持差。改为浏览器原生渲染 SVG（foreignObject）+ 把 KaTeX 字体以 data: URI 内联进 SVG，导出 PNG / SVG 自包含、清晰、不依赖外网即可显示；「复制 HTML」改为复制含公式样式的自包含 HTML，粘到网页编辑器可正确显示。"
   ]},
   { date:'2026-09-01', items:[
     "【长截图 / 滚动截图】新增「电脑版小程序」方案：网页版受浏览器安全限制截不到浏览器外的软件窗口，项目 <code>desktop-capture/</code> 提供 Windows 原生小程序（scroll_capture.py + README），可截 Word / WPS / 微信 / 资源管理器等任意窗口的整窗长图，逐屏滚动 + 重叠拼接 + 一键保存 PNG。网页内已加引导说明。",
