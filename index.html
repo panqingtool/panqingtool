@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.02-b</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.02-c</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7684,6 +7684,7 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-09-02', items:[
+    "【长截图 / 滚动截图】电脑版小程序改为「一键打包 exe」：下载解压后装一次 Python（安装时勾选「Add python.exe to PATH」），双击 build_exe.bat 即自动生成 dist\\scroll_capture.exe，以后双击 exe 即用、无需再装 Python、可自动滚动截取任意窗口（Word / WPS / 微信 / 资源管理器 / 桌面）整窗长图。bat 已改纯 ASCII（防中文乱码）、自动 cd 到自身目录、带 Python 3.14 兼容提示与 PyInstaller hidden-import 防漏包；安装包 desktop-capture.zip 已同步更新。",
     "【长截图 / 滚动截图】移除网页版「本页自动滚动」与「其它网页长图」两个功能（浏览器无法自动滚动非当前页、且截不到浏览器外的软件窗口）；现网页版仅保留「单屏截图」与「多图拼接」。截任意软件窗口（Word / WPS / 微信 / 资源管理器 / 桌面）的整窗长图，请用配套的电脑版小程序：应用内点「⬇️ 下载电脑版小程序（安装包）」即可获取（desktop-capture.zip，含一键安装运行脚本，双击 build_exe.bat 可生成免安装 exe）。"
   ]},
   { date:'2026-09-02-b', items:[
