@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.03-b</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.03-c</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7715,7 +7715,9 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 const CHANGELOG = [
   { date:'2026-09-03', items:[
     "【数学公式排版】修复导出 PNG / SVG 显示不全：改用离屏精确测量内容真实尺寸，不再被预览框裁切。",
-    "【长截图·电脑版】保存位置固定到「桌面\\托托长截图」并自动命名，可一键打开文件夹/图片；新增手动逐屏模式（兼容不响应滚轮的窗口）；新增桌面快捷方式与全局热键 Ctrl+Shift+S。"
+    "【长截图·电脑版】保存位置固定到「桌面\\托托长截图」并自动命名，可一键打开文件夹/图片；新增手动逐屏模式（兼容不响应滚轮的窗口）；新增桌面快捷方式与全局热键 Ctrl+Shift+S。",
+    "【长截图·网页版】恢复「本页自动滚动长截图」：点按钮后在系统弹窗选「此标签页」，工具自动滚动并逐屏拼成超长图；结果预览点击可放大（灯箱缩放 / 拖动）。",
+    "【长截图】澄清分工：网页版只能截当前网页（自动滚动 / 单屏 / 多图拼接）；截 Word / WPS / 微信 / 资源管理器等任意软件窗口的整窗长图请下载电脑版 exe。"
   ]},
   { date:'2026-09-02', items:[
     "【长截图】电脑版新增一键打包：解压后装一次 Python，双击 build_exe.bat 即生成 exe，可自动滚动截 Word / WPS / 微信等任意窗口长图。",
@@ -10840,10 +10842,11 @@ AppTools['long-shot'] = { build(body){
   const MAX_FRAMES = 160, MAX_H = 40000;
     body.innerHTML = `
     <div class="mb-sm" style="color:var(--text-2);font-size:13px;line-height:1.7;">
-      把滚动内容拼成一张超长图，<b>纯本地处理、不上传</b>。网页版现提供两种方式：<br>
-      ① <b>单屏截图</b>：截取屏幕 / 窗口 / 标签页当前可见区域一张；<br>
-      ② <b>多图拼接</b>：手机等不支持屏幕授权的设备，可边滚边连截几张，再自动识别重叠拼成长图。<br>
-      <b>要截任意软件窗口（Word / WPS / 微信 / 资源管理器）或桌面的整窗长图，请下载电脑版小程序 ↓</b>
+      把滚动内容拼成一张超长图，<b>纯本地处理、不上传</b>。网页版提供三种方式：<br>
+      ① <b>本页长截图</b>：自动滚动当前网页并拼成超长图（最常用）；<br>
+      ② <b>单屏截图</b>：截取屏幕 / 窗口 / 标签页当前可见区域一张；<br>
+      ③ <b>多图拼接</b>：手机等不支持屏幕授权的设备，边滚边连截几张，自动识别重叠拼成长图。<br>
+      <b>要截任意软件窗口（Word / WPS / 微信 / 资源管理器）或桌面的整窗长图，请用下方电脑版 exe ↓（网页受安全限制截不到浏览器外的窗口）</b>
     </div>
     <div style="margin-top:10px;background:#e6f4ff;border:1px solid #91caff;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.75;color:#0958d9;">
       💡 浏览器网页受安全限制<b>截不到浏览器外的窗口</b>。要截电脑上<b>任意窗口</b>（Word / WPS / 微信 / 资源管理器 / 桌面）的整窗长图，请用电脑版小程序：<b>下载 exe 双击即用，不用装 Python</b>。若 Windows 提示「未知发布者」，点「更多信息 → 仍要运行」即可（程序纯本地运行、不上传）。<br>
@@ -10852,11 +10855,21 @@ AppTools['long-shot'] = { build(body){
       <br><a class="btn ghost" href="desktop-capture.zip" download style="margin-top:8px;display:inline-block;text-decoration:none;">下载源码包（可自行打包）</a>
     </div>
     <div class="row mb">
-      <button class="btn primary" id="ls-tab-one">📷 单屏截图</button>
+      <button class="btn primary" id="ls-tab-auto">📜 本页长截图</button>
+      <button class="btn" id="ls-tab-one">📷 单屏截图</button>
       <button class="btn" id="ls-tab-stitch">🧩 多图拼接</button>
     </div>
 
-    <div id="ls-p-one">
+    <div id="ls-p-auto">
+      <div class="mb-sm" style="color:var(--text-2);font-size:12px;line-height:1.6;">
+        自动截取<b>当前网页</b>的完整长图：点「开始长截图」→ 在系统弹窗里选「<b>此标签页</b>」，工具会自行滚动并逐屏拼成一张超长图（无需手动滚）。<br>
+        ⚠️ 只能截当前网页内容；要截 Word / WPS / 微信 / 资源管理器等软件窗口，请用下方电脑版 exe。
+      </div>
+      <button class="btn primary" id="ls-auto-run">开始长截图</button>
+      <div id="ls-auto-status" class="mb-sm" style="font-size:12px;color:var(--primary);line-height:1.6;margin-top:8px;"></div>
+    </div>
+
+    <div id="ls-p-one" style="display:none">
       <div class="mb-sm" style="color:var(--text-2);font-size:12px;line-height:1.6;">
         截取屏幕 / 窗口 / 标签页当前可见区域一张（不滚动）。点击后在弹窗里选择要截取的来源即可（可截其它网站 / 窗口）。
       </div>
@@ -10880,14 +10893,16 @@ AppTools['long-shot'] = { build(body){
 
   function showPanel(n){
     stopStream();
-    ['one','stitch'].forEach(k => {
+    ['auto','one','stitch'].forEach(k => {
       const p = $('#ls-p-' + k, body); if(p) p.style.display = (k === n ? '' : 'none');
       const b = $('#ls-tab-' + k, body); if(b) b.className = 'btn' + (k === n ? ' primary' : '');
     });
+    if(n !== 'auto'){ const st = $('#ls-auto-status', body); if(st) st.textContent = ''; }
   }
   $('#ls-tab-stitch', body).onclick = () => showPanel('stitch');
   $('#ls-tab-one', body).onclick = () => showPanel('one');
-  showPanel('one');
+  $('#ls-tab-auto', body).onclick = () => showPanel('auto');
+  showPanel('auto');
 
   /* ---- 屏幕流（getDisplayMedia + video 取帧，无需任何外部库） ---- */
   async function openStream(preferCurrent){
@@ -10926,15 +10941,88 @@ AppTools['long-shot'] = { build(body){
     $('#ls-result', body).innerHTML = `
       <div class="result-box" style="text-align:center;">
         <div style="font-size:13px;color:var(--text-2);margin-bottom:8px;">✅ 完成，尺寸 <b>${canvas.width} × ${canvas.height}</b> 像素${canvas.height > 6000 ? '（超长图，建议下载后查看）' : ''}</div>
-        <img src="${url}" alt="长截图预览" style="max-width:100%;max-height:420px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+        <img id="ls-prev" src="${url}" alt="长截图预览" style="max-width:100%;max-height:420px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:zoom-in;">
+        <div style="font-size:12px;color:var(--text-2);margin-top:6px;">点击图片可放大查看 / 拖动</div>
         <div class="row" style="justify-content:center;margin-top:10px;">
           <button class="btn primary" id="ls-dl">⬇️ 下载 PNG</button>
           <button class="btn" id="ls-dl-jpg">下载 JPG</button>
         </div>
       </div>`;
+    const prev = $('#ls-prev', body); if(prev) prev.onclick = () => openImagePreview(url, name);
     $('#ls-dl', body).onclick = () => canvas.toBlob(b => { if(b) downloadBlob(b, name + '.png'); }, 'image/png');
     $('#ls-dl-jpg', body).onclick = () => canvas.toBlob(b => { if(b) downloadBlob(b, name + '.jpg'); }, 'image/jpeg', 0.92);
   }
+
+  /* ================= ③ 本页自动滚动长截图（当前标签页，自行滚动逐屏拼接） ================= */
+  $('#ls-auto-run', body).onclick = async () => {
+    const btn = $('#ls-auto-run', body);
+    const status = $('#ls-auto-status', body);
+    let smooth = null, stEl = null, prevOverflow = '', prevVis = '';
+    try{
+      btn.disabled = true; btn.innerHTML = '<span class="loading"><span class="spinner"></span>准备中…</span>';
+      if(status) status.textContent = '请在系统弹窗里选择「此标签页」…';
+      const v = await openStream(true);   // preferCurrentTab：让用户选「此标签页」
+      await sleep(450);
+      // 1) 关闭平滑滚动，否则截到动画中间帧
+      smooth = document.createElement('style'); smooth.textContent = 'html{scroll-behavior:auto !important;}';
+      document.head.appendChild(smooth);
+      // 2) 还原 body overflow（openToolModal 设了 hidden，否则页面滚不动）
+      prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = '';
+      // 3) 隐藏模态框，避免被截进每一帧
+      stEl = document.createElement('style'); stEl.textContent = '.modal-overlay{transition:none !important;}';
+      document.head.appendChild(stEl);
+      prevVis = overlay.style.visibility;
+      overlay.style.visibility = 'hidden';
+      await sleep(320);
+      const capW = v.videoWidth || 1, capH = v.videoHeight || 1;
+      const vpH = window.innerHeight, vpW = window.innerWidth;
+      const scale = capH / vpH;
+      if(!(scale > 0.2 && scale < 8)) throw new Error('缩放比例异常（' + scale.toFixed(2) + '），请在来源选择里选「此标签页」');
+      const pageH = document.documentElement.scrollHeight;
+      const maxScroll = Math.max(0, pageH - vpH);
+      const totalH = Math.round((vpH + maxScroll) * scale);
+      if(totalH > MAX_H) throw new Error('页面过长（约 ' + totalH + 'px），请用「单屏截图」或「多图拼接」');
+      const out = document.createElement('canvas'); out.width = Math.round(vpW * scale); out.height = Math.max(1, totalH);
+      const oc = out.getContext('2d'); oc.fillStyle = '#fff'; oc.fillRect(0, 0, out.width, out.height);
+      let outY = 0, prevScroll = 0, frames = 0;
+      const totalSteps = Math.max(1, Math.ceil(maxScroll / vpH) + 1);
+      if(status) status.textContent = '截取中 1 / ' + totalSteps + ' …';
+      oc.drawImage(v, 0, 0, capW, capH, 0, 0, capW, capH);   // 首帧整屏
+      outY = capH; prevScroll = 0; frames = 1;
+      while(prevScroll < maxScroll){
+        if(frames >= MAX_FRAMES) break;
+        const step = Math.min(vpH, maxScroll - prevScroll);
+        window.scrollTo(0, prevScroll + step);
+        await sleep(280);   // 等渲染 + 屏幕流跟上
+        const curScroll = window.scrollY || document.documentElement.scrollTop || 0;
+        const delta = curScroll - prevScroll;          // CSS 像素
+        const dDev = Math.round(delta * scale);        // 设备像素
+        if(dDev > 0 && dDev <= capH){
+          oc.drawImage(v, 0, capH - dDev, capW, dDev, 0, outY, capW, dDev);
+          outY += dDev;
+        }
+        prevScroll = curScroll; frames++;
+        if(status) status.textContent = '截取中 ' + frames + ' / ' + totalSteps + ' …';
+      }
+      const final = document.createElement('canvas'); final.width = out.width; final.height = Math.max(1, outY);
+      final.getContext('2d').drawImage(out, 0, 0);
+      showResult(final, 'longshot_' + Date.now());
+      toast('长截图完成，共 ' + frames + ' 屏');
+    }catch(e){
+      const m = (e && e.message) || '未知错误';
+      if(/NotAllowedError|用户|denied|Permission/i.test(m)) toast('已取消授权或未选择来源', 'err');
+      else toast('长截图失败：' + m, 'err');
+      if(status) status.textContent = '失败：' + m;
+    }finally{
+      stopStream();
+      try{ if(smooth && smooth.parentNode) smooth.remove(); }catch(_){ }
+      try{ if(stEl && stEl.parentNode) stEl.remove(); }catch(_){ }
+      try{ document.body.style.overflow = prevOverflow; }catch(_){ }
+      try{ overlay.style.visibility = prevVis; }catch(_){ }
+      btn.disabled = false; btn.textContent = '开始长截图';
+    }
+  };
 
   /* ================= ① 单屏截图（任意来源，不滚动） ================= */
   $('#ls-one-run', body).onclick = async () => {
