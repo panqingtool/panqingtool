@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.02-c</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.03</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6848,37 +6848,60 @@ AppTools['math-formula'] = {
       const w = Math.max(preview.scrollWidth, preview.clientWidth);
       const h = Math.max(preview.scrollHeight, preview.clientHeight);
       const html = preview.innerHTML;
-      return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      const svg = '<?xml version="1.0" encoding="UTF-8"?>\n' +
         '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
         '<foreignObject x="0" y="0" width="' + w + '" height="' + h + '">' +
         '<div xmlns="http://www.w3.org/1999/xhtml" style="background:#ffffff;padding:' + cs.padding + ';box-sizing:border-box;">' +
         '<style>' + css + '</style>' + html + '</div></foreignObject></svg>';
+      return { svg: svg, w: w, h: h };
     }
-    // 把自包含 SVG 光栅化为高清 PNG（字体已内联，canvas 不会被污染，可正常 toBlob）
-    async function renderToPng(){
-      const svg = await buildFormulaSvg();
-      const blob = new Blob([svg], { type:'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
+    // ⚠️ 关键（Chromium / Edge 实测结论）：SVG 内含 <foreignObject> 时，
+    //    用 blob: URL 加载会把 canvas 标记为跨域污染 → toBlob 抛 "Tainted canvases may not be exported"；
+    //    必须改用 data: URL 加载，canvas 才是干净的，可正常导出 PNG。
+    function svgToDataUrl(svg){ return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); }
+    async function svgToPngBlob(svg, w, h, scale){
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('SVG 渲染失败')); img.src = svgToDataUrl(svg); });
+      const iw = img.naturalWidth || w, ih = img.naturalHeight || h;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(iw * scale)); canvas.height = Math.max(1, Math.round(ih * scale));
+      const ctx = canvas.getContext('2d'); ctx.scale(scale, scale);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, iw, ih); ctx.drawImage(img, 0, 0, iw, ih);
+      return await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('PNG 生成失败')), 'image/png'));
+    }
+    // 兜底：极少数环境对 foreignObject 光栅化支持不佳时，退回 html2canvas 截图
+    async function fallbackHtml2CanvasPng(){
+      if(typeof html2canvas === 'undefined'){
+        try{ await ensureCDNLib('html2canvas', ['https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js','https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js']); }catch(_){ }
+      }
+      if(typeof html2canvas === 'undefined') return null;
+      const clone = preview.cloneNode(true);
+      clone.style.position = 'absolute'; clone.style.left = '-99999px'; clone.style.top = '0';
+      clone.style.background = '#ffffff'; clone.style.border = 'none'; clone.style.boxShadow = 'none'; clone.style.margin = '0';
+      document.body.appendChild(clone);
       try{
-        const img = new Image(); img.decoding = 'sync';
-        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('SVG 渲染失败')); img.src = url; });
-        const w = img.naturalWidth || preview.clientWidth, h = img.naturalHeight || preview.clientHeight;
-        const scale = 3;
-        const canvas = document.createElement('canvas'); canvas.width = w * scale; canvas.height = h * scale;
-        const ctx = canvas.getContext('2d'); ctx.scale(scale, scale);
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
-        const png = await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('PNG 生成失败')), 'image/png'));
-        return { blob: png, w, h };
-      } finally { URL.revokeObjectURL(url); }
+        const canvas = await html2canvas(clone, { backgroundColor:'#ffffff', scale:3, logging:false, useCORS:true });
+        return await new Promise(r => canvas.toBlob(b => r(b), 'image/png'));
+      }catch(_){ return null; } finally { clone.remove(); }
+    }
+    // 把自包含 SVG 光栅化为高清 PNG（scale=3）
+    async function renderToPng(){
+      const { svg, w, h } = await buildFormulaSvg();
+      try{ return { blob: await svgToPngBlob(svg, w, h, 3), w: w, h: h }; }
+      catch(e){ const fb = await fallbackHtml2CanvasPng(); if(fb) return { blob: fb, w: w, h: h }; throw e; }
     }
     async function previewToPng(){ const r = await renderToPng(); return r.blob; }
-    // SVG 导出：内嵌正确 PNG（Word / PDF / 浏览器均可靠显示，避免纯 foreignObject 在 Office 中空白）
+    // SVG 导出：优先内嵌 PNG（Word / PDF / 浏览器均可靠显示，避免纯 foreignObject 在 Office 中空白）；
+    // 若光栅化失败则退回纯 foreignObject SVG（字体已内联，浏览器与排版软件仍可正常显示）
     async function previewToSvg(){
-      const { blob, w, h } = await renderToPng();
-      const dataUrl = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
-      return '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
-        '<rect width="' + w + '" height="' + h + '" fill="#ffffff"/>' +
-        '<image width="' + w + '" height="' + h + '" xlink:href="' + dataUrl + '"/></svg>';
+      const { svg, w, h } = await buildFormulaSvg();
+      try{
+        const { blob } = await renderToPng();
+        const dataUrl = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+        return '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+          '<rect width="' + w + '" height="' + h + '" fill="#ffffff"/>' +
+          '<image width="' + w + '" height="' + h + '" xlink:href="' + dataUrl + '"/></svg>';
+      }catch(_){ return svg; }
     }
 
     $('#mf-copy-tex', body).onclick = () => copyText(src.value);
@@ -7683,151 +7706,118 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
-  { date:'2026-09-02', items:[
-    "【长截图 / 滚动截图】电脑版小程序改为「一键打包 exe」：下载解压后装一次 Python（安装时勾选「Add python.exe to PATH」），双击 build_exe.bat 即自动生成 dist\\scroll_capture.exe，以后双击 exe 即用、无需再装 Python、可自动滚动截取任意窗口（Word / WPS / 微信 / 资源管理器 / 桌面）整窗长图。bat 已改纯 ASCII（防中文乱码）、自动 cd 到自身目录、带 Python 3.14 兼容提示与 PyInstaller hidden-import 防漏包；安装包 desktop-capture.zip 已同步更新。",
-    "【长截图 / 滚动截图】移除网页版「本页自动滚动」与「其它网页长图」两个功能（浏览器无法自动滚动非当前页、且截不到浏览器外的软件窗口）；现网页版仅保留「单屏截图」与「多图拼接」。截任意软件窗口（Word / WPS / 微信 / 资源管理器 / 桌面）的整窗长图，请用配套的电脑版小程序：应用内点「⬇️ 下载电脑版小程序（安装包）」即可获取（desktop-capture.zip，含一键安装运行脚本，双击 build_exe.bat 可生成免安装 exe）。"
+  { date:'2026-09-03', items:[
+    "【数学公式排版】修复导出 PNG / SVG 报「Tainted canvases」失败，导出恢复高清自包含。",
+    "【长截图】电脑版可直接下载 exe（约 17 MB），双击即用、无需安装 Python。"
   ]},
-  { date:'2026-09-02-b', items:[
-    "【数学公式排版】修复导出白板 / 复制错乱：原 html2canvas 克隆到屏幕外易截到空白、且对 KaTeX 排版支持差。改为浏览器原生渲染 SVG（foreignObject）+ 把 KaTeX 字体以 data: URI 内联进 SVG，导出 PNG / SVG 自包含、清晰、不依赖外网即可显示；「复制 HTML」改为复制含公式样式的自包含 HTML，粘到网页编辑器可正确显示。"
+  { date:'2026-09-02', items:[
+    "【长截图】电脑版新增一键打包：解压后装一次 Python，双击 build_exe.bat 即生成 exe，可自动滚动截 Word / WPS / 微信等任意窗口长图。",
+    "【长截图】网页版移除「本页自动滚动」「其它网页长图」，仅保留单屏截图与多图拼接。"
   ]},
   { date:'2026-09-01', items:[
-    "【长截图 / 滚动截图】新增「电脑版小程序」方案：网页版受浏览器安全限制截不到浏览器外的软件窗口，项目 <code>desktop-capture/</code> 提供 Windows 原生小程序（scroll_capture.py + README），可截 Word / WPS / 微信 / 资源管理器等任意窗口的整窗长图，逐屏滚动 + 重叠拼接 + 一键保存 PNG。网页内已加引导说明。",
-    "【长截图 / 滚动截图】修复「只能截本站、截不到其它网站」的问题，新增四种方式：①本页自动滚动截取（电脑端授权后自动滚完整页）；②其它网页 / 窗口 / 整屏长图——弹窗里可选任意其它标签页 / 窗口，边滚边「截一帧」、工具自动按重叠拼接成长图；③单屏截图（可截任意来源）；④多图拼接（手机端边滚边连截后自动去重叠拼长图）。全程本地处理、不上传、不依赖外部库。"
+    "【长截图】新增电脑版小程序，可截浏览器外任意软件窗口的整窗长图。",
+    "【长截图】网页版新增本页自动滚动、其它网页 / 窗口长图、单屏截图、多图拼接四种方式。"
   ]},
   { date:'2026-08-31', items:[
-    "【表情包制作】文字可在图上自由拖动到任意位置，新增竖排模式，选中显示虚线框并可一键重置。",
-    "【批量导出 ZIP】修复本地文件头偏移与中文名乱码、JSZ 报错；改为纯本地打包，不再依赖国外 CDN，手机电脑均可正常导出。",
-    "【数学公式排版】行间距 / 数字字母字号 / 序号字号三组滑块，行间距支持极小值（如 0.1，多行公式块真正收紧甚至重叠），拖动即时预览。",
-    "【比赛记分】加分减分不重排位置并实时显示排名；修复「暂停后无法继续倒计时」，新增「重置计时」。",
-    "【决策转盘】支持保存、切换、更新与删除多份选项名单。",
-    "【二十四节气与节日】标注国家法定放假天数；按 2025-01-01 起新规修正（春节 4 天、劳动节 2 天、法定假日增至 13 天），2024 及以前不变。",
-    "【图片拼接】新增图片重叠（10%–80%）与缝隙底色，结果可逐张拖动自由调整，支持一键恢复自动排列。",
-    "【PDF 签章 / 签名】电子章重绘（字距按弧长分散不再重叠），骑缝章改为重叠切片且整体可拖动，新增统一印章透明度。",
-    "【图片预览】增强解码兼容：HEIC/HEIF 联网转码、AVIF 等罕见格式 createImageBitmap 救援，修复极少数图片无法预览。"
+    "【表情包制作】文字可自由拖动，新增竖排模式与一键重置。",
+    "【批量导出 ZIP】修复中文名乱码与打包失败，改为纯本地打包、不依赖国外 CDN。",
+    "【数学公式排版】新增行间距 / 数字字母字号 / 序号字号三组滑块，支持极小行距。",
+    "【比赛记分】加减分不重排并实时排名；修复暂停后无法继续，新增重置计时。",
+    "【决策转盘】支持保存、切换与删除多份名单。",
+    "【二十四节气与节日】标注法定放假天数，按 2025 新规修正。",
+    "【图片拼接】新增重叠度与缝隙底色，结果可逐张拖动、一键恢复自动排列。",
+    "【PDF 签章】电子章字距重绘，骑缝章改重叠切片并可整体拖动，新增统一透明度。",
+    "【图片预览】HEIC / AVIF 等罕见格式增强兼容。"
   ]},
   { date:'2026-08-28', items:[
-    "【手机卡片】改用固定行高（3 列 168px / 2 列 160px），所有卡片等面积，彻底修复同屏面积差距过大。",
-    "【分类更名】「文本工具」更名为「文本时娱」；繁简体转换、字数统计移入文档工具。",
-    "【分类重组】八字 / 星座 / MBTI / 理想型 / 农历互转 / 日期差 / 年龄 / 倒计时 / 节气 / 干支 / 转盘 / 抽签 / 随机数字 / 比赛记分等时间与娱乐应用移入「文本时娱」。",
-    "【分类简介】六大分类点击名称或简介可弹窗查看完整说明（同点击应用看完整功能）。",
-    "【更新日志】8/20–8/27 各期精简为带【】概括。",
+    "【手机卡片】固定行高（手机 104px / 平板 128px），同屏面积一致；恢复名称下两行小标注。",
+    "【分类更名】「文本工具」更名「文本时娱」，时间与娱乐类应用移入。",
+    "【分类简介】点击分类名或简介可弹窗看完整说明。",
     "【清理缓存】Service Worker 升 v22，自动清除旧版本废弃缓存。",
-    "【分类回调】决策转盘 / 随机抽签点名 / 比赛记分移回「生活实用」。",
-    "【手机卡片】移动端固定行高由 168/160px 统一缩小至 150px，每列应用面积更小且相等。",
-    "【手机卡片·二修】移动端行高再缩（手机 104px / 平板 128px）；卡片加 overflow:hidden、去掉 min-height 冲突，手机端隐藏描述（点卡片弹完整功能）；修复「全部 / 开发工具」等长描述导致的溢出排版问题，每列面积更小且相等。",
-    "【手机标注】恢复手机端应用名称下的功能标注（2 行截断、10px 小字），保持整齐等面积不变。",
-    "【更名】「海拔高度检测」改名为「海拔高检测」。",
-    "【分类标注】更新六大工具分类每个板块的标注内容，并修正「生活实用」完整简介（移除已转入文本时娱的娱乐 / 时间类应用）。"
+    "【更名】「海拔高度检测」改名「海拔高检测」。"
   ]},
   { date:'2026-08-27', items:[
-    "【手机卡片】调整尺寸缩小同屏面积差距，布局更均衡。",
+    "【手机卡片】缩小尺寸、布局更均衡。",
     "【分类前置】经期 / 转盘 / 抽签 / 八字移至生活实用靠前。",
-    "【节气更名】「二十四节气」更名「二十四节气与节日」，新增公历 / 农历节日。",
-    "【修复】手机号运营商显示、图片转 Base64 加载失败；随机抽签支持多份历史名单。",
+    "【节气更名】新增公历 / 农历节日。",
+    "【修复】手机号运营商显示、图片转 Base64 加载失败。",
     "【新增】贵金属价格换算；开发工具新增 JWT / 代码 Diff / SQL 格式化 / Markdown 编辑器 / UA 解析。",
-    "【优化】文档转 PDF 本地渲染、文本对比 / 去空白行增强、公式导出去边框、二维码解析修复；网速改 Cloudflare 节点、年龄 / 八字对比分享、邮编查询、薪酬对比、修音与拍照类优化。",
-    "【日志】去除「X 修」编号，条目简洁概括。"
+    "【优化】文档转 PDF 本地渲染、公式导出去边框、二维码解析等一批细节。"
   ]},
   { date:'2026-08-24', items:[
     "【PWA 安装】系统浏览器「添加到主屏幕」为受限裸 WebView，仅 Edge / Chrome 可用，全站明示。",
-    "【取图兜底】图片类工具注入「拍照」与「长按粘贴」旁路，不受系统选择器限制。",
-    "【状态持久化】后台未杀进程时记录分类 / 滚动 / 工具 / 文本，10 分钟内重进自动恢复。",
-    "【分享接入】standalone 下支持系统「分享」传入文件并自动定位工具。",
-    "【交互修复】分类标签栏横滑修复；搜索栏引导改浅黄底深蓝字；底部板块对齐。",
-    "【加载页】点击快捷方式首帧显示引用文案，加载完成自动进入。",
-    "【AI 抠图】下架（模型国内加载失败）并按需重上线。"
+    "【取图兜底】图片类工具注入拍照与长按粘贴旁路。",
+    "【状态持久化】记录分类 / 滚动 / 工具 / 文本，10 分钟内重进自动恢复。",
+    "【分享接入】standalone 下支持系统分享传入文件。",
+    "【交互修复】分类栏横滑、搜索栏配色、底部对齐；新增首帧加载页。",
+    "【AI 抠图】下架（模型国内加载失败）。"
   ]},
   { date:'2026-08-22', items:[
-    "【交互焕新】重构「装到主屏幕」引导，放大排版、新增首启加载提示。",
-    "【体验修复】下线不可用「AI 自动抠图」；OCR 导出改纯净 TXT；联网搜索外链打开；PDF 签章统一坐标系；修复 undefined 异常。",
-    "【部署升级】收敛为 pages.dev 单域名，重构 SW 自动更新（无需手动清缓存），修复桌面「安装」无响应与图标圆角。",
-    "【细节打磨】批量工具增补「批量」标识；快捷方式稳定与进入速度提升。",
-    "【收藏】搜索栏下方改为「我的收藏」，移除独立收藏入口。",
-    "【分类联动】点击分类自动滚动并居中筛选按钮。",
-    "【文案】移除「免下载」字样。"
+    "【交互焕新】重构「装到主屏幕」引导与首启加载提示。",
+    "【体验修复】OCR 导出改纯净 TXT、PDF 签章统一坐标系、下线不可用功能。",
+    "【部署升级】收敛为 pages.dev 单域名，SW 自动更新，修复桌面安装无响应。",
+    "【收藏】搜索栏下方改为「我的收藏」。"
   ]},
   { date:'2026-08-21', items:[
-    "【AI 抠图】修复模型分块缺失 / publicPath 绝对 CDN / 站内托管 / Invalid base URL 等多次加载报错。",
-    "【手动抠图】自定义背景色真正生效（不再锁死黄色）。",
-    "【PWA】补全 manifest / SW / 图标（红色圆角 / 透明），新增跨浏览器安装与「安装」按钮。",
-    "【联网】新增联网工具分类（天气 / IP / 手机号归属），后端 brave→google→维基→百度链式兜底。",
-    "【安全】新增 _headers + Functions 中间件统一注入 CSP 等安全头。",
-    "【拍照计数】彻底重做（仅相册选图、可缩放、五组按钮）。",
-    "【装修预算】移至「涉及金钱」。",
-    "【汇率】修复 Failed to fetch（CSP 放行 open.er-api.com + frankfurter 容灾）。",
-    "【倒计时】纪念日可不填时分。",
-    "【加水印】平铺去重叠。",
-    "【数学公式】修复 SVG/PNG 白板（改 MathJax 生成 SVG）。",
-    "【论文排版】文献可独立编号与排序。",
-    "【证件照】导出提速（JPEG 体积 1/5~1/10）。",
-    "【生活实用】按重要程度排序；更新不触碰 localStorage。"
+    "【AI 抠图】修复模型加载报错。",
+    "【手动抠图】自定义背景色真正生效。",
+    "【PWA】补全 manifest / SW / 图标与安装按钮。",
+    "【联网】新增联网工具分类与后端链式兜底。",
+    "【安全】新增 _headers + Functions 统一注入安全头。",
+    "【拍照计数】彻底重做（仅相册选图、可缩放）。",
+    "【其他】汇率取数修复、加水印平铺去重叠、数学公式导出修复、论文排版文献独立编号、证件照导出提速。"
   ]},
   { date:'2026-08-20', items:[
-    "【PWA 安装】补全 manifest / SW / 图标与「安装到主屏幕」按钮。",
     "【手机传感】新增 8 个工具：指南针 / 水平仪 / 噪音 / 海拔 / 拍照测距测高 / AR 测面积 / 拍照计数。",
-    "【解读补全】二维码类型识别、OCR 准确率提示、噪音 / 指南针 / 海拔等结果解读。",
+    "【解读补全】二维码类型识别、OCR 准确率提示等。",
     "【下载健壮】统一 downloadBlob，Blob 链接 8 秒回收。",
-    "【优化】加水印透明度修正、去水印扩散填充、分类标签重排、传感器兼容、海拔在线兜底、标注完整显示弹窗、AR 自由套索、拍照去相机、Cloudflare 源码包、联网搜索维基兜底。"
+    "【优化】加水印、去水印、传感器兼容、海拔在线兜底等一批细节。"
   ]},
   { date:'2026-08-19', items:[
-    '【分类精简】七大分类改为六大：移除「联网工具」板块，联网搜索并入开发工具；关联应用相邻排列（加水印 ↔ 去水印、二维码生成 ↔ 解析、JSON 格式化 ↔ 互转等）',
-    '【导航】顶部「首页」改为「⭐收藏」，点击直达收藏列表；所有应用卡片右上角星标不变',
-    '【页面布局】缩小各大板块间距与应用卡片，功能简介最多显示两行（悬停看完整说明）',
-    '【理想型测试】全新升级：精简版 10 题 / 深度版 30 题双题库，重置与清历史分离，结果去极端化（多套文案随机），朋友圈海报（预留头像位、分层解读：标签 / 画像 / 避雷与建议），下载前可预览，支持短分享链接（好友打开自动出结果），新增「好友匹配」契合分',
-    '【MBTI 检测】16 题扩至 20 题，新增「重置答题」（不清历史），平衡维度友好提示，结果含标签 / 画像 / 自查建议与下载卡',
-    '【决策转盘】选中扇区金色高亮，导出 1280px 高清图并标注选中者；新增永久历史记录（可逐条删除恢复），「移除已中」默认开启，已中者不再被抽中',
-    '【八字排盘】星座边界修复（8/23–9/22 不再误判为天秤），新增出生日期「公历 + 农历 + 节日 + 干支」同显',
-    '【多应用最小化】右下角最小化图标支持竖排 10 个应用，点击各自还原',
-    '【PDF 系列修复】Office 转 PDF 重写（本地渲染直接出 PDF，不再依赖打印框）；签章 fetch().blob 报错修复；图片透明度改为「越高越浅」；PDF 转图片新增 ZIP 打包；删除效果有限的「PDF 压缩」',
-    '【抠图 / 证件照】手动框选自定义背景色实时生效，套索线宽再细 30 倍，暂存结果支持逐个下载（ZIP 失败自动兜底）；证件照换背景并发加速并修复空指针报错',
-    '【解读补全】网速测试增加等级解读与场景建议；敏感词检测增加命中解读；视力度数增加视力等级解读',
-    '【其他】工时加班计算器移入「涉及金钱」板块',
+    "【分类精简】七类改六类，关联应用相邻排列。",
+    "【导航】顶部「首页」改为「⭐收藏」。",
+    "【布局】缩小板块间距与卡片，简介最多两行。",
+    "【理想型测试】双题库、结果海报与短链分享、好友匹配契合分。",
+    "【MBTI】20 题 + 重置答题 + 结果下载卡。",
+    "【决策转盘】选中高亮、高清导出、永久历史记录。",
+    "【八字排盘】星座边界修复、出生日期多信息同显。",
+    "【多应用最小化】右下角竖排 10 个应用，点击各自还原。",
+    "【PDF 系列】Office 转 PDF 重写、PDF 转图片 ZIP 打包。"
   ]},
   { date:'2026-08-18', items:[
-    '【PWA 与联网搜索】新增可安装 PWA（manifest / Service Worker 离线缓存 / 新版本提示）；新增「联网工具」分类与联网搜索（默认维基百科，可配 Brave 通用搜索）',
-    '【新增 15+ 工具】图片水印 / 图片模糊 / 转 JPG / GIF 分解 / 视频转 GIF / 拍照测距测高 / 决策转盘 / 比赛记分 / MBTI / 理想型测试，以及指南针 · 水平仪 · 海拔 · 噪音检测（需 HTTPS 授权）、拍照计数 · 照片测面积',
-    '【开发 · 便民优化】JSON 格式化（折叠 / 错误定位）、时间戳（秒毫秒微秒 / 时区）、MD5（SHA1/256/512）、密码生成合并高强度版、正则测试（新增）、汇率（反向 / 收藏 / 走势）、助学贷款、修音（变调变速混响降噪）、房贷（LPR / 提前还款）',
-    '【图片 · 文档 · 文本小工具】图片圆角 / 图片转 Base64 / 图片去水印 / 图片转 PDF / PDF 加水印 / Markdown 转 HTML / 文本反转 / 敏感词检测；PDF 转 Office 改为更稳的「表格转 Excel/Word」',
-    '【二修收尾】文本工具（空格 / 替换 / 符号 / 分段）、PDF 签章 Worker 修复、MBTI / 理想型细分、转盘 / 记分自定义导出、公历农历互转（内联离线库）、八字四柱、倒计时 / 纪念日永久保存、修音自动校音',
-    '【三修】修音加载崩溃加固、敏感词支持导入文档、表格识别升级为「粘贴 / OCR / 文档提取」三合一、加水印 / 去水印通用化（PDF · Word · 图片）、图片模糊自定义区域、批量复检与 img-base64 修复',
+    "【PWA 与联网搜索】新增可安装 PWA 与「联网工具」分类。",
+    "【新增 15+ 工具】图片水印 / 模糊 / 转 JPG / GIF 分解 / 视频转 GIF / 拍照测距测高 / 决策转盘 / 比赛记分 / MBTI / 理想型测试等。",
+    "【开发 · 便民优化】JSON 格式化、时间戳、MD5、密码生成、正则测试、汇率、助学贷款、修音、房贷等。",
+    "【图片 · 文档 · 文本小工具】图片圆角 / 转 Base64 / 去水印 / 转 PDF，Markdown 转 HTML、文本反转、敏感词检测等。"
   ]},
   { date:'2026-08-17', items:[
-    '【重磅】新增 23 个工具，覆盖日历时间 / 健康生活 / 财务理财 / 日常实用 / 趣味办公五大类：公历农历互转(含干支生肖朝代节日)、二十四节气、干支纪年、工时加班、BMI、基础代谢、预产期、血型遗传、视力度数、存款利息、车贷、退休金、金额大写、电费估算、高强度密码、油耗、快递导航、经期排卵期、装修预算',
-    '【批量选择】图片拼接 / PDF 合并等支持查看已选文件与顺序，可逐个继续添加、上移下移、删除',
-    '【更新日志】改为按日期自动合并 + 条目去重，同一天只显示一个日期，内容重要在前、不赘述',
-    '【图片转Excel / PDF转Excel·Word】增加「手动粘贴表格」兜底模式，OCR 不可用时仍可生成可导出表格',
-    '【文本工具】板块丰富化：字数统计增词频 / 朗读时长，替换 / 去重 / 大小写等细节增强',
-    '【应用最小化】每个工具右上角「—」可收起到右下角小图标，点击还原且不丢失已填内容',
-    '【搜索】空输入不再误显“未找到”，新增一键清空按钮',
-    '【AI 智能抠图】边缘羽化 + 输出缩放高清；【证件照换背景】双层羽化柔化发丝、支持批量高清',
-    '【电子签名/盖章】支持 PDF/Word/Excel，电子章/骑缝章半透明不挡原文，可拖动缩放、页码 1,2,4-5',
-    '【汇率换算】修复实时同步(返回格式异常)，改稳定公开接口并严格校验',
-    '【文字转语音】新增「用自己的声音」录制/上传样本入口',
-    '【时间戳】支持秒/毫秒/微秒；【MD5】附 SHA-256；【二维码】自定义尺寸',
-    '【助学贷款计算器】可设总还款额，宽限期仅还息、后等额本金；本专科≤2万/研究生≤2.5万每年；利率≈2.8%',
-    '【稳定性】OCR/PDF/Word/Excel/二维码等库增加 unpkg 容灾源，国内网络更不易“库未加载”',
-    '【图片转Excel / PDF转Office】再加固：OCR/PDF 引擎新增 esm.sh 第三容灾源、worker 多源自动回退；PDF 新增真实 .xlsx 导出（SheetJS）',
+    "【新增 23 个工具】覆盖日历时间 / 健康生活 / 财务理财 / 日常实用 / 趣味办公五大类。",
+    "【批量选择】图片拼接 / PDF 合并可查看已选文件、调整顺序。",
+    "【更新日志】按日期合并 + 去重，同一天只显示一个日期。",
+    "【表格兜底】图片 / PDF 转表格新增手动粘贴模式。",
+    "【应用最小化】工具可收起到右下角小图标且不丢内容。",
+    "【AI 抠图】边缘羽化 + 高清输出；【证件照】双层羽化、支持批量高清。",
+    "【电子签名 / 盖章】支持 PDF / Word / Excel，骑缝章与页码范围。",
+    "【稳定性】OCR / PDF / Word / Excel / 二维码等库增加多源容灾。"
   ]},
   { date:'2026-08-14', items:[
-    'AI 智能抠图支持多对象分步暂存与批量导出 ZIP',
-    '全部工具描述改写为「场景 + 能力」两句话，更好懂',
-    '搜索无结果时在搜索栏下方就近提示',
-    '背景 logo 改为整页铺底（原图，显示完整）',
-    '鼠标 / 触屏全屏放大按钮；预览灯箱自适应缩放',
+    "【AI 抠图】多对象分步暂存与批量导出 ZIP。",
+    "【描述改写】全部工具改为「场景 + 能力」两句话。",
+    "【搜索】无结果时在搜索栏下方就近提示。",
+    "【背景 logo】改为整页铺底、原图原色。"
   ]},
   { date:'2026-08-12', items:[
-    '底部板块重组为「关于本站 / 隐私说明 / 免责声明 / 快捷链接 / 开发者信息」紧凑五列',
-    '邮箱前统一标注「攀清科技工作室邮箱：」',
-    '分类切换不再强制滚动',
+    "【底部板块】重组为关于本站 / 隐私说明 / 免责声明 / 快捷链接 / 开发者信息。",
+    "【分类切换】不再强制滚动。"
   ]},
   { date:'2026-08-10', items:[
-    '新增 OCR、图片取色、表情包、论文排版、数学公式等工具',
-    '工具卡片标注「批量」徽标',
+    "【新增工具】OCR、图片取色、表情包、论文排版、数学公式等。",
+    "【徽标】工具卡片标注「批量」。"
   ]},
   { date:'2026-08-07', items:[
-    '托托工具箱首个版本发布（曾用名"万能免费在线工具箱"），覆盖图片 / 文档 / 文本 / 开发 / 涉及金钱 / 生活实用 / 联网七大类约 100 工具',
-    '全部工具本地处理、免登录、免下载',
-  ]},
+    "【首个版本】托托工具箱发布（原「万能免费在线工具箱」），覆盖七大类约 100 工具。",
+    "【隐私】全部工具本地处理、免登录、免下载。"
+  ]}
 ];
 function daysOld(d){
   const t = new Date(d + 'T00:00:00');
@@ -10849,8 +10839,9 @@ AppTools['long-shot'] = { build(body){
       <b>要截任意软件窗口（Word / WPS / 微信 / 资源管理器）或桌面的整窗长图，请下载电脑版小程序 ↓</b>
     </div>
     <div style="margin-top:10px;background:#e6f4ff;border:1px solid #91caff;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.75;color:#0958d9;">
-      💡 浏览器网页受安全限制<b>截不到浏览器外的窗口</b>。电脑版小程序可截电脑上<b>任意窗口</b>的整窗长图（逐屏滚动 + 重叠拼接 + 一键存 PNG）。已做成<b>一键打包 exe</b>：下载解压后，先装一次 Python（安装时勾选「Add python.exe to PATH」），双击「build_exe.bat」即自动生成 <b>dist\scroll_capture.exe</b>，以后<b>双击 exe 即可使用，无需再装 Python</b>、可自动滚动截取。
-      <br><a class="btn primary" href="desktop-capture.zip" download style="margin-top:8px;display:inline-block;text-decoration:none;">⬇️ 下载电脑版小程序（安装包）</a>
+      💡 浏览器网页受安全限制<b>截不到浏览器外的窗口</b>。要截电脑上<b>任意窗口</b>（Word / WPS / 微信 / 资源管理器 / 桌面）的整窗长图，请用电脑版小程序：逐屏滚动 + 重叠拼接 + 一键存 PNG，<b>下载 exe 双击即用，不用装 Python</b>。若 Windows 提示「未知发布者」，点「更多信息 → 仍要运行」即可（程序纯本地运行、不上传）。
+      <br><a class="btn primary" href="scroll_capture.exe" download="托托长截图.exe" style="margin-top:8px;display:inline-block;text-decoration:none;">⬇️ 下载电脑版（exe，约 17 MB，双击即用）</a>
+      <br><a class="btn ghost" href="desktop-capture.zip" download style="margin-top:8px;display:inline-block;text-decoration:none;">下载源码包（可自行打包）</a>
     </div>
     <div class="row mb">
       <button class="btn primary" id="ls-tab-one">📷 单屏截图</button>
