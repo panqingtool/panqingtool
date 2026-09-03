@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.03-d</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.03-e</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7073,6 +7073,7 @@ const TOOLS = [
   {id:'salary-cmp',   name:'薪酬对比计算器',      icon:'🧮', cat:'money', desc:'对比不同城市 / 不同薪资方案的税后实际收入：按当地社平工资封顶社保基数、可选公积金比例与专项附加扣除，算个税与五险一金后输出税后月薪 / 年入，多方案并排找出到手最高者。'},
   {id:'metal-price',  name:'贵金属价格换算',      icon:'🪙', cat:'money', desc:'按实时行情估算黄金 / 白银 / 铂金 / 钯金价值：取美元/盎司（gold-api.com）+ 美元兑人民币（open.er-api.com），换算每克人民币并按成色（999/925 等）算某重量的总价，附全金属速览表。'},
   {id:'renovation',   name:'装修预算估算',        icon:'🏗️', cat:'money', desc:'按面积与档次（简 / 精 / 豪装）估算总预算及分项占比，各项占比可自定义，附条形图可视化。'},
+  {id:'tax-rate',     name:'综合税率计算器',      icon:'📊', cat:'money', desc:'覆盖增值税 / 企业所得税 / 契税 / 车辆购置税 / 印花税 / 房产税六类常见税率：增值税含一般与小规模、含税价与进销项；企业所得税含小型微利5%与高新15%；契税按首套二套面积分档；车辆购置税含新能源减半；印花税多税目且可选六税两费减半；房产税从价与从租两种，附政策说明。'},
   /* ============ 生活实用 ============ */
   {id:'cycle',        name:'经期排卵期计算',      icon:'🌸', cat:'life', desc:'按末次月经与周期推算排卵期 / 易孕期 / 下次经期，可选填年龄优化波动系数、加宽易孕窗口，支持自定义周期与经期天数（仅供参考）。'},
   {id:'wheel',        name:'决策转盘',       icon:'🎡', cat:'life',   desc:'多选项转盘随机抽选，支持权重、快速等分、旋转时长 / 圈数、历史记录与导出 PNG；配色为固定调色板。'},
@@ -7718,7 +7719,8 @@ const CHANGELOG = [
     "【长截图·电脑版】保存位置固定到「桌面\\托托长截图」并自动命名，可一键打开文件夹/图片；新增手动逐屏模式（兼容不响应滚轮的窗口）；新增桌面快捷方式与全局热键 Ctrl+Shift+S。",
     "【长截图·网页版】恢复「本页自动滚动长截图」：点按钮后在系统弹窗选「此标签页」，工具自动滚动并逐屏拼成超长图；结果预览点击可放大（灯箱缩放 / 拖动）。",
     "【长截图】澄清分工：网页版只能截当前网页（自动滚动 / 单屏 / 多图拼接）；截 Word / WPS / 微信 / 资源管理器等任意软件窗口的整窗长图请下载电脑版 exe。",
-    "【长截图·电脑版下架】电脑版 exe 小程序在部分环境（多显示器 / 受保护窗口等）捕获不稳定，已下线下架；网页版保留本页长截图 / 单屏截图 / 多图拼接三种方式。"
+    "【长截图·电脑版下架】电脑版 exe 小程序在部分环境（多显示器 / 受保护窗口等）捕获不稳定，已下线下架；网页版保留本页长截图 / 单屏截图 / 多图拼接三种方式。",
+    "【综合税率计算器】新增：计算增值税（一般/小规模、含税价与进销项）、企业所得税（小型微利5%/高新15%）、契税（首套二套面积分档）、车辆购置税（含新能源减半）、印花税（多税目+六税两费减半）、房产税（从价/从租）六类常见税率，附政策说明。"
   ]},
   { date:'2026-09-02', items:[
     "【长截图】电脑版新增一键打包：解压后装一次 Python，双击 build_exe.bat 即生成 exe，可自动滚动截 Word / WPS / 微信等任意窗口长图。",
@@ -11526,6 +11528,208 @@ consumeShare();
   });
   // standalone 下保留顶部「安装」按钮可见：点击打开引导面板并提示「已安装」，保证任何环境都有响应
 })();
+
+// 综合税率计算器：增值税 / 企业所得税 / 契税 / 车辆购置税 / 印花税 / 房产税
+AppTools['tax-rate'] = {
+  build(body){
+    body.innerHTML = `
+      <div class="hint" style="margin-bottom:10px">本工具计算 <b>增值税 / 企业所得税 / 契税 / 车辆购置税 / 印花税 / 房产税</b> 六类常见税率；工资薪金个税请见「个税计算器」。政策口径更新至 2026 年，结果仅供参考，以税务 / 主管部门核算为准。</div>
+      <div id="tr-tabs" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+        <span data-t="vat"  class="tr-tab" style="cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;border:1px solid #1890ff;background:#1890ff;color:#fff">增值税</span>
+        <span data-t="corp" class="tr-tab" style="cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;border:1px solid #e3e8ef;background:#f5f7fa;color:#555">企业所得税</span>
+        <span data-t="deed" class="tr-tab" style="cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;border:1px solid #e3e8ef;background:#f5f7fa;color:#555">契税</span>
+        <span data-t="car"  class="tr-tab" style="cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;border:1px solid #e3e8ef;background:#f5f7fa;color:#555">车辆购置税</span>
+        <span data-t="stamp"class="tr-tab" style="cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;border:1px solid #e3e8ef;background:#f5f7fa;color:#555">印花税</span>
+        <span data-t="prop" class="tr-tab" style="cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;border:1px solid #e3e8ef;background:#f5f7fa;color:#555">房产税</span>
+      </div>
+
+      <div class="tr-p" data-p="vat">
+        <div class="row mb">
+          <div><label class="field-label">纳税人类型</label><select class="sel" id="vat-type"><option value="gen">一般纳税人</option><option value="small">小规模纳税人</option></select></div>
+          <div id="vat-genrate-wrap"><label class="field-label">适用税率</label><select class="sel" id="vat-rate"><option value="0.13">13%（货物/加工修理修配）</option><option value="0.09">9%（建筑/不动产/农产品/交通等）</option><option value="0.06">6%（现代/生活服务/金融）</option></select></div>
+          <div id="vat-smallrate-wrap" style="display:none"><label class="field-label">征收率</label><select class="sel" id="vat-srate"><option value="0.01">1%（2023-2027 优惠）</option><option value="0.03">3%（法定）</option></select></div>
+        </div>
+        <div class="row mb">
+          <div><label class="field-label">含税销售额(元)</label><input type="number" class="inp" id="vat-inc" value="11300"></div>
+          <div id="vat-input-wrap"><label class="field-label">进项税额(不含税额,元)</label><input type="number" class="inp" id="vat-in" value="0"></div>
+        </div>
+        <button class="btn" id="vat-run">计算</button>
+        <div id="vat-result"></div>
+        <div class="hint">一般纳税人：不含税销售额 = 含税 ÷(1+税率)，应纳税额 = 销项 − 进项；进项大于销项可留抵下期。小规模纳税人：不含税销售额 = 含税 ÷(1+征收率)，应纳税额 = 不含税 × 征收率；月销售额≤10万元免征（2023-2027）。</div>
+      </div>
+
+      <div class="tr-p" data-p="corp" style="display:none">
+        <div class="row mb">
+          <div><label class="field-label">企业类型</label><select class="sel" id="co-type"><option value="normal">一般企业（25%）</option><option value="small">小型微利企业（实际5%）</option><option value="high">高新技术企业（15%）</option></select></div>
+          <div><label class="field-label">应纳税所得额(元)</label><input type="number" class="inp" id="co-tax" value="1000000"></div>
+        </div>
+        <button class="btn" id="co-run">计算</button>
+        <div id="co-result"></div>
+        <div class="hint">小型微利企业（2023.1.1-2027.12.31）：年应纳税所得额≤300万元的部分，减按25%计入、按20%税率，实际税负5%；超过300万元部分全额按25%（不再享受优惠）。高新技术企业指经认定的国家需要重点扶持的高新技术企业，减按15%。</div>
+      </div>
+
+      <div class="tr-p" data-p="deed" style="display:none">
+        <div class="row mb">
+          <div><label class="field-label">房屋套数</label><select class="sel" id="de-type"><option value="first">首套</option><option value="second">二套</option><option value="third">三套及以上</option></select></div>
+          <div><label class="field-label">建筑面积(㎡)</label><input type="number" class="inp" id="de-area" value="90"></div>
+          <div><label class="field-label">成交价/不含增值税价款(元)</label><input type="number" class="inp" id="de-price" value="1000000"></div>
+        </div>
+        <div class="row mb" id="de-provwrap" style="display:none"><div><label class="field-label">省级法定税率(%)</label><input type="number" class="inp" id="de-prov" value="3" step="0.5" min="1" max="5"></div></div>
+        <button class="btn" id="de-run">计算</button>
+        <div id="de-result"></div>
+        <div class="hint">优惠税率（财税〔2016〕23号）：首套≤90㎡按1%、>90㎡按1.5%；二套≤90㎡按1%、>90㎡按2%；三套及以上按各省法定税率（3%-5%）。计税依据为不含增值税的成交价格。</div>
+      </div>
+
+      <div class="tr-p" data-p="car" style="display:none">
+        <div class="row mb">
+          <div><label class="field-label">车辆类型</label><select class="sel" id="ca-type"><option value="fuel">燃油车</option><option value="nev">新能源乘用车</option></select></div>
+          <div><label class="field-label">计税价格(不含增值税购车价,元)</label><input type="number" class="inp" id="ca-price" value="100000"></div>
+        </div>
+        <button class="btn" id="ca-run">计算</button>
+        <div id="ca-result"></div>
+        <div class="hint">车辆购置税法定税率10%，计税价格 = 不含增值税的购车价款 + 价外费用。新能源乘用车：2024-2025年免征，2026-2027年减半征收（每辆减税额上限1.5万元）。</div>
+      </div>
+
+      <div class="tr-p" data-p="stamp" style="display:none">
+        <div class="row mb"><div style="flex:1.3"><label class="field-label">税目</label><select class="sel" id="st-item">
+          <option value="0.0003">购销合同（0.03%）</option>
+          <option value="0.0005">加工承揽（0.05%）</option>
+          <option value="0.0005">建设工程勘察设计（0.05%）</option>
+          <option value="0.0003">建筑安装工程承包（0.03%）</option>
+          <option value="0.001">财产租赁（0.1%）</option>
+          <option value="0.0005">货物运输（0.05%）</option>
+          <option value="0.001">仓储保管（0.1%）</option>
+          <option value="0.00005">借款（0.005%）</option>
+          <option value="0.001">财产保险（0.1%）</option>
+          <option value="0.0003">技术合同（0.03%）</option>
+          <option value="0.0005">产权转移书据（0.05%）</option>
+          <option value="0.00025">营业账簿·资金（0.025%）</option>
+          <option value="fixed">权利许可证照（5元/件）</option>
+        </select></div></div>
+        <div class="row mb">
+          <div><label class="field-label">计税金额(元)</label><input type="number" class="inp" id="st-amt" value="1000000"></div>
+          <div id="st-cntwrap" style="display:none"><label class="field-label">件数</label><input type="number" class="inp" id="st-cnt" value="1" min="1"></div>
+        </div>
+        <div class="row mb"><label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="st-half"> 小规模纳税人/小型微利/个体户（六税两费减半）</label></div>
+        <button class="btn" id="st-run">计算</button>
+        <div id="st-result"></div>
+        <div class="hint">六税两费减半（2022-2027）：增值税小规模纳税人、小型微利企业和个体工商户可在50%幅度内减征印花税（不含证券交易）等。营业账簿资金账簿已按0.025%（原0.05%减半）。</div>
+      </div>
+
+      <div class="tr-p" data-p="prop" style="display:none">
+        <div class="row mb">
+          <div><label class="field-label">计税方式</label><select class="sel" id="pr-mode"><option value="price">从价计征（1.2%）</option><option value="rent">从租计征（12%）</option></select></div>
+          <div id="pr-pricewrap"><label class="field-label">房产原值(元)</label><input type="number" class="inp" id="pr-price" value="1000000"></div>
+          <div id="pr-redwrap"><label class="field-label">减除比例(%)</label><input type="number" class="inp" id="pr-red" value="30" min="10" max="30"></div>
+          <div id="pr-rentwrap" style="display:none"><label class="field-label">年租金收入(元)</label><input type="number" class="inp" id="pr-rent" value="50000"></div>
+        </div>
+        <div class="row mb" id="pr-homewrap" style="display:none"><label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="pr-home"> 个人出租住房（优惠4%）</label></div>
+        <button class="btn" id="pr-run">计算</button>
+        <div id="pr-result"></div>
+        <div class="hint">从价：年税 = 房产原值 ×(1−减除比例10%-30%)×1.2%；从租：年税 = 租金收入 ×12%，个人出租住房减按4%。按年计算。</div>
+      </div>
+    `;
+    const num = (id) => { const v = parseFloat($('#'+id, body).value); return isNaN(v) ? 0 : v; };
+    const fmt = (x) => x.toLocaleString('zh-CN', { maximumFractionDigits:2 });
+    function pct(x){ const v = x*100; return (v % 1 === 0) ? v.toFixed(0) : v.toFixed(2); }
+
+    const tabs = [...body.querySelectorAll('#tr-tabs .tr-tab')];
+    tabs.forEach(t => t.onclick = () => {
+      tabs.forEach(x => { x.classList.remove('on'); x.style.background='#f5f7fa'; x.style.color='#555'; x.style.borderColor='#e3e8ef'; });
+      t.classList.add('on'); t.style.background='#1890ff'; t.style.color='#fff'; t.style.borderColor='#1890ff';
+      const v = t.dataset.t;
+      body.querySelectorAll('.tr-p').forEach(p => p.style.display = p.dataset.p === v ? '' : 'none');
+    });
+
+    $('#vat-type', body).onchange = () => {
+      const t = $('#vat-type', body).value;
+      $('#vat-genrate-wrap', body).style.display = t==='gen' ? '' : 'none';
+      $('#vat-smallrate-wrap', body).style.display = t==='small' ? '' : 'none';
+      $('#vat-input-wrap', body).style.display = t==='gen' ? '' : 'none';
+    };
+    $('#vat-run', body).onclick = () => {
+      const t = $('#vat-type', body).value;
+      const inc = num('vat-inc');
+      if(t === 'gen'){
+        const r = parseFloat($('#vat-rate', body).value);
+        const inn = num('vat-in');
+        const sales = inc / (1 + r);
+        const out = sales * r;
+        const tax = out - inn;
+        const pay = tax > 0 ? tax : 0;
+        $('#vat-result', body).innerHTML = `<div class="result-box">不含税销售额：¥${fmt(sales)}<br>销项税额：¥${fmt(out)}<br>进项税额：¥${fmt(inn)}<br>应纳税额：¥${fmt(tax)}${tax<0?'（进项大于销项，可留抵下期）':''}<br>本期实缴：¥${fmt(pay)}</div>`;
+      } else {
+        const r = parseFloat($('#vat-srate', body).value);
+        const sales = inc / (1 + r);
+        const tax = sales * r;
+        $('#vat-result', body).innerHTML = `<div class="result-box">不含税销售额：¥${fmt(sales)}<br>应纳税额（征收率 ${pct(r)}%）：¥${fmt(tax)}<br><span class="hint">小规模纳税人月销售额≤10万元免征（2023-2027）。</span></div>`;
+      }
+    };
+
+    $('#co-run', body).onclick = () => {
+      const t = $('#co-type', body).value;
+      const x = num('co-tax');
+      let tax, rate;
+      if(t === 'normal'){ tax = x * 0.25; rate = 0.25; }
+      else if(t === 'high'){ tax = x * 0.15; rate = 0.15; }
+      else { if(x <= 3000000){ tax = x * 0.05; rate = 0.05; } else { tax = x * 0.25; rate = 0.25; } }
+      const note = (t === 'small' && x > 3000000) ? '（超过300万部分不享受优惠，全额25%）' : '';
+      $('#co-result', body).innerHTML = `<div class="result-box">应纳企业所得税：¥${fmt(tax)}<br>适用税率/实际税负：${pct(rate)}%${note}</div>`;
+    };
+
+    $('#de-type', body).onchange = () => { $('#de-provwrap', body).style.display = $('#de-type', body).value === 'third' ? '' : 'none'; };
+    $('#de-run', body).onclick = () => {
+      const t = $('#de-type', body).value;
+      const area = num('de-area');
+      const price = num('de-price');
+      let rate;
+      if(t === 'first') rate = area <= 90 ? 0.01 : 0.015;
+      else if(t === 'second') rate = area <= 90 ? 0.01 : 0.02;
+      else rate = (parseFloat($('#de-prov', body).value) || 3) / 100;
+      const tax = price * rate;
+      $('#de-result', body).innerHTML = `<div class="result-box">契税税率：${pct(rate)}%<br>应纳契税：¥${fmt(tax)}</div>`;
+    };
+
+    $('#ca-run', body).onclick = () => {
+      const t = $('#ca-type', body).value;
+      const p = num('ca-price');
+      let tax, note = '';
+      if(t === 'fuel'){ tax = p * 0.10; }
+      else { const full = p * 0.10; tax = Math.min(full / 2, 15000); note = '（2026-2027减半，减税额封顶1.5万元）'; }
+      $('#ca-result', body).innerHTML = `<div class="result-box">应纳车辆购置税：¥${fmt(tax)}${note}</div>`;
+    };
+
+    $('#st-item', body).onchange = () => { $('#st-cntwrap', body).style.display = $('#st-item', body).value === 'fixed' ? '' : 'none'; };
+    $('#st-run', body).onclick = () => {
+      const sel = $('#st-item', body);
+      const item = sel.value;
+      const amt = num('st-amt');
+      const half = $('#st-half', body).checked;
+      let tax;
+      if(item === 'fixed'){ const cnt = Math.max(1, parseInt($('#st-cnt', body).value || '1')); tax = 5 * cnt; }
+      else { const r = parseFloat(item); tax = amt * r; if(half) tax *= 0.5; }
+      const label = sel.selectedOptions[0].text;
+      const hn = (half && item !== 'fixed') ? '（已按六税两费减半）' : '';
+      $('#st-result', body).innerHTML = `<div class="result-box">税目：${label}<br>应纳印花税：¥${fmt(tax)}${hn}</div>`;
+    };
+
+    $('#pr-mode', body).onchange = () => {
+      const m = $('#pr-mode', body).value;
+      const rent = m === 'rent';
+      $('#pr-rentwrap', body).style.display = rent ? '' : 'none';
+      $('#pr-homewrap', body).style.display = rent ? '' : 'none';
+      $('#pr-pricewrap', body).style.display = rent ? 'none' : '';
+      $('#pr-redwrap', body).style.display = rent ? 'none' : '';
+    };
+    $('#pr-run', body).onclick = () => {
+      const m = $('#pr-mode', body).value;
+      let tax, info;
+      if(m === 'price'){ const p = num('pr-price'); const red = parseFloat($('#pr-red', body).value) || 0; tax = p * (1 - red/100) * 0.012; info = '从价计征（减除' + red + '%）'; }
+      else { const rent = num('pr-rent'); const home = $('#pr-home', body).checked; tax = rent * (home ? 0.04 : 0.12); info = home ? '从租·个人住房（4%）' : '从租（12%）'; }
+      $('#pr-result', body).innerHTML = `<div class="result-box">${info}<br>年应纳房产税：¥${fmt(tax)}（月均 ¥${fmt(tax/12)}）</div>`;
+    };
+  }
+};
 
 // 支持 ?open=xxx URL 参数（PWA shortcuts 长按/主屏快捷方式直接打开工具）
 (function(){
