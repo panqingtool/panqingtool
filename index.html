@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.03-c</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.03-d</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7717,7 +7717,8 @@ const CHANGELOG = [
     "【数学公式排版】修复导出 PNG / SVG 显示不全：改用离屏精确测量内容真实尺寸，不再被预览框裁切。",
     "【长截图·电脑版】保存位置固定到「桌面\\托托长截图」并自动命名，可一键打开文件夹/图片；新增手动逐屏模式（兼容不响应滚轮的窗口）；新增桌面快捷方式与全局热键 Ctrl+Shift+S。",
     "【长截图·网页版】恢复「本页自动滚动长截图」：点按钮后在系统弹窗选「此标签页」，工具自动滚动并逐屏拼成超长图；结果预览点击可放大（灯箱缩放 / 拖动）。",
-    "【长截图】澄清分工：网页版只能截当前网页（自动滚动 / 单屏 / 多图拼接）；截 Word / WPS / 微信 / 资源管理器等任意软件窗口的整窗长图请下载电脑版 exe。"
+    "【长截图】澄清分工：网页版只能截当前网页（自动滚动 / 单屏 / 多图拼接）；截 Word / WPS / 微信 / 资源管理器等任意软件窗口的整窗长图请下载电脑版 exe。",
+    "【长截图·电脑版下架】电脑版 exe 小程序在部分环境（多显示器 / 受保护窗口等）捕获不稳定，已下线下架；网页版保留本页长截图 / 单屏截图 / 多图拼接三种方式。"
   ]},
   { date:'2026-09-02', items:[
     "【长截图】电脑版新增一键打包：解压后装一次 Python，双击 build_exe.bat 即生成 exe，可自动滚动截 Word / WPS / 微信等任意窗口长图。",
@@ -10846,13 +10847,10 @@ AppTools['long-shot'] = { build(body){
       ① <b>本页长截图</b>：自动滚动当前网页并拼成超长图（最常用）；<br>
       ② <b>单屏截图</b>：截取屏幕 / 窗口 / 标签页当前可见区域一张；<br>
       ③ <b>多图拼接</b>：手机等不支持屏幕授权的设备，边滚边连截几张，自动识别重叠拼成长图。<br>
-      <b>要截任意软件窗口（Word / WPS / 微信 / 资源管理器）或桌面的整窗长图，请用下方电脑版 exe ↓（网页受安全限制截不到浏览器外的窗口）</b>
+      <b>说明：网页版只能截当前网页（浏览器安全限制）；截 Word / WPS / 微信等软件窗口需电脑客户端，该小程序已下线下架。</b>
     </div>
-    <div style="margin-top:10px;background:#e6f4ff;border:1px solid #91caff;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.75;color:#0958d9;">
-      💡 浏览器网页受安全限制<b>截不到浏览器外的窗口</b>。要截电脑上<b>任意窗口</b>（Word / WPS / 微信 / 资源管理器 / 桌面）的整窗长图，请用电脑版小程序：<b>下载 exe 双击即用，不用装 Python</b>。若 Windows 提示「未知发布者」，点「更多信息 → 仍要运行」即可（程序纯本地运行、不上传）。<br>
-      <b>新版功能：</b>① 自动保存到「桌面\托托长截图」并可一键打开；② <b>手动逐屏模式</b>兼容不响应滚轮的窗口；③ 可<b>创建桌面快捷方式</b>、<b>全局热键 Ctrl+Shift+S</b> 直接开始截取。
-      <br><a class="btn primary" href="scroll_capture.exe" download="托托长截图.exe" style="margin-top:8px;display:inline-block;text-decoration:none;">⬇️ 下载电脑版（exe，约 17 MB，双击即用）</a>
-      <br><a class="btn ghost" href="desktop-capture.zip" download style="margin-top:8px;display:inline-block;text-decoration:none;">下载源码包（可自行打包）</a>
+    <div style="margin-top:10px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.75;color:#666;">
+      💡 浏览器网页受安全限制<b>只能截当前网页</b>（上方「本页长截图」）。要截 Word / WPS / 微信 / 资源管理器等软件窗口，受浏览器沙箱限制网页版做不到；此前提供的<b>电脑版 exe 小程序已下线下架</b>。
     </div>
     <div class="row mb">
       <button class="btn primary" id="ls-tab-auto">📜 本页长截图</button>
@@ -10863,7 +10861,7 @@ AppTools['long-shot'] = { build(body){
     <div id="ls-p-auto">
       <div class="mb-sm" style="color:var(--text-2);font-size:12px;line-height:1.6;">
         自动截取<b>当前网页</b>的完整长图：点「开始长截图」→ 在系统弹窗里选「<b>此标签页</b>」，工具会自行滚动并逐屏拼成一张超长图（无需手动滚）。<br>
-        ⚠️ 只能截当前网页内容；要截 Word / WPS / 微信 / 资源管理器等软件窗口，请用下方电脑版 exe。
+        ⚠️ 只能截当前网页内容；截 Word / WPS / 微信等软件窗口受浏览器安全限制做不到（电脑版小程序已下架）。
       </div>
       <button class="btn primary" id="ls-auto-run">开始长截图</button>
       <div id="ls-auto-status" class="mb-sm" style="font-size:12px;color:var(--primary);line-height:1.6;margin-top:8px;"></div>
