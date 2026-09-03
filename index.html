@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.03</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.03-b</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -6838,21 +6838,28 @@ AppTools['math-formula'] = {
       css += '\n.eq-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}' +
              '\n.eq-tex{flex:1;text-align:center;}' +
              '\n.eq-num{color:#555;font-size:14px;white-space:nowrap;}' +
-             '\n#mf-preview .katex-display{margin:0;}\n';
+             '\n.katex-display{margin:0;}\n';
       _katexFontCss = css; return css;
     }
     // 把预览 HTML 包成自包含 SVG（foreignObject + 内联 KaTeX 字体）
     async function buildFormulaSvg(){
       const css = await getKatexCssWithFonts();
-      const cs = getComputedStyle(preview);
-      const w = Math.max(preview.scrollWidth, preview.clientWidth);
-      const h = Math.max(preview.scrollHeight, preview.clientHeight);
-      const html = preview.innerHTML;
+      // 离屏精确测量内容真实尺寸：用 inline-block 包裹、不受预览容器 max-width/overflow/滚动影响，
+      // 否则按预览框量出的 w/h 偏小，foreignObject 内公式被裁切（导出的 SVG/PNG 显示不全）。
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;display:inline-block;background:#fff;';
+      wrap.innerHTML = preview.innerHTML;
+      document.body.appendChild(wrap);
+      const padX = 24, padY = 16, buf = 4;
+      const cw = Math.max(1, Math.ceil(wrap.scrollWidth));
+      const ch = Math.max(1, Math.ceil(wrap.scrollHeight));
+      document.body.removeChild(wrap);
+      const w = cw + padX * 2 + buf, h = ch + padY * 2 + buf;
       const svg = '<?xml version="1.0" encoding="UTF-8"?>\n' +
         '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
         '<foreignObject x="0" y="0" width="' + w + '" height="' + h + '">' +
-        '<div xmlns="http://www.w3.org/1999/xhtml" style="background:#ffffff;padding:' + cs.padding + ';box-sizing:border-box;">' +
-        '<style>' + css + '</style>' + html + '</div></foreignObject></svg>';
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="background:#ffffff;padding:' + padY + 'px ' + padX + 'px;box-sizing:border-box;width:' + w + 'px;height:' + h + 'px;">' +
+        '<style>' + css + '</style>' + preview.innerHTML + '</div></foreignObject></svg>';
       return { svg: svg, w: w, h: h };
     }
     // ⚠️ 关键（Chromium / Edge 实测结论）：SVG 内含 <foreignObject> 时，
@@ -7707,8 +7714,8 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-09-03', items:[
-    "【数学公式排版】修复导出 PNG / SVG 报「Tainted canvases」失败，导出恢复高清自包含。",
-    "【长截图】电脑版可直接下载 exe（约 17 MB），双击即用、无需安装 Python。"
+    "【数学公式排版】修复导出 PNG / SVG 显示不全：改用离屏精确测量内容真实尺寸，不再被预览框裁切。",
+    "【长截图·电脑版】保存位置固定到「桌面\\托托长截图」并自动命名，可一键打开文件夹/图片；新增手动逐屏模式（兼容不响应滚轮的窗口）；新增桌面快捷方式与全局热键 Ctrl+Shift+S。"
   ]},
   { date:'2026-09-02', items:[
     "【长截图】电脑版新增一键打包：解压后装一次 Python，双击 build_exe.bat 即生成 exe，可自动滚动截 Word / WPS / 微信等任意窗口长图。",
@@ -10839,7 +10846,8 @@ AppTools['long-shot'] = { build(body){
       <b>要截任意软件窗口（Word / WPS / 微信 / 资源管理器）或桌面的整窗长图，请下载电脑版小程序 ↓</b>
     </div>
     <div style="margin-top:10px;background:#e6f4ff;border:1px solid #91caff;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.75;color:#0958d9;">
-      💡 浏览器网页受安全限制<b>截不到浏览器外的窗口</b>。要截电脑上<b>任意窗口</b>（Word / WPS / 微信 / 资源管理器 / 桌面）的整窗长图，请用电脑版小程序：逐屏滚动 + 重叠拼接 + 一键存 PNG，<b>下载 exe 双击即用，不用装 Python</b>。若 Windows 提示「未知发布者」，点「更多信息 → 仍要运行」即可（程序纯本地运行、不上传）。
+      💡 浏览器网页受安全限制<b>截不到浏览器外的窗口</b>。要截电脑上<b>任意窗口</b>（Word / WPS / 微信 / 资源管理器 / 桌面）的整窗长图，请用电脑版小程序：<b>下载 exe 双击即用，不用装 Python</b>。若 Windows 提示「未知发布者」，点「更多信息 → 仍要运行」即可（程序纯本地运行、不上传）。<br>
+      <b>新版功能：</b>① 自动保存到「桌面\托托长截图」并可一键打开；② <b>手动逐屏模式</b>兼容不响应滚轮的窗口；③ 可<b>创建桌面快捷方式</b>、<b>全局热键 Ctrl+Shift+S</b> 直接开始截取。
       <br><a class="btn primary" href="scroll_capture.exe" download="托托长截图.exe" style="margin-top:8px;display:inline-block;text-decoration:none;">⬇️ 下载电脑版（exe，约 17 MB，双击即用）</a>
       <br><a class="btn ghost" href="desktop-capture.zip" download style="margin-top:8px;display:inline-block;text-decoration:none;">下载源码包（可自行打包）</a>
     </div>
