@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.03-e</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.04-a</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -4849,7 +4849,9 @@ AppTools['rand-num'] = {
       } else {
         const min=+$('#rn-min',body).value, max=+$('#rn-max',body).value;
         if(min>max){ toast('最小值不能大于最大值','err'); return; }
-        const filt={ odd:x=>x%2===1, even:x=>x%2===0, prime:isPrime, comp:x=>x>1&&!isPrime(x) }[type];
+        // 原写法用对象查表，type='int' 时取到 undefined → filt 不是函数而报错；改为兜底恒真
+        const FILT={ odd:x=>x%2===1, even:x=>x%2===0, prime:isPrime, comp:x=>x>1&&!isPrime(x) };
+        const filt=FILT[type] || (()=>true);
         const pool=[]; for(let x=Math.ceil(min);x<=Math.floor(max);x++){ if(filt(x)) pool.push(x); }
         if(pool.length===0){ toast('该区间内没有符合条件的数','err'); return; }
         for(let i=0;i<n;i++) out.push(pool[Math.floor(Math.random()*pool.length)]);
@@ -7073,7 +7075,7 @@ const TOOLS = [
   {id:'salary-cmp',   name:'薪酬对比计算器',      icon:'🧮', cat:'money', desc:'对比不同城市 / 不同薪资方案的税后实际收入：按当地社平工资封顶社保基数、可选公积金比例与专项附加扣除，算个税与五险一金后输出税后月薪 / 年入，多方案并排找出到手最高者。'},
   {id:'metal-price',  name:'贵金属价格换算',      icon:'🪙', cat:'money', desc:'按实时行情估算黄金 / 白银 / 铂金 / 钯金价值：取美元/盎司（gold-api.com）+ 美元兑人民币（open.er-api.com），换算每克人民币并按成色（999/925 等）算某重量的总价，附全金属速览表。'},
   {id:'renovation',   name:'装修预算估算',        icon:'🏗️', cat:'money', desc:'按面积与档次（简 / 精 / 豪装）估算总预算及分项占比，各项占比可自定义，附条形图可视化。'},
-  {id:'tax-rate',     name:'综合税率计算器',      icon:'📊', cat:'money', desc:'覆盖增值税 / 企业所得税 / 契税 / 车辆购置税 / 印花税 / 房产税六类常见税率：增值税含一般与小规模、含税价与进销项；企业所得税含小型微利5%与高新15%；契税按首套二套面积分档；车辆购置税含新能源减半；印花税多税目且可选六税两费减半；房产税从价与从租两种，附政策说明。'},
+  {id:'tax-rate',     name:'综合税率计算器',      icon:'📊', cat:'money', desc:'覆盖增值税 / 企业所得税 / 契税 / 车辆购置税 / 印花税 / 房产税六类常见税率，另附「税率速查」页：增值税支持一般与小规模、含税 ↔ 不含税双向换算、进销项与附加税费（城建税 + 教育费附加 + 地方教育附加）；企业所得税含小型微利5%、高新 / 西部大开发 15%，并支持弥补亏损与研发费用加计扣除；契税按首套二套面积分档；车辆购置税含新能源减半；印花税多税目（含证券交易 0.1%）且可选六税两费减半；房产税从价与从租两种；各面板可一键复制结果。'},
   /* ============ 生活实用 ============ */
   {id:'cycle',        name:'经期排卵期计算',      icon:'🌸', cat:'life', desc:'按末次月经与周期推算排卵期 / 易孕期 / 下次经期，可选填年龄优化波动系数、加宽易孕窗口，支持自定义周期与经期天数（仅供参考）。'},
   {id:'wheel',        name:'决策转盘',       icon:'🎡', cat:'life',   desc:'多选项转盘随机抽选，支持权重、快速等分、旋转时长 / 圈数、历史记录与导出 PNG；配色为固定调色板。'},
@@ -7714,6 +7716,13 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
+  { date:'2026-09-04', items:[
+    "【综合税率计算器】丰富设置：增值税支持含税 / 不含税双向换算，可勾选附算附加税费（城建税 7% / 5% / 1% + 教育费附加 3% + 地方教育附加 2%）；企业所得税新增西部大开发 15%、技术先进型 15%，并支持弥补以前年度亏损与研发费用加计扣除，输出实际税负；印花税新增证券交易 0.1%（单边）。",
+    "【综合税率计算器】新增「税率速查」页：增值税 / 企业所得税 / 个税七级累进表 / 契税 / 车购税 / 房产税 / 城建税 / 印花税等常用税率一页速查；各面板新增「复制结果」。",
+    "【家用耗电电费】修复无法计算：原阶梯档位写死 3 档，阈值填超过 2 个时金额变成 NaN。现支持任意档数与自定义各档加价并输出分段明细；新增常用电器预设、电器名称、清空按钮，兼容全角逗号输入。",
+    "【随机数字生成】修复选「整数」时报错、无法生成的问题。",
+    "【缓存清理】Service Worker 升 v23，自动清除历史废弃缓存并给缓存加上限，页面加载更干净。"
+  ]},
   { date:'2026-09-03', items:[
     "【数学公式排版】修复导出 PNG / SVG 显示不全：改用离屏精确测量内容真实尺寸，不再被预览框裁切。",
     "【长截图·电脑版】保存位置固定到「桌面\\托托长截图」并自动命名，可一键打开文件夹/图片；新增手动逐屏模式（兼容不响应滚轮的窗口）；新增桌面快捷方式与全局热键 Ctrl+Shift+S。",
@@ -9047,25 +9056,72 @@ AppTools['electricity'] = {
     let hist=[]; try{ hist=JSON.parse(localStorage.getItem(HK)||'[]'); }catch(_){}
     let lastResult=null;
     body.innerHTML=`
-      <div class="row mb"><div><label class="field-label">电价(元/kWh)</label><input type="number" step="0.01" class="inp" id="el-price" value="0.56"></div>
-        <div><label class="field-label">阶梯(可选：月阈值,如 200,400)</label><input type="text" class="inp" id="el-tier" placeholder="留空不启用"></div></div>
-      <div class="card-soft mb"><label class="field-label">添加电器（功率W, 每日小时, 数量）</label>
-        <div class="row"><input type="number" class="inp" id="el-pw" placeholder="功率W" value="100"><input type="number" step="0.1" class="inp" id="el-h" placeholder="小时/天" value="4"><input type="number" class="inp" id="el-n" placeholder="数量" value="1"><button class="btn" id="el-add">添加</button></div>
+      <div class="row mb"><div><label class="field-label">基础电价(元/kWh)</label><input type="number" step="0.01" class="inp" id="el-price" value="0.56"></div>
+        <div><label class="field-label">阶梯阈值(月kWh,逗号分隔)</label><input type="text" class="inp" id="el-tier" placeholder="留空不启用，如 200,400"></div></div>
+      <div class="row mb" id="el-stepwrap" style="display:none"><div style="flex:2"><label class="field-label">各档加价(元/kWh,逗号分隔)</label><input type="text" class="inp" id="el-step" placeholder="留空默认 0,0.05,0.3"></div></div>
+      <div class="card-soft mb"><label class="field-label">添加电器（名称选填 · 功率W · 每日小时 · 数量）</label>
+        <div class="row"><input type="text" class="inp" id="el-name" placeholder="名称(选填)"><input type="number" class="inp" id="el-pw" placeholder="功率W" value="100"><input type="number" step="0.1" class="inp" id="el-h" placeholder="小时/天" value="4"><input type="number" class="inp" id="el-n" placeholder="数量" value="1"><button class="btn" id="el-add">添加</button></div>
+        <div class="wrap-tags mt" id="el-presets"></div>
         <div id="el-list" class="wrap-tags"></div></div>
-      <div class="btn-row"><button class="btn" id="el-run">计算</button><button class="btn ghost" id="el-save" disabled>保存到历史</button></div>
+      <div class="btn-row"><button class="btn" id="el-run">计算</button><button class="btn ghost" id="el-clear">清空电器</button><button class="btn ghost" id="el-save" disabled>保存到历史</button></div>
       <div id="el-out" class="result-box">结果将显示在此</div>
       <div class="card-soft mt" id="el-histbox" style="display:none">
         <div class="row" style="justify-content:space-between;align-items:center"><b>📋 历史记录（本地保存，可比较前后变化）</b><button class="btn-mini danger" id="el-histclear">清空</button></div>
         <div id="el-hist" class="hint" style="margin-top:6px"></div></div>`;
     const items=[];
-    const renderList=()=>{ $('#el-list',body).innerHTML=items.map((it,i)=>`<span class="mini-tag">${it.pw}W×${it.h}h×${it.n} <a data-del="${i}" style="cursor:pointer">✕</a></span>`).join(''); $('#el-list',body).querySelectorAll('[data-del]').forEach(a=>a.onclick=()=>{items.splice(+a.dataset.del,1);renderList();}); };
+    const PRESETS=[['空调',1500,8],['冰箱',150,24],['电视',120,4],['洗衣机',500,1],['电热水器',2000,2],['照明',60,6],['电脑',200,8],['电饭煲',800,1]];
+    const renderList=()=>{ $('#el-list',body).innerHTML=items.map((it,i)=>`<span class="mini-tag">${escapeHtml(it.name||'电器')} ${it.pw}W×${it.h}h×${it.n} <a data-del="${i}" style="cursor:pointer">✕</a></span>`).join(''); $('#el-list',body).querySelectorAll('[data-del]').forEach(a=>a.onclick=()=>{items.splice(+a.dataset.del,1);renderList();}); };
     function renderHist(){
       const box=$('#el-histbox',body); if(!hist.length){ box.style.display='none'; return; }
       box.style.display=''; $('#el-hist',body).innerHTML=hist.map((it,i)=>`<div class="mini-tag" style="cursor:pointer;background:var(--bg);border:1px solid var(--border)"><b>${escapeHtml(it.label)}</b> · 月¥${it.cost.toFixed(2)}/年¥${it.yearCost.toFixed(2)} <span class="hint">${new Date(it.t).toLocaleString()}</span> <span data-hi="${i}" style="color:var(--error);font-weight:700">✕</span></div>`).join(' ');
       $('#el-hist',body).querySelectorAll('[data-hi]').forEach(b=>b.onclick=()=>{ hist.splice(+b.dataset.hi,1); try{ localStorage.setItem(HK,JSON.stringify(hist)); }catch(_){} renderHist(); });
     }
-    $('#el-add',body).onclick=()=>{ const pw=+$('#el-pw',body).value,h=+$('#el-h',body).value,n=+$('#el-n',body).value||1; if(pw>0&&h>0){items.push({pw,h,n});renderList();} };
-    $('#el-run',body).onclick=()=>{ const price=+$('#el-price',body).value, tier=$('#el-tier',body).value.trim(); let kwhDay=0; items.forEach(it=>kwhDay+=it.pw/1000*it.h*it.n); const kwhMonth=kwhDay*30; let cost; if(tier){ const ts=tier.split(',').map(Number); let rem=kwhMonth,c=0,prev=0; const rates=[price,price*1.1,price*1.3]; for(let i=0;i<ts.length;i++){ const seg=Math.min(rem,ts[i]-prev); if(seg>0){c+=seg*rates[i];rem-=seg;} prev=ts[i]; } if(rem>0)c+=rem*rates[ts.length]; cost=c; } else cost=kwhMonth*price; lastResult={label:`${items.length}件电器 · ¥${price}/kWh${tier?' 阶梯':''}`, kwhMonth, cost, yearCost:cost*12}; $('#el-save',body).disabled=false; $('#el-out',body).innerHTML=`<div class="big-num">月耗电 ${kwhMonth.toFixed(1)} kWh</div><div class="row3"><div><b>日耗电</b><br>${kwhDay.toFixed(2)} kWh</div><div><b>月电费</b><br>¥${cost.toFixed(2)}</div><div><b>年电费</b><br>¥${(cost*12).toFixed(2)}</div></div>`; };
+    // 原阶梯逻辑档数写死 3 档，阈值超过 2 个时 rates[ts.length] 为 undefined → 金额变 NaN，导致「无法计算」
+    function parseNums(s, allowZero){ return (s||'').split(/[,，、\s]+/).map(x=>parseFloat(x)).filter(x=>!isNaN(x)&&(allowZero?x>=0:x>0)); }
+    function calcBill(kwh, price, ts, steps){
+      const n=ts.length+1, add=[];
+      for(let i=0;i<n;i++) add.push(steps[i]!=null?steps[i]:(i===0?0:(i===1?0.05:0.30)));
+      const rates=add.map(a=>price+a);
+      const rows=[]; let prev=0, rem=kwh, cost=0;
+      for(let i=0;i<ts.length;i++){
+        const seg=Math.max(0,Math.min(rem,ts[i]-prev)), c=seg*rates[i];
+        cost+=c; rows.push({from:prev,to:ts[i],seg,rate:rates[i],cost:c}); rem-=seg; prev=ts[i];
+      }
+      const seg2=Math.max(0,rem), c2=seg2*rates[ts.length];
+      cost+=c2; rows.push({from:prev,to:null,seg:seg2,rate:rates[ts.length],cost:c2});
+      return {cost, rows, rates};
+    }
+    $('#el-presets',body).innerHTML=PRESETS.map((p,i)=>`<span class="mini-tag" data-p="${i}" style="cursor:pointer">${p[0]} ${p[1]}W</span>`).join(' ');
+    $('#el-presets',body).querySelectorAll('[data-p]').forEach(s=>s.onclick=()=>{ const p=PRESETS[+s.dataset.p]; $('#el-name',body).value=p[0]; $('#el-pw',body).value=p[1]; $('#el-h',body).value=p[2]; });
+    $('#el-tier',body).oninput=()=>{ $('#el-stepwrap',body).style.display = $('#el-tier',body).value.trim() ? '' : 'none'; };
+    $('#el-add',body).onclick=()=>{ const pw=+$('#el-pw',body).value,h=+$('#el-h',body).value,nn=+$('#el-n',body).value||1,name=$('#el-name',body).value.trim(); if(pw>0&&h>0){items.push({name:name||'电器',pw,h,n:nn});renderList();} else toast('请填写有效功率与每日小时数','err'); };
+    $('#el-clear',body).onclick=()=>{ if(!items.length){toast('电器列表已为空');return;} items.length=0; renderList(); lastResult=null; $('#el-save',body).disabled=true; $('#el-out',body).innerHTML='结果将显示在此'; };
+    $('#el-run',body).onclick=()=>{
+      const price=parseFloat($('#el-price',body).value);
+      if(!(price>0)){ toast('请输入有效电价','err'); return; }
+      if(!items.length){ toast('请先添加至少一个电器','err'); return; }
+      const ts=parseNums($('#el-tier',body).value).sort((a,b)=>a-b);
+      const steps=parseNums($('#el-step',body).value,true);
+      let kwhDay=0; const detail=[];
+      items.forEach(it=>{ const k=it.pw/1000*it.h*it.n; kwhDay+=k; detail.push({name:it.name||'电器',kwh:k}); });
+      const kwhMonth=kwhDay*30;
+      let cost, rows=null;
+      if(ts.length){ const r=calcBill(kwhMonth,price,ts,steps); cost=r.cost; rows=r.rows; }
+      else cost=kwhMonth*price;
+      const yearCost=cost*12;
+      lastResult={label:`${items.length}件电器 · ¥${price}/kWh${ts.length?' 阶梯':''}`, kwhMonth, cost, yearCost};
+      $('#el-save',body).disabled=false;
+      let html=`<div class="big-num">月耗电 ${kwhMonth.toFixed(1)} kWh</div><div class="row3"><div><b>日耗电</b><br>${kwhDay.toFixed(2)} kWh</div><div><b>月电费</b><br>¥${cost.toFixed(2)}</div><div><b>年电费</b><br>¥${yearCost.toFixed(2)}</div></div>`;
+      if(rows){
+        html+=`<div style="margin-top:10px"><b>阶梯分段明细（月）</b></div><div style="overflow:auto;max-height:200px;margin-top:6px"><table class="tbl-prev"><thead><tr><th>档位</th><th>区间(kWh)</th><th>用量</th><th>单价</th><th>金额</th></tr></thead><tbody>`;
+        rows.forEach((r,i)=>{ const rng = r.to==null ? ('>'+r.from) : (r.from+'~'+r.to); html+=`<tr><td>第${i+1}档</td><td>${rng}</td><td>${r.seg.toFixed(1)}</td><td>¥${r.rate.toFixed(4)}</td><td>¥${r.cost.toFixed(2)}</td></tr>`; });
+        html+=`</tbody></table></div>`;
+      }
+      html+=`<div style="margin-top:8px"><b>电器耗电明细（每日）</b></div><div style="margin-top:4px;font-size:12.5px;line-height:1.8">`;
+      detail.forEach(d=>{ html+=`${escapeHtml(d.name)}：${d.kwh.toFixed(2)} kWh/日 · ${(d.kwh*30).toFixed(1)} kWh/月<br>`; });
+      html+=`</div><div class="hint">按每月 30 天估算，年电费 = 月电费 × 12；${ts.length?'阶梯按「基础电价 + 各档加价」计算（默认 0 / +0.05 / +0.30 元）。':'未启用阶梯，按单一电价计算。'}</div>`;
+      $('#el-out',body).innerHTML=html;
+    };
     $('#el-save',body).onclick=()=>{ if(!lastResult) return; hist.unshift(lastResult); if(hist.length>50)hist=hist.slice(0,50); try{ localStorage.setItem(HK,JSON.stringify(hist)); }catch(_){} renderHist(); toast('已保存本次记录'); };
     $('#el-histclear',body).onclick=()=>{ if(!hist.length){toast('暂无历史');return;} if(!confirm('确认清空全部历史记录？'))return; hist=[]; try{ localStorage.removeItem(HK); }catch(_){} renderHist(); };
     renderHist();
@@ -11541,6 +11597,7 @@ AppTools['tax-rate'] = {
         <span data-t="car"  class="tr-tab" style="cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;border:1px solid #e3e8ef;background:#f5f7fa;color:#555">车辆购置税</span>
         <span data-t="stamp"class="tr-tab" style="cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;border:1px solid #e3e8ef;background:#f5f7fa;color:#555">印花税</span>
         <span data-t="prop" class="tr-tab" style="cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;border:1px solid #e3e8ef;background:#f5f7fa;color:#555">房产税</span>
+        <span data-t="ref"  class="tr-tab" style="cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;border:1px solid #e3e8ef;background:#f5f7fa;color:#555">税率速查</span>
       </div>
 
       <div class="tr-p" data-p="vat">
@@ -11550,22 +11607,30 @@ AppTools['tax-rate'] = {
           <div id="vat-smallrate-wrap" style="display:none"><label class="field-label">征收率</label><select class="sel" id="vat-srate"><option value="0.01">1%（2023-2027 优惠）</option><option value="0.03">3%（法定）</option></select></div>
         </div>
         <div class="row mb">
-          <div><label class="field-label">含税销售额(元)</label><input type="number" class="inp" id="vat-inc" value="11300"></div>
-          <div id="vat-input-wrap"><label class="field-label">进项税额(不含税额,元)</label><input type="number" class="inp" id="vat-in" value="0"></div>
+          <div><label class="field-label">换算方向</label><select class="sel" id="vat-dir"><option value="i2e">含税金额 → 不含税</option><option value="e2i">不含税金额 → 含税</option></select></div>
+          <div><label class="field-label">金额(元)</label><input type="number" class="inp" id="vat-inc" value="11300"></div>
+          <div id="vat-input-wrap"><label class="field-label">进项税额(元)</label><input type="number" class="inp" id="vat-in" value="0"></div>
         </div>
-        <button class="btn" id="vat-run">计算</button>
+        <div class="row mb"><label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="vat-sur"> 附算附加税费（城建税 + 教育费附加 + 地方教育附加）</label>
+          <div id="vat-citywrap" style="display:none"><label class="field-label">城建税地区</label><select class="sel" id="vat-city"><option value="0.07">市区 7%</option><option value="0.05">县镇 5%</option><option value="0.01">其他 1%</option></select></div></div>
+        <div class="btn-row"><button class="btn" id="vat-run">计算</button><button class="btn ghost" id="vat-copy">复制结果</button></div>
         <div id="vat-result"></div>
-        <div class="hint">一般纳税人：不含税销售额 = 含税 ÷(1+税率)，应纳税额 = 销项 − 进项；进项大于销项可留抵下期。小规模纳税人：不含税销售额 = 含税 ÷(1+征收率)，应纳税额 = 不含税 × 征收率；月销售额≤10万元免征（2023-2027）。</div>
+        <div class="hint">一般纳税人：不含税 = 含税 ÷(1+税率)，应纳税额 = 销项 − 进项；进项大于销项可留抵下期。小规模纳税人：应纳税额 = 不含税 × 征收率；月销售额 ≤10 万元（季度 ≤30 万元）免征（2023-2027）。附加税费以<b>实缴增值税</b>为计税依据。</div>
       </div>
 
       <div class="tr-p" data-p="corp" style="display:none">
         <div class="row mb">
-          <div><label class="field-label">企业类型</label><select class="sel" id="co-type"><option value="normal">一般企业（25%）</option><option value="small">小型微利企业（实际5%）</option><option value="high">高新技术企业（15%）</option></select></div>
-          <div><label class="field-label">应纳税所得额(元)</label><input type="number" class="inp" id="co-tax" value="1000000"></div>
+          <div><label class="field-label">企业类型</label><select class="sel" id="co-type"><option value="normal">一般企业（25%）</option><option value="small">小型微利企业（实际5%）</option><option value="high">高新技术企业（15%）</option><option value="west">西部大开发鼓励类（15%）</option><option value="tech">技术先进型服务企业（15%）</option></select></div>
+          <div><label class="field-label">会计利润总额(元)</label><input type="number" class="inp" id="co-profit" value="1000000"></div>
         </div>
-        <button class="btn" id="co-run">计算</button>
+        <div class="row mb">
+          <div><label class="field-label">弥补以前年度亏损(元)</label><input type="number" class="inp" id="co-loss" value="0"></div>
+          <div><label class="field-label">研发费用(元,可加计扣除)</label><input type="number" class="inp" id="co-rd" value="0"></div>
+          <div><label class="field-label">研发加计比例(%)</label><input type="number" class="inp" id="co-rdrate" value="100"></div>
+        </div>
+        <div class="btn-row"><button class="btn" id="co-run">计算</button><button class="btn ghost" id="co-copy">复制结果</button></div>
         <div id="co-result"></div>
-        <div class="hint">小型微利企业（2023.1.1-2027.12.31）：年应纳税所得额≤300万元的部分，减按25%计入、按20%税率，实际税负5%；超过300万元部分全额按25%（不再享受优惠）。高新技术企业指经认定的国家需要重点扶持的高新技术企业，减按15%。</div>
+        <div class="hint">应纳税所得额 = 会计利润 − 弥补以前年度亏损 − 研发费用 × 加计比例（一般按 100% 加计扣除）。小型微利企业（2023-2027）：年应纳税所得额 ≤300 万元部分减按 25% 计入、按 20% 税率，实际税负 5%；超过 300 万元则全额按 25%。高企 / 西部大开发鼓励类产业等减按 15%。小型微利还需同时满足从业人数 ≤300 人、资产总额 ≤5000 万元等条件。</div>
       </div>
 
       <div class="tr-p" data-p="deed" style="display:none">
@@ -11575,7 +11640,7 @@ AppTools['tax-rate'] = {
           <div><label class="field-label">成交价/不含增值税价款(元)</label><input type="number" class="inp" id="de-price" value="1000000"></div>
         </div>
         <div class="row mb" id="de-provwrap" style="display:none"><div><label class="field-label">省级法定税率(%)</label><input type="number" class="inp" id="de-prov" value="3" step="0.5" min="1" max="5"></div></div>
-        <button class="btn" id="de-run">计算</button>
+        <div class="btn-row"><button class="btn" id="de-run">计算</button><button class="btn ghost" id="de-copy">复制结果</button></div>
         <div id="de-result"></div>
         <div class="hint">优惠税率（财税〔2016〕23号）：首套≤90㎡按1%、>90㎡按1.5%；二套≤90㎡按1%、>90㎡按2%；三套及以上按各省法定税率（3%-5%）。计税依据为不含增值税的成交价格。</div>
       </div>
@@ -11585,7 +11650,7 @@ AppTools['tax-rate'] = {
           <div><label class="field-label">车辆类型</label><select class="sel" id="ca-type"><option value="fuel">燃油车</option><option value="nev">新能源乘用车</option></select></div>
           <div><label class="field-label">计税价格(不含增值税购车价,元)</label><input type="number" class="inp" id="ca-price" value="100000"></div>
         </div>
-        <button class="btn" id="ca-run">计算</button>
+        <div class="btn-row"><button class="btn" id="ca-run">计算</button><button class="btn ghost" id="ca-copy">复制结果</button></div>
         <div id="ca-result"></div>
         <div class="hint">车辆购置税法定税率10%，计税价格 = 不含增值税的购车价款 + 价外费用。新能源乘用车：2024-2025年免征，2026-2027年减半征收（每辆减税额上限1.5万元）。</div>
       </div>
@@ -11604,6 +11669,7 @@ AppTools['tax-rate'] = {
           <option value="0.0003">技术合同（0.03%）</option>
           <option value="0.0005">产权转移书据（0.05%）</option>
           <option value="0.00025">营业账簿·资金（0.025%）</option>
+          <option value="sec">证券交易（0.1%，单边由出让方缴纳）</option>
           <option value="fixed">权利许可证照（5元/件）</option>
         </select></div></div>
         <div class="row mb">
@@ -11611,9 +11677,9 @@ AppTools['tax-rate'] = {
           <div id="st-cntwrap" style="display:none"><label class="field-label">件数</label><input type="number" class="inp" id="st-cnt" value="1" min="1"></div>
         </div>
         <div class="row mb"><label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="st-half"> 小规模纳税人/小型微利/个体户（六税两费减半）</label></div>
-        <button class="btn" id="st-run">计算</button>
+        <div class="btn-row"><button class="btn" id="st-run">计算</button><button class="btn ghost" id="st-copy">复制结果</button></div>
         <div id="st-result"></div>
-        <div class="hint">六税两费减半（2022-2027）：增值税小规模纳税人、小型微利企业和个体工商户可在50%幅度内减征印花税（不含证券交易）等。营业账簿资金账簿已按0.025%（原0.05%减半）。</div>
+        <div class="hint">六税两费减半（2022-2027）：增值税小规模纳税人、小型微利企业和个体工商户可在50%幅度内减征印花税（<b>不含证券交易印花税</b>）。营业账簿资金账簿已按0.025%（原0.05%减半）。</div>
       </div>
 
       <div class="tr-p" data-p="prop" style="display:none">
@@ -11624,14 +11690,47 @@ AppTools['tax-rate'] = {
           <div id="pr-rentwrap" style="display:none"><label class="field-label">年租金收入(元)</label><input type="number" class="inp" id="pr-rent" value="50000"></div>
         </div>
         <div class="row mb" id="pr-homewrap" style="display:none"><label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="pr-home"> 个人出租住房（优惠4%）</label></div>
-        <button class="btn" id="pr-run">计算</button>
+        <div class="btn-row"><button class="btn" id="pr-run">计算</button><button class="btn ghost" id="pr-copy">复制结果</button></div>
         <div id="pr-result"></div>
         <div class="hint">从价：年税 = 房产原值 ×(1−减除比例10%-30%)×1.2%；从租：年税 = 租金收入 ×12%，个人出租住房减按4%。按年计算。</div>
+      </div>
+
+      <div class="tr-p" data-p="ref" style="display:none">
+        <div class="card-soft mb"><b>增值税</b>
+          <div style="font-size:12.5px;line-height:1.9;margin-top:4px">一般纳税人：13%（销售货物 / 加工修理修配 / 有形动产租赁）、9%（交通运输 / 邮政 / 基础电信 / 建筑 / 不动产租赁 / 销售不动产 / 农产品等）、6%（增值电信 / 金融 / 现代服务 / 生活服务）、0%（出口货物等）<br>小规模纳税人：征收率 3%，2023-2027 减按 1%；月销售额 ≤10 万元（季度 ≤30 万元）免征</div></div>
+        <div class="card-soft mb"><b>企业所得税</b>
+          <div style="font-size:12.5px;line-height:1.9;margin-top:4px">基本税率 25%；高新技术企业 / 西部大开发鼓励类产业 15%；小型微利企业（2023-2027）年应纳税所得额 ≤300 万元部分实际税负 5%</div></div>
+        <div class="card-soft mb"><b>个人所得税（综合所得 · 年度税率表）</b>
+          <div style="overflow:auto;margin-top:6px"><table class="tbl-prev"><thead><tr><th>级数</th><th>全年应纳税所得额(元)</th><th>税率</th><th>速算扣除数</th></tr></thead><tbody>
+          <tr><td>1</td><td>≤ 36,000</td><td>3%</td><td>0</td></tr>
+          <tr><td>2</td><td>36,000 – 144,000</td><td>10%</td><td>2,520</td></tr>
+          <tr><td>3</td><td>144,000 – 300,000</td><td>20%</td><td>16,920</td></tr>
+          <tr><td>4</td><td>300,000 – 420,000</td><td>25%</td><td>31,920</td></tr>
+          <tr><td>5</td><td>420,000 – 660,000</td><td>30%</td><td>52,920</td></tr>
+          <tr><td>6</td><td>660,000 – 960,000</td><td>35%</td><td>85,920</td></tr>
+          <tr><td>7</td><td>&gt; 960,000</td><td>45%</td><td>181,920</td></tr>
+          </tbody></table></div>
+          <div class="hint">应纳税所得额 = 年收入 − 6 万元基本减除 − 专项扣除（三险一金等）− 专项附加扣除 − 依法确定的其他扣除。</div></div>
+        <div class="card-soft mb"><b>其他常见税（费）率</b>
+          <div style="font-size:12.5px;line-height:1.9;margin-top:4px">契税：首套 ≤90㎡ 1% / &gt;90㎡ 1.5%；二套 ≤90㎡ 1% / &gt;90㎡ 2%；三套及以上按各省 3%–5%<br>车辆购置税：10%（新能源乘用车 2026-2027 减半，减税额封顶 1.5 万元）<br>房产税：从价 1.2%（减除 10%–30%）；从租 12%，个人出租住房 4%<br>城市维护建设税：市区 7% / 县镇 5% / 其他 1%（以实缴增值税、消费税为计税依据）<br>教育费附加 3%、地方教育附加 2%<br>印花税：购销合同 0.03%、借款 0.005%、产权转移书据 0.05%、营业账簿（资金）0.025%、权利许可证照 5 元/件</div></div>
+        <div class="hint">以上为常用政策口径摘要，具体适用以最新法规与主管税务机关认定为准。</div>
       </div>
     `;
     const num = (id) => { const v = parseFloat($('#'+id, body).value); return isNaN(v) ? 0 : v; };
     const fmt = (x) => x.toLocaleString('zh-CN', { maximumFractionDigits:2 });
-    function pct(x){ const v = x*100; return (v % 1 === 0) ? v.toFixed(0) : v.toFixed(2); }
+    // 先做精度收敛，否则 0.07*100=7.000000000000001 会显示成 7.00%
+    function pct(x){ const v = Math.round(x*100*100)/100; return (Math.abs(v % 1) < 1e-9) ? String(Math.round(v)) : v.toFixed(2); }
+    // 通用「复制结果」：读取各面板结果区纯文本（契税/车购/印花/房产共用）
+    function bindCopy(btn, res){
+      const b = $('#'+btn, body);
+      if(b) b.onclick = () => {
+        const r = $('#'+res, body);
+        const t = r ? r.innerText.trim() : '';
+        if(!t){ toast('请先点「计算」','err'); return; }
+        copyText(t); toast('结果已复制');
+      };
+    }
+    bindCopy('de-copy','de-result'); bindCopy('ca-copy','ca-result'); bindCopy('st-copy','st-result'); bindCopy('pr-copy','pr-result');
 
     const tabs = [...body.querySelectorAll('#tr-tabs .tr-tab')];
     tabs.forEach(t => t.onclick = () => {
@@ -11647,35 +11746,67 @@ AppTools['tax-rate'] = {
       $('#vat-smallrate-wrap', body).style.display = t==='small' ? '' : 'none';
       $('#vat-input-wrap', body).style.display = t==='gen' ? '' : 'none';
     };
+    $('#vat-sur', body).onchange = () => { $('#vat-citywrap', body).style.display = $('#vat-sur', body).checked ? '' : 'none'; };
+    let vatText='';
     $('#vat-run', body).onclick = () => {
       const t = $('#vat-type', body).value;
-      const inc = num('vat-inc');
+      const r = t==='gen' ? parseFloat($('#vat-rate', body).value) : parseFloat($('#vat-srate', body).value);
+      const dir = $('#vat-dir', body).value;
+      const amt = num('vat-inc');
+      const gross = dir==='i2e' ? amt : amt*(1+r);
+      const sales = dir==='i2e' ? amt/(1+r) : amt;
+      let out, inn=0, tax, pay;
+      if(t === 'gen'){ inn = num('vat-in'); out = sales*r; tax = out - inn; pay = tax > 0 ? tax : 0; }
+      else { out = sales*r; tax = out; pay = out; }
+      const L=[];
+      L.push('不含税金额：¥'+fmt(sales)); L.push('含税金额：¥'+fmt(gross));
       if(t === 'gen'){
-        const r = parseFloat($('#vat-rate', body).value);
-        const inn = num('vat-in');
-        const sales = inc / (1 + r);
-        const out = sales * r;
-        const tax = out - inn;
-        const pay = tax > 0 ? tax : 0;
-        $('#vat-result', body).innerHTML = `<div class="result-box">不含税销售额：¥${fmt(sales)}<br>销项税额：¥${fmt(out)}<br>进项税额：¥${fmt(inn)}<br>应纳税额：¥${fmt(tax)}${tax<0?'（进项大于销项，可留抵下期）':''}<br>本期实缴：¥${fmt(pay)}</div>`;
-      } else {
-        const r = parseFloat($('#vat-srate', body).value);
-        const sales = inc / (1 + r);
-        const tax = sales * r;
-        $('#vat-result', body).innerHTML = `<div class="result-box">不含税销售额：¥${fmt(sales)}<br>应纳税额（征收率 ${pct(r)}%）：¥${fmt(tax)}<br><span class="hint">小规模纳税人月销售额≤10万元免征（2023-2027）。</span></div>`;
+        L.push('销项税额：¥'+fmt(out)); L.push('进项税额：¥'+fmt(inn));
+        L.push('应纳税额：¥'+fmt(tax)+(tax<0?'（进项大于销项，可留抵下期）':''));
+        L.push('本期实缴增值税：¥'+fmt(pay));
+      } else L.push('应纳增值税（征收率 '+pct(r)+'%）：¥'+fmt(out));
+      if($('#vat-sur', body).checked && pay > 0){
+        const cr = parseFloat($('#vat-city', body).value);
+        const cs = pay*cr, edu = pay*0.03, ledu = pay*0.02, st = cs+edu+ledu;
+        L.push('');
+        L.push('附加税费（以实缴增值税 ¥'+fmt(pay)+' 为基数）');
+        L.push('城市维护建设税 '+pct(cr)+'%：¥'+fmt(cs));
+        L.push('教育费附加 3%：¥'+fmt(edu));
+        L.push('地方教育附加 2%：¥'+fmt(ledu));
+        L.push('附加税费合计：¥'+fmt(st));
+        L.push('增值税 + 附加合计：¥'+fmt(pay+st));
       }
+      vatText = L.join('\n');
+      let html = '<div class="result-box">' + L.map(s=>s?escapeHtml(s):'').join('<br>') + '</div>';
+      if(t === 'small') html += '<div class="hint">小规模纳税人月销售额 ≤10 万元（季度 ≤30 万元）免征增值税（2023-2027）。</div>';
+      $('#vat-result', body).innerHTML = html;
     };
+    $('#vat-copy', body).onclick = () => { if(!vatText){ toast('请先点「计算」','err'); return; } copyText(vatText); toast('结果已复制'); };
 
+    let coText='';
     $('#co-run', body).onclick = () => {
       const t = $('#co-type', body).value;
-      const x = num('co-tax');
+      const profit = num('co-profit'), loss = num('co-loss'), rd = num('co-rd'), rdr = num('co-rdrate');
+      const ded = rd * (rdr/100);
+      const x = Math.max(0, profit - loss - ded);
       let tax, rate;
       if(t === 'normal'){ tax = x * 0.25; rate = 0.25; }
-      else if(t === 'high'){ tax = x * 0.15; rate = 0.15; }
+      else if(t === 'high' || t === 'west' || t === 'tech'){ tax = x * 0.15; rate = 0.15; }
       else { if(x <= 3000000){ tax = x * 0.05; rate = 0.05; } else { tax = x * 0.25; rate = 0.25; } }
       const note = (t === 'small' && x > 3000000) ? '（超过300万部分不享受优惠，全额25%）' : '';
-      $('#co-result', body).innerHTML = `<div class="result-box">应纳企业所得税：¥${fmt(tax)}<br>适用税率/实际税负：${pct(rate)}%${note}</div>`;
+      const eff = profit > 0 ? (tax/profit*100) : 0;
+      const L=[];
+      L.push('会计利润总额：¥'+fmt(profit));
+      L.push('弥补以前年度亏损：¥'+fmt(loss));
+      L.push('研发费用加计扣除：¥'+fmt(ded)+'（'+fmt(rd)+' × '+rdr+'%）');
+      L.push('应纳税所得额：¥'+fmt(x));
+      L.push('适用税率：'+pct(rate)+'%'+note);
+      L.push('应纳企业所得税：¥'+fmt(tax));
+      L.push('实际税负（占会计利润）：'+eff.toFixed(2)+'%');
+      coText = L.join('\n');
+      $('#co-result', body).innerHTML = '<div class="result-box">'+L.map(s=>escapeHtml(s)).join('<br>')+'</div>';
     };
+    $('#co-copy', body).onclick = () => { if(!coText){ toast('请先点「计算」','err'); return; } copyText(coText); toast('结果已复制'); };
 
     $('#de-type', body).onchange = () => { $('#de-provwrap', body).style.display = $('#de-type', body).value === 'third' ? '' : 'none'; };
     $('#de-run', body).onclick = () => {
@@ -11707,9 +11838,10 @@ AppTools['tax-rate'] = {
       const half = $('#st-half', body).checked;
       let tax;
       if(item === 'fixed'){ const cnt = Math.max(1, parseInt($('#st-cnt', body).value || '1')); tax = 5 * cnt; }
+      else if(item === 'sec'){ tax = amt * 0.001; }
       else { const r = parseFloat(item); tax = amt * r; if(half) tax *= 0.5; }
       const label = sel.selectedOptions[0].text;
-      const hn = (half && item !== 'fixed') ? '（已按六税两费减半）' : '';
+      const hn = (half && item !== 'fixed' && item !== 'sec') ? '（已按六税两费减半）' : '';
       $('#st-result', body).innerHTML = `<div class="result-box">税目：${label}<br>应纳印花税：¥${fmt(tax)}${hn}</div>`;
     };
 
