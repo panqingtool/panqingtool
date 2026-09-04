@@ -19,11 +19,16 @@
  * v19 关键变更（2026-08-24-g）：① 新增 Web Share Target——拦截 POST /_share，把分享进来的文件存入 IndexedDB 后 303 回首页，
  *      页面读取后注入目标工具，彻底解决 standalone PWA 下「选择 / 添加文件按钮无反应」；② 删除 imgly 模型路由（证件照换背景已下架）。
  *
+ * v23 清理（2026-09-04）：升版强制失效并删除所有旧缓存（app-shell-v22 / runtime-v22 等历史缓存壳），
+ *      同时给同源 runtime 缓存加上限清理，避免长期累积旧文件占用空间。
+ *      导航策略、跨域 CDN 纯透传等核心逻辑保持不变。
+ *
  * activate 阶段自动删除所有「不含当前 VERSION」的旧缓存 → 旧缓存（含坏缓存壳）被自动清理。
  */
-const VERSION = 'v22';
+const VERSION = 'v23';
 const SHELL_CACHE = 'app-shell-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
+const RUNTIME_MAX = 60; // 同源 runtime 缓存条目上限，超出按最旧淘汰
 
 const APP_SHELL = [
   './',
@@ -137,10 +142,18 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    // 删除所有不含当前 VERSION 的旧缓存（含 v17 及更早的坏缓存壳 / 跨域坏缓存）
+    // 删除所有不含当前 VERSION 的旧缓存（含 v22 及更早的坏缓存壳 / 跨域坏缓存）
     await Promise.all(
       keys.filter((k) => !k.includes(VERSION)).map((k) => caches.delete(k))
     );
+    // 同源 runtime 缓存条目上限清理：超出则淘汰最早写入的条目，避免长期累积占用空间
+    try {
+      const rc = await caches.open(RUNTIME_CACHE);
+      const reqs = await rc.keys();
+      if (reqs.length > RUNTIME_MAX) {
+        await Promise.all(reqs.slice(0, reqs.length - RUNTIME_MAX).map((r) => rc.delete(r)));
+      }
+    } catch (_) { /* 清理失败不影响主流程 */ }
     await self.clients.claim();
   })());
 });
