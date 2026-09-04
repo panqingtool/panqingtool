@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.04-b</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.04-c</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -2979,6 +2979,7 @@ AppTools['pdf-merge'] = {
       <div class="mb"><label class="field-label">选择多个 PDF（按列表顺序合并；可多次添加）</label>
         <input type="file" class="vis-file-btn" id="pm-file" accept="application/pdf" multiple aria-label="选择PDF">
       <div id="pm-list" class="fq-list"></div>
+      <div class="mb"><label class="field-label">输出文件名</label><input type="text" class="inp" id="pm-name" value="merged.pdf" aria-label="输出文件名"></div>
       <button class="btn" id="pm-run" disabled>合并 PDF</button>
       <div id="pm-result"></div>`;
     const q = mountFileQueue({ body, inputId:'pm-file', addId:'pm-add', listId:'pm-list', kind:'file', onChange:(items)=>{ $('#pm-run', body).disabled = items.length < 1; } });
@@ -3000,7 +3001,7 @@ AppTools['pdf-merge'] = {
         const blob = new Blob([out], {type:'application/pdf'});
         $('#pm-result', body).innerHTML = `<div class="result-box">合并完成，共 ${merged.getPageCount()} 页</div>
           <div class="btn-row"><button class="btn" id="pm-down2">下载合并PDF</button></div>`;
-        $('#pm-down2', body).onclick = () => downloadBlob(blob, 'merged.pdf');
+        $('#pm-down2', body).onclick = () => { const nm = ($('#pm-name', body).value.trim() || 'merged.pdf'); downloadBlob(blob, nm.toLowerCase().endsWith('.pdf') ? nm : nm + '.pdf'); };
       }catch(err){ $('#pm-result', body).innerHTML = '<div class="result-box err">合并失败：'+escapeHtml(errMsg(err))+'</div>'; }
       btn.disabled = false; btn.textContent = '合并 PDF';
     };
@@ -3032,22 +3033,53 @@ AppTools['pdf-split'] = {
     body.innerHTML = `
       <div class="mb"><label class="field-label">选择 PDF</label>
         <input type="file" class="inp" id="ps-file" accept="application/pdf" aria-label="选择PDF"></div>
-      <div class="mb"><label class="field-label">提取页码（多种写法）</label>
+      <div class="mb"><label class="field-label">拆分模式</label>
+        <select class="sel" id="ps-mode" aria-label="拆分模式">
+          <option value="extract" selected>提取选中页（合成一个 PDF）</option>
+          <option value="each">按每 N 页拆分（每 N 页一个文件，打包 ZIP）</option>
+        </select></div>
+      <div class="mb" id="ps-pages-wrap"><label class="field-label">提取页码（多种写法）</label>
         <input type="text" class="inp" id="ps-pages" placeholder="如 1,3,5-8 / 2-5 / 1- / -3 / 1-10/2 / 奇,偶" aria-label="页码范围"></div>
-      <div class="hint">支持：逗号分隔（1,3,5）；区间（2-5，倒序 5-2 亦可）；开头 / 结尾省略（1- 到末页、-3 前 3 页）；隔页（1-10/2 每 2 页取一）；奇偶（奇 / 偶 / odd / even）。留空 = 全部页。</div>
-      <button class="btn" id="ps-run" disabled>提取页面</button>
+      <div class="mb" id="ps-nwrap" style="display:none"><label class="field-label">每 N 页一个文件（N）</label>
+        <input type="number" class="inp" id="ps-n" value="5" min="1" aria-label="每N页"></div>
+      <div class="hint">提取模式支持：逗号分隔（1,3,5）；区间（2-5，倒序 5-2 亦可）；开头 / 结尾省略（1- 到末页、-3 前 3 页）；隔页（1-10/2 每 2 页取一）；奇偶（奇 / 偶 / odd / even）。留空 = 全部页。「按每 N 页拆分」会把整份均匀切成多个小 PDF 并打包下载。</div>
+      <button class="btn" id="ps-run" disabled>开始拆分</button>
       <div id="ps-result"></div>`;
     let file = null;
     $('#ps-file', body).onchange = (e) => { file = e.target.files[0]; $('#ps-run', body).disabled = !file; };
     const parsePages = parsePageRanges;
+    const togglePsMode = () => {
+      const m = $('#ps-mode', body).value;
+      $('#ps-pages-wrap', body).style.display = m==='extract' ? '' : 'none';
+      $('#ps-nwrap', body).style.display = m==='each' ? '' : 'none';
+      $('#ps-run', body).textContent = m==='each' ? '开始拆分' : '提取页面';
+    };
+    $('#ps-mode', body).onchange = togglePsMode; togglePsMode();
     $('#ps-run', body).onclick = async () => {
       if(!pdfLibReady()){ $('#ps-result', body).innerHTML='<div class="result-box err">PDF 库未加载</div>'; return; }
+      const mode = $('#ps-mode', body).value;
       const btn = $('#ps-run', body); btn.disabled = true; btn.innerHTML='<span class="loading"><span class="spinner"></span>处理中…</span>';
       try{
         const { PDFDocument } = PDFLib;
         const bytes = await file.arrayBuffer();
         const doc = await PDFDocument.load(bytes);
         const total = doc.getPageCount();
+        const base = (file.name.replace(/\.pdf$/i,'')||'pdf');
+        if(mode==='each'){
+          const n = Math.max(1, parseInt($('#ps-n', body).value,10)||5);
+          const parts = Math.ceil(total/n);
+          if(parts>300){ $('#ps-result', body).innerHTML='<div class="result-box err">页数过多，拆分文件数超过 300，请增大 N</div>'; btn.disabled=false; btn.textContent='开始拆分'; return; }
+          const files=[];
+          for(let k=0;k<parts;k++){
+            const idx=[]; for(let p=k*n+1;p<=Math.min(total,(k+1)*n);p++) idx.push(p-1);
+            const out=await PDFDocument.create();
+            (await out.copyPages(doc, idx)).forEach(pg=>out.addPage(pg));
+            files.push({ name:`${base}_part${k+1}.pdf`, blob:new Blob([await out.save()],{type:'application/pdf'}) });
+          }
+          await downloadZip(files, `${base}_split.zip`);
+          $('#ps-result', body).innerHTML=`<div class="result-box">已拆分为 ${parts} 个文件，开始下载 ZIP（${base}_split.zip）</div>`;
+          btn.disabled=false; btn.textContent='开始拆分'; return;
+        }
         const pages = parsePages($('#ps-pages', body).value, total);
         if(!pages.length){ $('#ps-result', body).innerHTML='<div class="result-box err">未解析到有效页码</div>'; btn.disabled=false; btn.textContent='提取页面'; return; }
         const out = await PDFDocument.create();
@@ -3056,9 +3088,9 @@ AppTools['pdf-split'] = {
         const blob = new Blob([await out.save()], {type:'application/pdf'});
         $('#ps-result', body).innerHTML = `<div class="result-box">已提取 ${pages.length} 页</div>
           <div class="btn-row"><button class="btn" id="ps-down">下载</button></div>`;
-        $('#ps-down', body).onclick = () => downloadBlob(blob, 'extracted.pdf');
-      }catch(err){ $('#ps-result', body).innerHTML='<div class="result-box err">提取失败：'+escapeHtml(errMsg(err))+'</div>'; }
-      btn.disabled=false; btn.textContent='提取页面';
+        $('#ps-down', body).onclick = () => downloadBlob(blob, `${base}_extracted.pdf`);
+      }catch(err){ $('#ps-result', body).innerHTML='<div class="result-box err">处理失败：'+escapeHtml(errMsg(err))+'</div>'; }
+      btn.disabled=false; btn.textContent = $('#ps-mode', body).value==='each' ? '开始拆分' : '提取页面';
     };
   }
 };
@@ -3077,6 +3109,13 @@ AppTools['pdf-toimg'] = {
           <option value="600">极致 600 DPI（4K 以上）</option>
         </select>
         <span class="hint" id="pi-info"></span></div>
+      <div class="mb"><label class="field-label">输出格式</label>
+        <select class="sel" id="pi-fmt" aria-label="输出格式">
+          <option value="image/png" selected>PNG（无损）</option>
+          <option value="image/jpeg">JPG（体积更小）</option>
+          <option value="image/webp">WebP（最省空间）</option>
+        </select>
+        <span class="hint" id="pi-qwrap" style="display:none">质量 <input type="range" id="pi-q" min="50" max="95" value="85" style="vertical-align:middle;width:120px"></span></div>
       <div class="hint" style="background:var(--bg);padding:10px 12px;border-left:3px solid var(--primary);border-radius:6px;line-height:1.6;">
         💡 <strong>画质增强说明</strong>：即使是模糊、低分辨率的扫描件 PDF，也可以通过选择 <strong>极致 600 DPI（4K 以上）</strong> 将每页重新栅格化为 4K+ 高清画面，文字边缘与细节比原 PDF 内的位图更清晰；600 DPI 在 A4 页面约为 4950×7016 像素/页，足以 4K 屏展示。
       </div>
@@ -3085,6 +3124,8 @@ AppTools['pdf-toimg'] = {
     let file = null;
     $('#pi-dpi', body).onchange = () => { const d=+$('#pi-dpi', body).value; $('#pi-info', body).textContent = `约 ${Math.round(d/72*595)}×${Math.round(d/72*842)} px/页（A4 参考）`; };
     $('#pi-dpi', body).dispatchEvent(new Event('change'));
+    $('#pi-fmt', body).onchange = () => { $('#pi-qwrap', body).style.display = $('#pi-fmt', body).value==='image/jpeg' ? '' : 'none'; };
+    $('#pi-fmt', body).dispatchEvent(new Event('change'));
     $('#pi-file', body).onchange = (e) => { file = e.target.files[0]; $('#pi-run', body).disabled = !file; };
     $('#pi-run', body).onclick = async () => {
       if(!pdfjsReady()){ $('#pi-result', body).innerHTML='<div class="result-box err">PDF 渲染库未加载，请检查网络</div>'; return; }
@@ -3094,10 +3135,13 @@ AppTools['pdf-toimg'] = {
         const data = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({data}).promise;
         const scale = (+$('#pi-dpi', body).value) / 72;
+        const fmt = $('#pi-fmt', body).value;
+        const ext = fmt==='image/jpeg' ? 'jpg' : fmt==='image/webp' ? 'webp' : 'png';
+        const q = fmt==='image/jpeg' ? (parseInt($('#pi-q', body).value,10)||85)/100 : undefined;
         let html = '<div class="thumb-grid">';
         const canvases = [];
         for(let p=1;p<=pdf.numPages;p++){ html += `<canvas id="pi-c${p}"></canvas>`; canvases.push(p); }
-        html += '</div><div class="btn-row"><button class="btn" id="pi-zip">打包下载 ZIP（推荐）</button><button class="btn btn-ghost" id="pi-down">逐页下载 PNG</button></div>';
+        html += '</div><div class="btn-row"><button class="btn" id="pi-zip">打包下载 ZIP（推荐）</button><button class="btn btn-ghost" id="pi-down">逐页下载 ${ext.toUpperCase()}</button></div>';
         $('#pi-result', body).innerHTML = html + `<div class="result-box">共 ${pdf.numPages} 页</div>`;
         const blobs = [];
         for(const p of canvases){
@@ -3106,19 +3150,19 @@ AppTools['pdf-toimg'] = {
           const cvi = $('#pi-c'+p, body);
           cvi.width = vp.width; cvi.height = vp.height;
           await page.render({ canvasContext: cvi.getContext('2d'), viewport: vp }).promise;
-          blobs.push(await new Promise(r => cvi.toBlob(r, 'image/png')));
+          blobs.push(await new Promise(r => cvi.toBlob(r, fmt, q)));
         }
         const base = (file.name.replace(/\.pdf$/i,'')||'pdf');
         $('#pi-zip', body).onclick = async () => {
           const btn = $('#pi-zip', body); btn.disabled = true; btn.textContent = '打包中…';
           try{
-            await downloadZip(blobs.map((b,i)=>({ name:`page_${i+1}.png`, blob:b })), `${base}_pages.zip`);
+            await downloadZip(blobs.map((b,i)=>({ name:`page_${i+1}.${ext}`, blob:b })), `${base}_pages.zip`);
             toast('已开始下载 ZIP');
           }catch(e){ toast('打包失败，请改用逐页下载：'+e.message,'err'); }
           btn.disabled = false; btn.textContent = '打包下载 ZIP（推荐）';
         };
         $('#pi-down', body).onclick = () => {
-          blobs.forEach((b,i) => downloadBlob(b, `page_${i+1}.png`));
+          blobs.forEach((b,i) => downloadBlob(b, `page_${i+1}.${ext}`));
           toast('已开始下载各页');
         };
       }catch(err){ $('#pi-result', body).innerHTML='<div class="result-box err">转换失败：'+escapeHtml(errMsg(err))+'</div>'; }
@@ -7132,7 +7176,7 @@ const TOOLS = [
   {id:'ar-area',      name:'AR 测面积',       icon:'🟦', cat:'life', desc:'选照片后用「自由套索」或「多边形」框选区域，输入图中一条已知边长即可按比例尺算出实际面积。'},
   {id:'photo-count',  name:'拍照计数',        icon:'🔢', cat:'life', desc:'选照片后逐一轻点目标即可自动计数（人数 / 物品数），带标记点与撤销，适合清点。'},
   {id:'postal-code',  name:'邮政编码查询',     icon:'📮', cat:'life', desc:'省/直辖市/自治区级标准邮编查询（准确），支持反向由 6 位邮编定位省区，并可跳转中国邮政官网查街道/乡镇级精确邮编。'},
-  {id:'long-shot',    name:'网页截图 / 拼长图', icon:'📜', cat:'image', desc:'三种纯本地截图方式：①本页长截图（自动滚动当前网页拼成超长图）；②单屏截图（截屏幕/窗口/标签页任意一张）；③多图拼接（连截多张自动去重叠拼长图）。网页版受浏览器限制只能截当前网页，截 Word/WPS/微信等软件窗口请用电脑客户端。纯本地不上传。'},
+  {id:'long-shot',    name:'网页截图 / 拼长图', icon:'📜', cat:'image', desc:'三种纯本地截图方式：①本页长截图（自动滚动当前网页拼成超长图）；②单屏截图（截屏幕/窗口/标签页任意一张）；③多图拼接（连截多张自动去重叠拼长图）。网页版受浏览器限制只能截当前网页，截 Word/WPS/微信等软件窗口受沙箱限制暂不支持（电脑版 exe 已下架）。纯本地不上传。'},
 
 ];;
 
@@ -7736,27 +7780,16 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-09-04', items:[
-    "【综合税率计算器】丰富设置：增值税支持含税 / 不含税双向换算，可勾选附算附加税费（城建税 7% / 5% / 1% + 教育费附加 3% + 地方教育附加 2%）；企业所得税新增西部大开发 15%、技术先进型 15%，并支持弥补以前年度亏损与研发费用加计扣除，输出实际税负；印花税新增证券交易 0.1%（单边）。",
-    "【综合税率计算器】新增「税率速查」页：增值税 / 企业所得税 / 个税七级累进表 / 契税 / 车购税 / 房产税 / 城建税 / 印花税等常用税率一页速查；各面板新增「复制结果」。",
-    "【家用耗电电费】修复无法计算：原阶梯档位写死 3 档，阈值填超过 2 个时金额变成 NaN。现支持任意档数与自定义各档加价并输出分段明细；新增常用电器预设、电器名称、清空按钮，兼容全角逗号输入。",
-    "【随机数字生成】修复选「整数」时报错、无法生成的问题。",
-    "【缓存清理】Service Worker 升 v23，自动清除历史废弃缓存并给缓存加上限，页面加载更干净。"
+    "【PDF 工具增强】合并可自定义输出文件名；拆分新增「按每 N 页」均分并打包 ZIP；PDF 转图片支持 PNG / JPG / WebP，并可选 JPG 质量。",
+    "【综合税率计算器】丰富设置：增值税含/不含税双向换算、附算附加税费；企业所得税加西部大开发/技术先进型 15%、弥补亏损与研发加计；印花税加证券交易 0.1%；新增税率速查页。",
+    "【家用耗电电费】修复无法计算（多档阈值变 NaN），改支持任意档数与分段明细，新增电器预设。",
+    "【随机数字生成】修复选整数时报错。",
+    "【网页截图 / 拼长图】整合更名：本页自动滚动长截图 + 单屏截图 + 多图拼接（重叠容差可调）；电脑版 exe 已下架。",
+    "【缓存清理】Service Worker 升 v23，清除废弃缓存并限容。"
   ]},
   { date:'2026-09-03', items:[
     "【数学公式排版】修复导出 PNG / SVG 显示不全：改用离屏精确测量内容真实尺寸，不再被预览框裁切。",
-    "【长截图·电脑版】保存位置固定到「桌面\\托托长截图」并自动命名，可一键打开文件夹/图片；新增手动逐屏模式（兼容不响应滚轮的窗口）；新增桌面快捷方式与全局热键 Ctrl+Shift+S。",
-    "【长截图·网页版】恢复「本页自动滚动长截图」：点按钮后在系统弹窗选「此标签页」，工具自动滚动并逐屏拼成超长图；结果预览点击可放大（灯箱缩放 / 拖动）。",
-    "【长截图】澄清分工：网页版只能截当前网页（自动滚动 / 单屏 / 多图拼接）；截 Word / WPS / 微信 / 资源管理器等任意软件窗口的整窗长图请下载电脑版 exe。",
-    "【长截图·电脑版下架】电脑版 exe 小程序在部分环境（多显示器 / 受保护窗口等）捕获不稳定，已下线下架；网页版保留本页长截图 / 单屏截图 / 多图拼接三种方式。",
-    "【综合税率计算器】新增：计算增值税（一般/小规模、含税价与进销项）、企业所得税（小型微利5%/高新15%）、契税（首套二套面积分档）、车辆购置税（含新能源减半）、印花税（多税目+六税两费减半）、房产税（从价/从租）六类常见税率，附政策说明。"
-  ]},
-  { date:'2026-09-02', items:[
-    "【长截图】电脑版新增一键打包：解压后装一次 Python，双击 build_exe.bat 即生成 exe，可自动滚动截 Word / WPS / 微信等任意窗口长图。",
-    "【长截图】网页版移除「本页自动滚动」「其它网页长图」，仅保留单屏截图与多图拼接。"
-  ]},
-  { date:'2026-09-01', items:[
-    "【长截图】新增电脑版小程序，可截浏览器外任意软件窗口的整窗长图。",
-    "【长截图】网页版新增本页自动滚动、其它网页 / 窗口长图、单屏截图、多图拼接四种方式。"
+    "【综合税率计算器】新增：计算增值税、企业所得税、契税、车辆购置税、印花税、房产税六类常见税率，附政策说明。"
   ]},
   { date:'2026-08-31', items:[
     "【表情包制作】文字可自由拖动，新增竖排模式与一键重置。",
