@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-e</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-f</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7786,7 +7786,10 @@ const CHANGELOG = [
     "【智能排班·导出 PNG】改为 2 倍分辨率渲染（标题 + 更大字号与单元格），清晰不模糊。",
     "【智能排班·Excel 模板下拉修复】「导出 Excel 模板」改为原生 OpenXML 单工作表「人员需求」：第一需求 / 第二需求列直接下拉选择班次（如早/中/晚/夜班），无需打字；填好后用「导入填写结果」一键导入并自动生成排班表（第一/第二需求映射为「优先排某班次」）。已删除「生成智能填写网页」功能。",
     "【智能排班·加载崩溃修复 + 模板丰富】修复旧配置字段缺失导致打开即报错（Cannot read properties of undefined (reading 'map')）：加载时统一补齐 days/shifts/people/weeks/perCell/balance 等字段的合法结构，排班结果渲染也加空值防御。导出 Excel 模板新增「说明区」：标注当前类型（值班表 / 课表 / 自定义）对应的可选班次与日期、不可用时间格式与填写规则，并预置 50 行带下拉的空白行方便直接填写；说明区在导入时按「姓名」为空自动忽略，不影响识别。",
-    "【智能排班·Excel 模板改回 6 列 + 导入任意内容】「导出 Excel 模板」恢复为「姓名 / 第一需求 / 第一需求详情 / 第二需求 / 第二需求详情 / 不可用时间」六列，其中第一 / 第二需求与两个详情列均为原生下拉（需求列列出应用内 9 种类型标题，详情列列出班次 / 星期 / 数字等），下拉不限定可手输任意内容。导入识别大幅增强：可识别不固定的选项内容——下拉标题、手写简称（如「不排夜班」「早点班」「最多3班」「想和张三搭班」）或任意自由文本，自动归类为对应需求并抽取参数；同时支持无表头的自制表格（按 A~F 列识别）与任意工作表名，导入后直接生成排班表。"
+    "【智能排班·Excel 模板改回 6 列 + 导入任意内容】「导出 Excel 模板」恢复为「姓名 / 第一需求 / 第一需求详情 / 第二需求 / 第二需求详情 / 不可用时间」六列，其中第一 / 第二需求与两个详情列均为原生下拉（需求列列出应用内 9 种类型标题，详情列列出班次 / 星期 / 数字等），下拉不限定可手输任意内容。导入识别大幅增强：可识别不固定的选项内容——下拉标题、手写简称（如「不排夜班」「早点班」「最多3班」「想和张三搭班」）或任意自由文本，自动归类为对应需求并抽取参数；同时支持无表头的自制表格（按 A~F 列识别）与任意工作表名，导入后直接生成排班表。",
+    "【智能排班·单元格添加人员修复】已排好的表格里点单元格弹出的编辑框改为独立浮层（不再嵌在表格内），修掉「点开后立刻关闭」的问题；弹层内可下拉选人加入、点人员标签移除、一键清空本格，并支持 Esc 或点击空白处关闭。",
+    "【智能排班·导入真正生效】导入填写结果不再只是「读进来」：会自动把表格里出现的班次 / 日期补齐到当前设置，并把无法对应上的需求降级处理，然后立即执行排班、生成表格，同时提示「已生效需求」与未排满的格子数。",
+    "【智能排班·内容与设置联动校验】新增一致性检查：人员数量偏少、不可用时间超出当前班次 / 日期范围、需求里写的班次或搭班对象已不存在等情况，排班时会用人话提示，避免「设置与内容互相矛盾却无感知」。"
   ]},
   { date:'2026-09-04', items:[
     "【PDF 工具增强】合并可自定义输出文件名；拆分新增「按每 N 页」均分并打包 ZIP；PDF 转图片支持 PNG / JPG / WebP，并可选 JPG 质量。",
@@ -11664,13 +11667,45 @@ AppTools['auto-schedule'] = {
       return {A, warnings};
     }
 
+    // 一致性检查：找出「内容与设置相互矛盾」的地方，返回人话提示数组
+    function checkConflicts(){
+      const issues=[];
+      const shiftNames=S.shifts.map(s=>s.n), dayKeys=S.days.map(d=>d.k), dayLabels=S.days.map(d=>d.l);
+      const cap=S.days.length*S.shifts.length*Math.max(1,S.perCell|0);
+      if(S.people.length && cap>0 && S.people.length*Math.max(1,S.weeks|0) < cap*0.35){
+        issues.push('人员偏少：共 '+cap+' 个格位需安排，当前仅 '+S.people.length+' 人，部分格子会空着');
+      }
+      const bad=[];
+      S.people.forEach(p=>{
+        (p.una||[]).forEach(u=>{
+          const parts=String(u).split('|'); if(parts.length<2) return;
+          const dk=parts[0], sn=parts.slice(1).join('|');
+          const okDay=dayKeys.includes(dk)||dayLabels.includes(dk);
+          const okShift=shiftNames.includes(sn);
+          if(!okDay||!okShift) bad.push(p.name+' 的不可用时间「'+u+'」不在当前班次/日期范围内');
+        });
+        [p.need1,p.need2].forEach(nd=>{
+          if(!nd) return;
+          if((nd.t==='prefer_shift'||nd.t==='avoid_shift')&&nd.p&&!shiftNames.includes(nd.p))
+            bad.push(p.name+' 的「'+nd.p+'」已不在班次列表');
+          if((nd.t==='pair'||nd.t==='avoid_pair')&&nd.p&&!S.people.some(x=>x.name===nd.p))
+            bad.push(p.name+' 想'+(nd.t==='pair'?'搭班':'避开')+'的「'+nd.p+'」不在人员列表中');
+        });
+      });
+      if(bad.length) issues.push(...bad.slice(0,6));
+      return issues;
+    }
     function generate(){
       if(!S.people.length){ toast('请先添加人员','err'); return; }
       if(!S.shifts.length||!S.days.length){ toast('请设置班次与日期','err'); return; }
+      const issues=checkConflicts();
       results=[];
       for(let w=0; w<S.weeks; w++) results.push(generateWeek());
       curWeek=0; saveRes(); renderResult();
-      toast('排班完成 🎉','ok');
+      const warn=results.reduce((a,r)=>a+(r.warnings?r.warnings.length:0),0);
+      if(issues.length){ toast('排班完成，但发现 '+issues.length+' 处需留意：'+issues[0], 'err'); }
+      else if(warn){ toast('排班完成；有 '+warn+' 个格子未排满，可增加人员或放宽需求','err'); }
+      else { toast('排班完成 🎉','ok'); }
     }
 
     function renderDays(){
@@ -11772,18 +11807,57 @@ AppTools['auto-schedule'] = {
       box.querySelectorAll('.sch-tab').forEach(t=> t.onclick=()=>{ curWeek=+t.dataset.w; renderResult(); });
       box.querySelectorAll('.sch-cell').forEach(td=>{ td.onclick=()=> openCellEditor(td, +td.dataset.d, +td.dataset.s); });
     }
+    // 单元格编辑器：浮层形式，独立于表格重绘，避免「点开就关」
+    let cellEditorEl=null;
+    function closeCellEditor(){
+      if(cellEditorEl){ cellEditorEl.remove(); cellEditorEl=null; }
+      document.removeEventListener('mousedown', onCellDocDown, true);
+      document.removeEventListener('keydown', onCellKey, true);
+    }
+    function onCellDocDown(e){ if(cellEditorEl && !cellEditorEl.contains(e.target)) closeCellEditor(); }
+    function onCellKey(e){ if(e.key==='Escape') closeCellEditor(); }
     function openCellEditor(td,d,s){
+      closeCellEditor();
       const res=results[curWeek];
-      const opts=['<option value="">＋ 添加人员</option>','<option value="__clear__">清空本格</option>'].concat(S.people.map(p=>`<option value="${esc(p.name)}">${esc(p.name)}</option>`)).join('');
-      td.innerHTML=`<select class="sel sch-cellsel">${opts}</select>`;
-      const sel=td.querySelector('select');
-      sel.onchange=()=>{
-        if(sel.value==='__clear__'){ res.A[d][s]=[]; }
-        else if(sel.value){ if(!res.A[d][s].includes(sel.value)) res.A[d][s].push(sel.value); }
-        saveRes(); renderResult();
+      if(!res||!res.A||!res.A[d]||!Array.isArray(res.A[d][s])){ toast('该格无数据','err'); return; }
+      const rect=td.getBoundingClientRect();
+      const el=document.createElement('div');
+      el.className='sch-celledit';
+      el.style.cssText='position:fixed;z-index:9999;background:#fff;border:1px solid #d9e2ec;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.16);padding:8px;min-width:172px;font-size:13px';
+      const cur=res.A[d][s].slice();
+      const peopleOpts=S.people.map(p=>`<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+      el.innerHTML=`
+        <div style="font-size:12px;color:#888;margin-bottom:6px">${esc(S.days[d]?S.days[d].l:'')} · ${esc(S.shifts[s]?S.shifts[s].n:'')}${cur.length?('（当前：'+cur.map(esc).join('、')+'）'):'（空）'}</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+          <select class="sel sch-ce-sel" style="flex:1">${peopleOpts||'<option value="">（暂无人员）</option>'}</select>
+          <button class="btn sm sch-ce-add" type="button">加入</button>
+        </div>
+        <div style="display:flex;gap:6px;justify-content:space-between">
+          <button class="btn ghost sm sch-ce-clear" type="button">清空本格</button>
+          <button class="btn ghost sm sch-ce-close" type="button">关闭</button>
+        </div>
+        ${cur.length?('<div class="sch-ce-chips" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">'+cur.map(n=>`<span class="sch-ps sch-ce-del" data-n="${esc(n)}" title="点击移除" style="cursor:pointer">${esc(n)} ×</span>`).join('')+'</div>'):''}
+      `;
+      document.body.appendChild(el);
+      cellEditorEl=el;
+      // 定位：优先在单元格下方，越界则上翻/左右收拢
+      const w=el.offsetWidth, h=el.offsetHeight;
+      let left=Math.min(rect.left, window.innerWidth-w-8); if(left<8) left=8;
+      let top=rect.bottom+6; if(top+h>window.innerHeight-8) top=Math.max(8, rect.top-h-6);
+      el.style.left=left+'px'; el.style.top=top+'px';
+      const $1=(sel)=>el.querySelector(sel);
+      $1('.sch-ce-add').onclick=()=>{
+        const v=$1('.sch-ce-sel').value; if(!v) return;
+        if(!res.A[d][s].includes(v)) res.A[d][s].push(v);
+        saveRes(); renderResult(); // 重绘表格后重开编辑器以便继续操作
+        const ntd=document.querySelector('#sc-result .sch-cell[data-d="'+d+'"][data-s="'+s+'"]');
+        if(ntd) openCellEditor(ntd,d,s); else closeCellEditor();
       };
-      sel.onblur=()=> renderResult();
-      sel.focus();
+      $1('.sch-ce-clear').onclick=()=>{ res.A[d][s]=[]; saveRes(); renderResult(); closeCellEditor(); };
+      $1('.sch-ce-close').onclick=closeCellEditor;
+      el.querySelectorAll('.sch-ce-del').forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); const n=b.dataset.n; res.A[d][s]=res.A[d][s].filter(x=>x!==n); saveRes(); renderResult(); const ntd=document.querySelector('#sc-result .sch-cell[data-d="'+d+'"][data-s="'+s+'"]'); if(ntd) openCellEditor(ntd,d,s); else closeCellEditor(); });
+      // 点击浮层内部不应导致关闭（用捕获阶段判断 contains 已覆盖）
+      setTimeout(()=>{ document.addEventListener('mousedown', onCellDocDown, true); document.addEventListener('keydown', onCellKey, true); }, 0);
     }
 
     function exportCSV(){
@@ -12084,19 +12158,74 @@ AppTools['auto-schedule'] = {
       const raw=(c)=>(c&&row[c]!=null)?row[c]:'';
       return { name, need1:needFromTexts(raw(c1L),raw(c1D)), need2:needFromTexts(raw(c2L),raw(c2D)), una:parseUnaText(raw(cU)) };
     }
+    // 导入后「真正生效」：把导入内容与当前设置对齐（补班次/日期），再按需求执行排班
     function applyImported(data){
       if(!data||!Array.isArray(data.people)){ toast('文件格式不正确','err'); return; }
-      if(Array.isArray(data.shifts)&&data.shifts.length){ S.shifts=data.shifts.map(n=>({n:String(n)})); renderShifts(); }
-      if(Array.isArray(data.days)&&data.days.length){ S.days=data.days.map(d=>(typeof d==='string'?{k:d,l:d}:d)); renderDays(); }
-      // 归一化人员：补齐 need1/need2/una，修正类型与参数
-      const people=data.people.filter(p=>p&&p.name).map(p=>{
-        const fix=(nd)=>{ const t=(nd&&nd.t)||'none'; const tt=NEED_TYPES.some(o=>o.v===t)?t:'none'; return {t:tt, p:adaptParam(tt, nd&&nd.p)}; };
-        return { name:String(p.name).trim(), need1:fix(p.need1), need2:fix(p.need2), una:Array.isArray(p.una)?p.una:[] };
-      }).filter(p=>p.name);
+      if(Array.isArray(data.shifts)&&data.shifts.length){ S.shifts=data.shifts.map(n=>({n:String(n)})); }
+      if(Array.isArray(data.days)&&data.days.length){ S.days=data.days.map(d=>(typeof d==='string'?{k:d,l:d}:d)); }
+      const people=data.people.filter(p=>p&&p.name).map(p=>({ name:String(p.name).trim(), need1:p.need1||{t:'none',p:''}, need2:p.need2||{t:'none',p:''}, una:Array.isArray(p.una)?p.una:[] })).filter(p=>p.name);
       if(!people.length){ toast('未读取到人员数据','err'); return; }
-      S.people=people; renderPeople(); saveCfg();
-      toast('已导入 '+people.length+' 人，正在生成排班…','ok');
-      generate();
+
+      // ① 收集导入内容里出现、但当前设置没有的班次 / 日期，自动补上（否则需求与不可用时间会无处安放 → 矛盾）
+      const addedShifts=[], addedDays=[];
+      const hasShift=n=>S.shifts.some(x=>x.n===n);
+      const addShift=n=>{ if(n&&!hasShift(n)){ S.shifts.push({n:String(n)}); addedShifts.push(String(n)); } };
+      people.forEach(p=>{
+        [p.need1,p.need2].forEach(nd=>{ if(nd&&(nd.t==='prefer_shift'||nd.t==='avoid_shift')&&nd.p) addShift(nd.p); });
+      });
+      // 不可用时间 key 形如「1|早班」或「周一|早班」
+      const dayByKey=k=>S.days.find(d=>d.k===k||d.l===k);
+      people.forEach(p=>{
+        p.una.forEach(uk=>{
+          const parts=String(uk).split('|'); if(parts.length<2) return;
+          const dayRaw=parts[0], sh=parts.slice(1).join('|');
+          addShift(sh);
+          if(!dayByKey(dayRaw)){
+            const idx=S.days.length+1;
+            const known=['周一','周二','周三','周四','周五','周六','周日'];
+            const label=(known.includes(dayRaw)?dayRaw:dayRaw);
+            const k=/^\d+$/.test(dayRaw)?dayRaw:String(idx);
+            S.days.push({k, l:label}); addedDays.push(label);
+          }
+        });
+      });
+      renderShifts(); renderDays();
+
+      // ② 归一化人员需求（类型合法性 + 参数对齐到当前班次/日期）
+      S.people=people;   // 先落位，便于下方 pair 校验姓名是否存在于本表
+      S.people=S.people.map(p=>{
+        const fix=(nd)=>{
+          let t=(nd&&nd.t)||'none';
+          if(!NEED_TYPES.some(o=>o.v===t)) t='none';
+          let pa=adaptParam(t, nd&&nd.p);
+          // 参数兜底：shift/day 类型的参数必须能对上当前设置，否则降级为 none，避免"写着却无效"的矛盾
+          if((t==='prefer_shift'||t==='avoid_shift') && pa && !S.shifts.some(x=>x.n===pa)) t='none';
+          if(t==='prefer_day' && pa && pa!=='weekday' && pa!=='weekend' && !S.days.some(x=>x.k===pa)) t='none';
+          if(t==='avoid_day' && pa && pa!=='weekend' && !S.days.some(x=>x.k===pa)) t='none';
+          // pair/avoid_pair：若目标姓名不在人员表内则该偏好无意义 → 降级为 none
+          if((t==='pair'||t==='avoid_pair') && (!pa || !S.people.some(x=>x.name===pa))) t='none';
+          return {t, p:(t==='none'?'':pa)};
+        };
+        return { name:p.name, need1:fix(p.need1), need2:fix(p.need2), una:p.una };
+      });
+      renderPeople(); saveCfg();
+
+      // ③ 真正执行排班（并给出可读结果摘要）
+      const nShift=S.shifts.length, nDay=S.days.length;
+      const stat={};
+      S.people.forEach(p=>[p.need1,p.need2].forEach(nd=>{ if(nd&&nd.t&&nd.t!=='none') stat[nd.t]=(stat[nd.t]||0)+1; }));
+      const needNames={never:'',avoid_shift:'不排某班次',avoid_day:'不排某天',prefer_shift:'优先某班次',prefer_day:'优先某天',max_per:'限班次数',nocons:'不要连排',pair:'想搭班',avoid_pair:'想避开'};
+      results=[];
+      for(let w=0; w<Math.max(1,S.weeks|0); w++) results.push(generateWeek());
+      curWeek=0; saveRes(); renderResult();
+      const warn=results.reduce((a,r)=>a+(r.warnings?r.warnings.length:0),0);
+      let msg='已导入 '+S.people.length+' 人并生成排班（'+nDay+' 天 × '+nShift+' 班次）';
+      if(addedShifts.length) msg+='；自动补充班次：'+addedShifts.join('、');
+      if(addedDays.length) msg+='；自动补充日期：'+addedDays.join('、');
+      const applied=Object.keys(stat).map(k=>(needNames[k]||k)+'×'+stat[k]).join('，');
+      if(applied) msg+='；已生效需求：'+applied;
+      if(warn) msg+='；有 '+warn+' 格未排满，可增加人员或放宽需求';
+      toast(msg, warn?'':'ok');
     }
     // 自动挑选「最像人员表」的工作表：优先「人员需求」，否则取含「姓名」列且行数最多者
     function pickPeopleSheet(wb){
@@ -12184,6 +12313,8 @@ AppTools['auto-schedule'] = {
       .sch-statrow{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
       .sch-stat{background:#f5f7fa;border:1px solid #e3e8ef;border-radius:8px;padding:5px 10px;font-size:13px}
       .sch-warn{background:#fff4e6;border:1px solid #ffd8a8;color:#a85a00;border-radius:8px;padding:8px 10px;font-size:13px;margin-top:8px}
+      .sch-celledit .sel,.sch-celledit .btn{font-size:12px}
+      .sch-celledit input,.sch-celledit select{font-family:inherit}
       </style>
       <div class="sch-wrap">
         <div class="sch-sec">
