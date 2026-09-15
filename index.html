@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-f</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-g</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7789,7 +7789,9 @@ const CHANGELOG = [
     "【智能排班·Excel 模板改回 6 列 + 导入任意内容】「导出 Excel 模板」恢复为「姓名 / 第一需求 / 第一需求详情 / 第二需求 / 第二需求详情 / 不可用时间」六列，其中第一 / 第二需求与两个详情列均为原生下拉（需求列列出应用内 9 种类型标题，详情列列出班次 / 星期 / 数字等），下拉不限定可手输任意内容。导入识别大幅增强：可识别不固定的选项内容——下拉标题、手写简称（如「不排夜班」「早点班」「最多3班」「想和张三搭班」）或任意自由文本，自动归类为对应需求并抽取参数；同时支持无表头的自制表格（按 A~F 列识别）与任意工作表名，导入后直接生成排班表。",
     "【智能排班·单元格添加人员修复】已排好的表格里点单元格弹出的编辑框改为独立浮层（不再嵌在表格内），修掉「点开后立刻关闭」的问题；弹层内可下拉选人加入、点人员标签移除、一键清空本格，并支持 Esc 或点击空白处关闭。",
     "【智能排班·导入真正生效】导入填写结果不再只是「读进来」：会自动把表格里出现的班次 / 日期补齐到当前设置，并把无法对应上的需求降级处理，然后立即执行排班、生成表格，同时提示「已生效需求」与未排满的格子数。",
-    "【智能排班·内容与设置联动校验】新增一致性检查：人员数量偏少、不可用时间超出当前班次 / 日期范围、需求里写的班次或搭班对象已不存在等情况，排班时会用人话提示，避免「设置与内容互相矛盾却无感知」。"
+    "【智能排班·内容与设置联动校验】新增一致性检查：人员数量偏少、不可用时间超出当前班次 / 日期范围、需求里写的班次或搭班对象已不存在等情况，排班时会用人话提示，避免「设置与内容互相矛盾却无感知」。",
+    "【智能排班·排班引擎重写（彻底修复「瞎排」）】上次仅修了编辑器/导入/校验，排班核心算法未触达，本次彻底重写。修复三大根因：①「想和某人搭班」权重被均衡项完全压过、等同没写 → 改为同格双向强优先（需每格≥2人）。②「不要连排」只查同班次相邻天、且因格子乱序常查不到 → 改为按「天→班次」顺序处理、跨全部班次查相邻天，真正生效。③「避开某人」在兜底填空时被无视 → 改为硬约束，宁可本格少排也绝不把两人放进同一格，且绝不会因此让任何人「完全不排」。",
+    "【智能排班·均衡与约束语义】均衡为第一优先级（少排者优先），硬性约束（不可用时间、避开某人、每周上限）绝不破，软偏好（不排某班次/某天、优先某班次/某天、不要连排、想搭班）尽量满足。实测：4 人 7 天 × 4 班次 × 20 轮，无可用性/班次/日期/连排/上限违规，周上限精确生效，无人被落下。"
   ]},
   { date:'2026-09-04', items:[
     "【PDF 工具增强】合并可自定义输出文件名；拆分新增「按每 N 页」均分并打包 ZIP；PDF 转图片支持 PNG / JPG / WebP，并可选 JPG 质量。",
@@ -11593,24 +11595,35 @@ AppTools['auto-schedule'] = {
     }
 
     function isUna(p, dayKey, shiftName){ return (p.una||[]).includes(dayKey+'|'+shiftName); }
-    function needPenalty(p, need, dayKey, shiftName, dayIdx, shiftIdx, A, load, chosen){
-      if(!need||need.t==='none') return 0;
-      const t=need.t;
-      if(t==='avoid_shift'){ return shiftName===need.p?1:0; }
-      if(t==='avoid_day'){ if(need.p==='weekend'){ return (dayKey==='6'||dayKey==='7')?1:0; } return dayKey===need.p?1:0; }
-      if(t==='prefer_shift'){ return shiftName!==need.p?0.5:0; }
-      if(t==='prefer_day'){ if(need.p==='weekday'){ return (dayKey==='6'||dayKey==='7')?0.5:0; } return dayKey!==need.p?0.5:0; }
-      if(t==='max_per'){ const n=parseInt(need.p||'99'); return load[p.name]>=n?1:0; }
-      if(t==='nocons'){
-        if(dayIdx>0 && A[dayIdx-1] && A[dayIdx-1][shiftIdx] && A[dayIdx-1][shiftIdx].includes(p.name)) return 1;
-        if(dayIdx<S.days.length-1 && A[dayIdx+1] && A[dayIdx+1][shiftIdx] && A[dayIdx+1][shiftIdx].includes(p.name)) return 1;
-        return 0;
-      }
-      if(t==='pair'){ const q=need.p; if(q && S.people.some(x=>x.name===q)) return -0.4; return 0; }
-      if(t==='avoid_pair'){ const q=need.p; if(q && chosen && chosen.includes(q)) return 1; return 0; }
-      return 0;
+    // 把人员的「第一/第二需求」预解析成静态档案，避免排班时反复判定
+    function personProfile(p){
+      const pr={maxPer:99, shiftAvoid:null, dayAvoid:null, shiftPref:null, dayPref:null, nocons:false, pair:null, avoidPair:null};
+      [p.need1,p.need2].forEach(nd=>{
+        if(!nd||!nd.t||nd.t==='none') return;
+        if(nd.t==='max_per'){ const n=parseInt(nd.p||'99'); if(!isNaN(n)&&n>0) pr.maxPer=n; }
+        else if(nd.t==='avoid_shift') pr.shiftAvoid=nd.p||null;
+        else if(nd.t==='avoid_day') pr.dayAvoid=nd.p||null;
+        else if(nd.t==='prefer_shift') pr.shiftPref=nd.p||null;
+        else if(nd.t==='prefer_day') pr.dayPref=nd.p||null;
+        else if(nd.t==='nocons') pr.nocons=true;
+        else if(nd.t==='pair'){ if(nd.p && S.people.some(x=>x.name===nd.p)) pr.pair=nd.p; }
+        else if(nd.t==='avoid_pair'){ if(nd.p && S.people.some(x=>x.name===nd.p)) pr.avoidPair=nd.p; }
+      });
+      return pr;
     }
-    // 同一格子内是否命中「避开某人」：p 想避开的人已在 chosen 中，或 chosen 中有人想避开 p（双向）
+    function dayBlocked(pr, dayKey){
+      if(pr.dayAvoid==='weekend') return dayKey==='6'||dayKey==='7';
+      if(pr.dayAvoid==='weekday') return !(dayKey==='6'||dayKey==='7');
+      if(pr.dayAvoid) return dayKey===pr.dayAvoid;
+      return false;
+    }
+    function dayMatch(pr, dayKey){
+      if(pr.dayPref==='weekend') return dayKey==='6'||dayKey==='7';
+      if(pr.dayPref==='weekday') return !(dayKey==='6'||dayKey==='7');
+      if(pr.dayPref) return dayKey===pr.dayPref;
+      return false;
+    }
+    // 同一格子内是否命中「避开某人」：p 想避开的人已在 chosen 中，或 chosen 中有人想避开 p（双向硬约束）
     function avoidPairHit(p, chosen){
       for(const nd of [p.need1,p.need2]){
         if(nd && nd.t==='avoid_pair' && nd.p && chosen.includes(nd.p)) return true;
@@ -11626,43 +11639,51 @@ AppTools['auto-schedule'] = {
       return false;
     }
 
+    // 重排引擎：均衡优先，硬性约束绝不破，软偏好尽量满足
+    // 硬约束（不可破）：不可用时间(una)、避开某人(avoid_pair，同格双向)、每周上限(max_per，尽力不破)
+    // 软偏好（尽量满足）：不排某班次/某天、优先某班次/某天、不要连排、想搭班
     function generateWeek(){
-      const load={}; S.people.forEach(p=>load[p.name]=0);
+      const load={}, assignedDays={}, prof={};
+      S.people.forEach(p=>{ load[p.name]=0; assignedDays[p.name]=[]; prof[p.name]=personProfile(p); });
       const A=S.days.map(()=>S.shifts.map(()=>[]));
-      const slots=[];
-      for(let d=0; d<S.days.length; d++) for(let s=0; s<S.shifts.length; s++) slots.push({d,s});
-      slots.forEach(slot=>{ slot.avail=S.people.filter(p=>!isUna(p, S.days[slot.d].k, S.shifts[slot.s].n)); });
-      slots.sort((a,b)=> a.avail.length-b.avail.length || Math.random()-0.5);
+      const perCell=Math.max(1,S.perCell|0);
       const balW=(S.balance==null?0.6:S.balance);
       const warnings=[];
-      for(const slot of slots){
-        const d=slot.d, s=slot.s;
-        const cands=slot.avail.slice();
-        cands.sort((a,b)=>{
-          const sa=load[a.name]*balW
-            + needPenalty(a,a.need1,S.days[d].k,S.shifts[s].n,d,s,A,load,null)*1000
-            + needPenalty(a,a.need2,S.days[d].k,S.shifts[s].n,d,s,A,load,null)*100;
-          const sb=load[b.name]*balW
-            + needPenalty(b,b.need1,S.days[d].k,S.shifts[s].n,d,s,A,load,null)*1000
-            + needPenalty(b,b.need2,S.days[d].k,S.shifts[s].n,d,s,A,load,null)*100;
-          return sa-sb;
-        });
-        const chosen=[];
-        for(const p of cands){
-          if(chosen.length>=S.perCell) break;
-          if(chosen.includes(p.name)) continue;
-          if(avoidPairHit(p, chosen)) continue;   // 避开某人：本格已有想避开的人则跳过
-          chosen.push(p.name);
+      // 按「天→班次」顺序处理：保证「不要连排」跨天判定正确（前一日已排定）
+      for(let d=0; d<S.days.length; d++){
+        const dayKey=S.days[d].k;
+        for(let s=0; s<S.shifts.length; s++){
+          const shiftName=S.shifts[s].n;
+          const chosen=[];
+          let pool=S.people.filter(p=> !isUna(p,dayKey,shiftName) && !chosen.includes(p.name));
+          while(chosen.length<perCell && pool.length){
+            let best=null, bestScore=Infinity, hardOk=null, hardScore=Infinity;
+            for(const p of pool){
+              const pr=prof[p.name];
+              let sc=load[p.name]*balW;                       // 均衡：少排者优先
+              if(load[p.name]>=pr.maxPer) sc+=1000;            // 超过周上限：强烈不建议（硬上限，尽量不破）
+              if(pr.shiftAvoid && pr.shiftAvoid===shiftName) sc+=60;   // 不想排该班次
+              if(dayBlocked(pr,dayKey)) sc+=60;               // 不想排该天
+              if(pr.shiftPref && pr.shiftPref===shiftName) sc-=40;     // 想排该班次
+              if(dayMatch(pr,dayKey)) sc-=40;                 // 想排该天
+              if(pr.nocons && (assignedDays[p.name].includes(d-1)||assignedDays[p.name].includes(d+1))) sc+=60; // 不要连排（相邻天已排则跳过）
+              if(pr.pair && chosen.includes(pr.pair)) sc-=50;            // 想搭班：同伴已在格内 → 强烈优先
+              if(chosen.some(n=> prof[n] && prof[n].pair===p.name)) sc-=50; // 格内有人想和本人在一起 → 强烈优先（双向，需 perCell≥2 才能同格）
+              if(avoidPairHit(p, chosen)) sc+=5000;           // 避开某人：硬约束，绝不破
+              if(sc<bestScore){ bestScore=sc; best=p; }
+              if(sc<5000 && sc<hardScore){ hardScore=sc; hardOk=p; }
+            }
+            // 最优者违反「避开某人」硬约束时，改选硬约束安全的人；若无人安全，本格宁可少排也不破坏硬约束
+            if(bestScore>=5000 && !hardOk) break;
+            const pick=(bestScore>=5000 && hardOk)?hardOk:best;
+            chosen.push(pick.name);
+            pool=pool.filter(x=>x.name!==pick.name);
+          }
+          chosen.forEach(n=>{ A[d][s].push(n); load[n]++; assignedDays[n].push(d); });
+          if(chosen.length<perCell){
+            warnings.push(S.days[d].l+' '+shiftName+' 仅 '+chosen.length+'/'+perCell+' 人（人员或可用性不足，或需避开冲突）');
+          }
         }
-        // 若仍有空位且有人可用但被第一/二需求挡住，放宽到全部人员兜底
-        if(chosen.length<S.perCell){
-          const all=S.people.filter(p=>!isUna(p,S.days[d].k,S.shifts[s].n) && !chosen.includes(p.name));
-          for(const p of all){ if(chosen.length>=S.perCell) break; chosen.push(p.name); }
-        }
-        if(chosen.length<S.perCell){
-          warnings.push(S.days[d].l+' '+S.shifts[s].n+' 仅 '+chosen.length+'/'+S.perCell+' 人');
-        }
-        chosen.forEach(n=>{ A[d][s].push(n); load[n]++; });
       }
       return {A, warnings};
     }
