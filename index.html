@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-d</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-e</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7785,7 +7785,8 @@ const CHANGELOG = [
     "【智能排班】新增：按每人「第一需求 + 第二需求」自动排班，适用值班表 / 课表 / 自定义；支持班次与日期自定义、每人不可用时间、均衡分配、手动微调，结果可导出 CSV / PNG / Markdown 或打印，配置本地保存。",
     "【智能排班·导出 PNG】改为 2 倍分辨率渲染（标题 + 更大字号与单元格），清晰不模糊。",
     "【智能排班·Excel 模板下拉修复】「导出 Excel 模板」改为原生 OpenXML 单工作表「人员需求」：第一需求 / 第二需求列直接下拉选择班次（如早/中/晚/夜班），无需打字；填好后用「导入填写结果」一键导入并自动生成排班表（第一/第二需求映射为「优先排某班次」）。已删除「生成智能填写网页」功能。",
-    "【智能排班·加载崩溃修复 + 模板丰富】修复旧配置字段缺失导致打开即报错（Cannot read properties of undefined (reading 'map')）：加载时统一补齐 days/shifts/people/weeks/perCell/balance 等字段的合法结构，排班结果渲染也加空值防御。导出 Excel 模板新增「说明区」：标注当前类型（值班表 / 课表 / 自定义）对应的可选班次与日期、不可用时间格式与填写规则，并预置 50 行带下拉的空白行方便直接填写；说明区在导入时按「姓名」为空自动忽略，不影响识别。"
+    "【智能排班·加载崩溃修复 + 模板丰富】修复旧配置字段缺失导致打开即报错（Cannot read properties of undefined (reading 'map')）：加载时统一补齐 days/shifts/people/weeks/perCell/balance 等字段的合法结构，排班结果渲染也加空值防御。导出 Excel 模板新增「说明区」：标注当前类型（值班表 / 课表 / 自定义）对应的可选班次与日期、不可用时间格式与填写规则，并预置 50 行带下拉的空白行方便直接填写；说明区在导入时按「姓名」为空自动忽略，不影响识别。",
+    "【智能排班·Excel 模板改回 6 列 + 导入任意内容】「导出 Excel 模板」恢复为「姓名 / 第一需求 / 第一需求详情 / 第二需求 / 第二需求详情 / 不可用时间」六列，其中第一 / 第二需求与两个详情列均为原生下拉（需求列列出应用内 9 种类型标题，详情列列出班次 / 星期 / 数字等），下拉不限定可手输任意内容。导入识别大幅增强：可识别不固定的选项内容——下拉标题、手写简称（如「不排夜班」「早点班」「最多3班」「想和张三搭班」）或任意自由文本，自动归类为对应需求并抽取参数；同时支持无表头的自制表格（按 A~F 列识别）与任意工作表名，导入后直接生成排班表。"
   ]},
   { date:'2026-09-04', items:[
     "【PDF 工具增强】合并可自定义输出文件名；拆分新增「按每 N 页」均分并打包 ZIP；PDF 转图片支持 PNG / JPG / WebP，并可选 JPG 质量。",
@@ -11899,17 +11900,22 @@ AppTools['auto-schedule'] = {
       return out;
     }
     // 生成真正的 xlsx（原生 OpenXML + 下拉 dataValidation），单工作表「人员需求」
+    // 结构：姓名 | 第一需求(下拉) | 第一需求详情(下拉) | 第二需求(下拉) | 第二需求详情(下拉) | 不可用时间
     function buildScheduleXlsxParts(opts){
-      const { shifts, days, people, legend, targetRows } = opts;
-      const list = '"' + shifts.map(s=>escXml(String(s)).replace(/"/g,'""')).join(',') + '"';
-      const cols = [14,50,24,30];
+      const { shifts, days, people, needLabels, detailLabels, legend, targetRows } = opts;
+      const escList = arr => '"' + (arr||[]).map(s=>escXml(String(s)).replace(/"/g,'""')).join(',') + '"';
+      const listNeed = escList(needLabels);          // 需求类型下拉（9 种）
+      const listShift = escList(shifts);             // 班次下拉
+      const listDay = escList(days.map(d=>d.l));     // 日期下拉
+      const listDetail = escList(detailLabels);      // 详情下拉（班次 + 日期 + 常用数值/关键字）
+      const cols = [12,20,18,20,18,30];
       // 数据区：表头 + 人员 + 预置空白行（带下拉，方便直接填写）+ 间隔空行 + 说明区
-      const header=['姓名','第一需求(最想排的班)','第二需求(其次想排的班)','不可用时间(可选,每行一个,格式:周一 早班)'];
-      const data = (people||[]).map(p=>[p.name, p.n1||'', p.n2||'', (p.una||[]).join('\n')]);
+      const header=['姓名','第一需求','第一需求详情','第二需求','第二需求详情','不可用时间(可选,每行一个,格式:周一 早班)'];
+      const data = (people||[]).map(p=>[p.name, p.n1||'', p.d1||'', p.n2||'', p.d2||'', (p.una||[]).join('\n')]);
       const tgt = Math.max(data.length, targetRows||50);
-      const blanks = Array.from({length: tgt - data.length}, ()=>['','','','']);
-      const legendRows = (legend||[]).map(L=>['', L.b||'', '', L.d||'']);
-      const aoa = [header, ...data, ...blanks, ['' ,'', '', ''], ...legendRows];
+      const blanks = Array.from({length: Math.max(0, tgt - data.length)}, ()=>['','','','','','']);
+      const legendRows = (legend||[]).map(L=>['', L.b||'', '', '', '', '']);
+      const aoa = [header, ...data, ...blanks, ['','','','','',''], ...legendRows];
       let rowsXml='';
       const sq = 1 + tgt; // 下拉覆盖 表头之外 的 数据+预置空白 行（说明区在 sq 之后，不带下拉）
       aoa.forEach((row,ri)=>{
@@ -11921,7 +11927,9 @@ AppTools['auto-schedule'] = {
         });
         rowsXml+=`<row r="${r}">${cells}</row>`;
       });
-      const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${rowsXml}</sheetData><dataValidations count="2"><dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="B2:B${sq}"><formula1>${list}</formula1></dataValidation><dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="C2:C${sq}"><formula1>${list}</formula1></dataValidation></dataValidations></worksheet>`;
+      const dv=(col,list)=>`<dataValidation type="list" allowBlank="1" showErrorMessage="0" sqref="${col}2:${col}${sq}"><formula1>${list}</formula1></dataValidation>`;
+      // B=第一需求 C=第一详情 D=第二需求 E=第二详情 全部可下拉；showErrorMessage=0 → 允许手输任意值（兼容“不固定选项内容”）
+      const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${rowsXml}</sheetData><dataValidations count="4">${dv('B',listNeed)}${dv('C',listDetail)}${dv('D',listNeed)}${dv('E',listDetail)}</dataValidations></worksheet>`;
       const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
       const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`;
       const workbook=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="人员需求" sheetId="1" r:id="rId1"/></sheets></workbook>`;
@@ -11949,56 +11957,160 @@ AppTools['auto-schedule'] = {
       const shifts = S.shifts.length ? S.shifts.map(s=>s.n) : ['早班','中班','晚班','夜班'];
       const days = S.days.length ? S.days.map(d=>({k:d.k,l:d.l})) : [];
       const typeLabel = S.type==='class'?'课表':(S.type==='duty'?'值班表':'自定义排班');
-      // 若当前已有人员，按「优先某班次」预填其第一/第二需求，方便他人在此基础上改；否则给两行示例
+      // 需求类型下拉项 = 应用内 9 种选项标题；详情下拉项 = 班次 + 日期 + 常用数值/关键字
+      const needLabels = NEED_TYPES.map(o=>o.t);
+      const detailLabels = ['', ...shifts, ...days.map(d=>d.l), '周末（周六日）', '工作日（周一~周五）', '1','2','3','4','5','6','7'].filter((v,i,a)=>a.indexOf(v)===i);
+      // 若当前已有人员，预填其真实需求（类型标题 + 详情），方便他人在此基础上改；否则给两行示例
+      const toLabel = t => { const o=NEED_TYPES.find(x=>x.v===t); return o?o.t:''; };
       const people = S.people.length ? S.people.map(p=>({
         name:p.name,
-        n1:(p.need1&&p.need1.t==='prefer_shift')?p.need1.p:'',
-        n2:(p.need2&&p.need2.t==='prefer_shift')?p.need2.p:'',
+        n1:toLabel(p.need1&&p.need1.t), d1:(p.need1&&p.need1.p!=null)?String(p.need1.p):'',
+        n2:toLabel(p.need2&&p.need2.t), d2:(p.need2&&p.need2.p!=null)?String(p.need2.p):'',
         una:p.una||[]
       })) : [
-        {name:'示例·张三', n1:shifts[0]||'', n2:shifts[1]||'', una:[]},
-        {name:'示例·李四', n1:'', n2:shifts[3]||'', una:[(days[6]?days[6].k:'7')+'|'+(shifts[3]||'夜班')]}
+        {name:'示例·张三', n1:'尽量不排「某班次」', d1:shifts[3]||'', n2:'每周最多 N 班', d2:'3', una:[]},
+        {name:'示例·李四', n1:'优先排「某天 / 工作日」', d1:'工作日（周一~周五）', n2:'不要连排（相邻日同班次不重复）', d2:'', una:[(days[6]?days[6].k:'7')+'|'+(shifts[3]||'夜班')]}
       ];
       // 说明区（类型对应的选项标题 + 填写规则），放在下拉区下方，导入时因「姓名」为空自动忽略
       const legend=[
-        {b:'填写说明：本表仅一个工作表，直接在「第一需求 / 第二需求」列下拉选择班次即可，无需打字。'},
+        {b:'填写说明：本表仅一个工作表，直接在各列下拉选择即可，也可手动输入任意内容（下拉不限定）。'},
         {b:'当前类型：'+typeLabel},
-        {b:'可选班次（下拉项）：'+shifts.join('、')},
-        {b:'可选日期（不可用时间填写用）：'+days.map(d=>d.l).join('、')},
-        {b:'不可用时间格式：每行一个，示例「周一 早班」= 周一不能排早班（留空表示无限制）'},
-        {b:'第一需求=最想排的班次；第二需求=其次想排的班次（两列都留空表示无偏好）'}
+        {b:'第一/第二需求 可选（下拉）：'+needLabels.join('、')},
+        {b:'详情 可选（下拉）：班次 '+shifts.join('/')+'；日期 '+days.map(d=>d.l).join('/')+'；或填数字/姓名/工作日/周末'},
+        {b:'详情对照：不排某班次/优先某班次→填班次；不排某天/优先某天→填星期或周末/工作日；每周最多N班→填数字；想搭配/避开某人→填姓名；不要连排、无特殊要求→留空'},
+        {b:'不可用时间格式：每行一个，示例「周一 早班」= 周一不能排早班（留空表示无限制）'}
       ];
-      const parts = buildScheduleXlsxParts({shifts, days, people, legend, targetRows:50});
+      const parts = buildScheduleXlsxParts({shifts, days, people, needLabels, detailLabels, legend, targetRows:50});
       doZip(parts).then(blob=>{
         downloadBlob(blob, '排班需求填写模板.xlsx');
         toast('已导出 Excel 模板：第一/第二需求列可直接下拉选择班次','ok');
       }).catch(e=>{ toast('导出失败：'+(e&&e.message?e.message:e),'err'); });
     }
 
+    // 把任意「需求」文本（下拉标题 / 手输 / 近似写法）归一到内部类型 val。
+    // 关键：不依赖固定选项内容——先精确匹配 9 种标题，再用关键词模糊匹配，最后兜底为「优先某班次/某天」。
+    function labelToNeedType(raw){
+      let s=String(raw==null?'':raw).trim();
+      if(!s) return 'none';
+      s=s.replace(/[\s\u3000]+/g,'');
+      const exact=NEED_TYPES.find(o=>o.t.replace(/[\s\u3000]+/g,'')===s || o.v===s);
+      if(exact) return exact.v;
+      const en=NEED_TYPES.find(o=>o.v.toLowerCase()===s.toLowerCase());
+      if(en) return en.v;
+      const has=(...arr)=>arr.some(k=>s.indexOf(k)>=0);
+      // 是否提到某个具体班次（用于区分「某班次」与「某天」）
+      const shiftHit=()=>{
+        if(S.shifts.map(x=>x.n).some(n=>n&&s.indexOf(n)>=0)) return true;
+        if(/[班节]/.test(s)) return true;
+        return false;
+      };
+      if(has('不要连排','不连排','不连续','连排','nocons')) return 'nocons';
+      if(has('避开','不想','不搭')&&has('搭班','同班','一起','某人','同事')) return 'avoid_pair';
+      if(has('搭班','一起','同班','想和','pair')&&!has('不')) return 'pair';
+      if(has('最多','上限','不超过','至多','max')) return 'max_per';
+      if(has('不排','避免','尽量不','不要排','避开','别排')) return shiftHit()?'avoid_shift':'avoid_day';
+      if(has('优先','最想','希望','偏向','尽量排','prefer')) return has('星期','周','天','日','工作日','周末')?'prefer_day':'prefer_shift';
+      // 自由口语：如「早点班」「多排夜班」——含班次名且带正向词时视为「优先某班次」
+      if(/^(早|中|晚|夜|白|午|大)/.test(s) && /[班节]/.test(s)) return 'prefer_shift';
+      if(has('多排','多上','安排','排','上') && shiftHit()) return 'prefer_shift';
+      if(has('无特殊','无要求','无所谓','随便','均可','none')) return 'none';
+      if(s==='无') return 'none';
+      return 'none';
+    }
+    // 把任意「详情」文本适配到某个需求类型：班次名 / 星期 / 周末工作日 / 数字 / 姓名 / 空
+    function adaptParam(type, raw){
+      const s=String(raw==null?'':raw).trim();
+      if(type==='none'||type==='nocons') return '';
+      if(type==='max_per'){ const n=(s.match(/\d+/)||[])[0]; return n?parseInt(n,10):3; }
+      if(type==='pair'||type==='avoid_pair'){
+        // 抽取人名：优先匹配已存在人员姓名，否则截掉「搭班/一起/同班」等词
+        const names=S.people.map(x=>x.name).filter(Boolean);
+        let hit=names.find(n=>n===s) || names.find(n=>s&&s.indexOf(n)>=0);
+        if(hit) return hit;
+        return s.replace(/^.*?[和跟与向找]/,'').replace(/搭班|一起|同班|上班|值班|同事|某人/g,'').trim()||s;
+      }
+      if(type==='avoid_shift'||type==='prefer_shift'){
+        // 从任意文本中抽出班次名：精确 → 包含 → 去尾字（如「夜班」←「夜」）
+        const names=S.shifts.map(x=>x.n).filter(Boolean);
+        let hit=names.find(n=>n===s);
+        if(!hit) hit=names.find(n=>s&&(n.indexOf(s)>=0||s.indexOf(n)>=0));
+        if(!hit){
+          hit=names.find(n=>{ const core=n.replace(/[班次节课]$/,''); return core&&s.indexOf(core)>=0; });
+        }
+        return hit||s;
+      }
+      if(type==='avoid_day'||type==='prefer_day'){
+        if(/周末|双休|六日|sat|sun/i.test(s)) return 'weekend';
+        if(/工作日|周一至周五|周一~周五|周一-周五|weekday/i.test(s)) return 'weekday';
+        const d=S.days.find(x=>x.l===s||x.k===s) || S.days.find(x=>s&&x.l&&x.l.indexOf(s.replace(/^(周|星期)/,''))>=0);
+        return d?d.k:(s||'');
+      }
+      return s;
+    }
+    // 由「需求文本 + 详情」得到 need（详情为空时从需求文本里抽取参数，兼容自由填写）
+    function needFromTexts(labelTxt, detailTxt){
+      labelTxt=String(labelTxt==null?'':labelTxt).trim();
+      detailTxt=String(detailTxt==null?'':detailTxt).trim();
+      const t=labelToNeedType(labelTxt);
+      let p=detailTxt?adaptParam(t,detailTxt):'';
+      if(!p && labelTxt){
+        if(t==='max_per'){ p=adaptParam('max_per', labelTxt); }
+        else if(t==='pair'||t==='avoid_pair'){ p=adaptParam(t, labelTxt.replace(/^.*?[和跟与向找]/,'')); }
+        else if(t==='avoid_shift'||t==='prefer_shift'||t==='avoid_day'||t==='prefer_day'){ p=adaptParam(t, labelTxt); }
+      }
+      if(t==='none'&&!p&&labelTxt){
+        const asShift=S.shifts.map(x=>x.n).find(n=>n===labelTxt||labelTxt.indexOf(n)>=0);
+        if(asShift) return {t:'prefer_shift', p:asShift};
+      }
+      return {t, p};
+    }
     function rowToPerson(row){
       const keys=Object.keys(row);
-      const g=k=>{ const c=keys.find(x=>x&&x.indexOf(k)>=0); return c?row[c]:''; };
-      const nm=g('姓名'); if(!nm||!String(nm).trim()) return null;
-      const n1raw=String(g('第一需求')||'').trim();
-      const n2raw=String(g('第二需求')||'').trim();
-      const unaRaw=g('不可用');
-      const toNeed=(raw)=> raw ? {t:'prefer_shift', p:raw} : {t:'none', p:''};
-      return {
-        name:String(nm).trim(),
-        need1:toNeed(n1raw),
-        need2:toNeed(n2raw),
-        una:parseUnaText(unaRaw)
+      // 找同时含 a、b 的列（用于「第一需求详情」这类复合表头），找不到再退回只含 a 的列
+      const find=(a,b)=>{
+        const both=b?keys.find(k=>k&&k.indexOf(a)>=0&&k.indexOf(b)>=0):null;
+        if(both) return both;
+        // 含 a 但不含「详情」（用于取「第一需求」本身，避免误取到「第一需求详情」）
+        return keys.find(k=>k&&k.indexOf(a)>=0&&(!b||k.indexOf(b)<0));
       };
+      const nm=row[find('姓名')]||row[find('名字')]||'';
+      const c1L=find('第一需求'), c1D=find('第一需求','详情');
+      const c2L=find('第二需求'), c2D=find('第二需求','详情');
+      const cU=find('不可用');
+      if(!nm||!String(nm).trim()) return null;
+      const name=String(nm).trim();
+      // 只过滤「说明区」文本行（说明行恰好落在姓名列时），保留「示例·张三」等真实示例人员
+      if(/^(填写说明|说明|姓名|名字|备注|提示)/.test(name)) return null;
+      const raw=(c)=>(c&&row[c]!=null)?row[c]:'';
+      return { name, need1:needFromTexts(raw(c1L),raw(c1D)), need2:needFromTexts(raw(c2L),raw(c2D)), una:parseUnaText(raw(cU)) };
     }
     function applyImported(data){
       if(!data||!Array.isArray(data.people)){ toast('文件格式不正确','err'); return; }
       if(Array.isArray(data.shifts)&&data.shifts.length){ S.shifts=data.shifts.map(n=>({n:String(n)})); renderShifts(); }
       if(Array.isArray(data.days)&&data.days.length){ S.days=data.days.map(d=>(typeof d==='string'?{k:d,l:d}:d)); renderDays(); }
-      const people=data.people.filter(p=>p&&p.name);
+      // 归一化人员：补齐 need1/need2/una，修正类型与参数
+      const people=data.people.filter(p=>p&&p.name).map(p=>{
+        const fix=(nd)=>{ const t=(nd&&nd.t)||'none'; const tt=NEED_TYPES.some(o=>o.v===t)?t:'none'; return {t:tt, p:adaptParam(tt, nd&&nd.p)}; };
+        return { name:String(p.name).trim(), need1:fix(p.need1), need2:fix(p.need2), una:Array.isArray(p.una)?p.una:[] };
+      }).filter(p=>p.name);
       if(!people.length){ toast('未读取到人员数据','err'); return; }
       S.people=people; renderPeople(); saveCfg();
       toast('已导入 '+people.length+' 人，正在生成排班…','ok');
       generate();
+    }
+    // 自动挑选「最像人员表」的工作表：优先「人员需求」，否则取含「姓名」列且行数最多者
+    function pickPeopleSheet(wb){
+      if(wb.Sheets['人员需求']) return wb.Sheets['人员需求'];
+      let best=null, bestScore=-1;
+      (wb.SheetNames||[]).forEach(nm=>{
+        const ws=wb.Sheets[nm]; if(!ws) return;
+        let aoa=[]; try{ aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:''})||[]; }catch(_){ aoa=[]; }
+        let score=0;
+        aoa.slice(0,5).forEach(r=>{ if(Array.isArray(r)&&r.some(c=>/姓名|名字|人员/.test(String(c)))) score+=100; });
+        score+=Math.min(aoa.length,60);
+        if(score>bestScore){ bestScore=score; best=ws; }
+      });
+      return best||wb.Sheets[wb.SheetNames[0]];
     }
     function importResultFile(file){
       if(!file) return;
@@ -12011,14 +12123,26 @@ AppTools['auto-schedule'] = {
         if(typeof XLSX==='undefined'){ toast('Excel 组件未加载，请联网后重试','err'); return; }
         r.onload=()=>{ try{
           const wb=XLSX.read(r.result,{type:'array'});
-          const ws=wb.Sheets['人员需求']||wb.Sheets[wb.SheetNames[0]];
+          const ws=pickPeopleSheet(wb);
           const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
-          const people=rows.map(rowToPerson).filter(Boolean);
-          if(!people.length){ toast('未读取到人员数据（请确认第一列填写了姓名）','err'); return; }
+          // 兼容「第一行不是表头」的表格：若无一行含「姓名」，则按位置取 A~F 列
+          const hasHeader=rows.some(row=>Object.keys(row).some(k=>/姓名|名字|人员/.test(String(k))));
+          let people;
+          if(hasHeader){ people=rows.map(rowToPerson).filter(Boolean); }
+          else {
+            const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+            people=aoa.map(r0=>{
+              const nm=String((r0&&r0[0])||'').trim(); if(!nm||/姓名|说明|名字/.test(nm)) return null;
+              // 无表头时按位置：A姓名 B第一需求 C第一详情 D第二需求 E第二详情 F不可用
+              return { name:nm, need1:needFromTexts(r0[1],r0[2]), need2:needFromTexts(r0[3],r0[4]), una:parseUnaText(r0[5]) };
+            }).filter(Boolean);
+          }
+          if(!people.length){ toast('未读取到人员数据（请确认有「姓名」列且已填写）','err'); return; }
           applyImported({people:people});
+          toast('已识别 '+people.length+' 人','ok');
         }catch(e){ toast('Excel 读取失败：'+(e.message||e),'err'); } };
         r.readAsArrayBuffer(file);
-      } else { toast('仅支持 .json / .xlsx 文件','err'); }
+      } else { toast('仅支持 .json / .xlsx / .xls 文件','err'); }
     }
 
     // ---------- 初始化 ----------
