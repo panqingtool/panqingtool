@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-a</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-b</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7782,7 +7782,9 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
   { date:'2026-09-15', items:[
-    "【智能排班】新增：按每人「第一需求 + 第二需求」自动排班，适用值班表 / 课表 / 自定义；支持班次与日期自定义、每人不可用时间、均衡分配、手动微调，结果可导出 CSV / PNG / Markdown 或打印，配置本地保存。"
+    "【智能排班】新增：按每人「第一需求 + 第二需求」自动排班，适用值班表 / 课表 / 自定义；支持班次与日期自定义、每人不可用时间、均衡分配、手动微调，结果可导出 CSV / PNG / Markdown 或打印，配置本地保存。",
+    "【智能排班·导出 PNG】改为 2 倍分辨率渲染（标题 + 更大字号与单元格），清晰不模糊。",
+    "【智能排班·共享填写】新增「导出 Excel 模板」「生成智能填写网页(带下拉)」「导入填写结果」：发起人发出模板，他人按应用内选项（如早/中/晚/夜班）直接下拉填写第一/第二需求，回传后一键导入并自动生成排班表；支持 .xlsx 与 .json 导入。"
   ]},
   { date:'2026-09-04', items:[
     "【PDF 工具增强】合并可自定义输出文件名；拆分新增「按每 N 页」均分并打包 ZIP；PDF 转图片支持 PNG / JPG / WebP，并可选 JPG 质量。",
@@ -11826,26 +11828,229 @@ AppTools['auto-schedule'] = {
     function exportPNG(){
       if(!results.length){ toast('请先排班','err'); return; }
       const res=results[curWeek];
-      const cw=120, ch=44, pad=10, leftW=72, topH=30;
+      const scale=2;                                   // 2 倍分辨率，导出清晰不模糊
+      const cw=132, ch=56, pad=12, leftW=92, topH=38, titleH=34;
       const W=pad*2+leftW+S.days.length*cw;
-      const H=pad*2+topH+S.shifts.length*ch;
-      const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+      const H=pad*2+titleH+topH+S.shifts.length*ch;
+      const cv=document.createElement('canvas');
+      cv.width=Math.round(W*scale); cv.height=Math.round(H*scale);
       const ctx=cv.getContext('2d');
+      ctx.scale(scale,scale);                          // 逻辑坐标绘制，物理像素翻倍
       ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
       ctx.textBaseline='middle'; ctx.textAlign='center';
-      S.days.forEach((d,di)=>{ const x=pad+leftW+di*cw; ctx.fillStyle='#1890ff'; ctx.fillRect(x,pad,cw,topH); ctx.fillStyle='#fff'; ctx.fillText(d.l,x+cw/2,pad+topH/2); });
-      S.shifts.forEach((s,si)=>{ const y=pad+topH+si*ch; ctx.fillStyle='#1890ff'; ctx.fillRect(pad,y,leftW,ch); ctx.fillStyle='#fff'; ctx.fillText(s.n,pad+leftW/2,y+ch/2); });
-      ctx.font='13px sans-serif';
+      const FS='"Microsoft YaHei","PingFang SC","Hiragino Sans GB","Microsoft JhengHei",sans-serif';
+      // 标题
+      ctx.fillStyle='#1890ff'; ctx.font='bold 18px '+FS;
+      const title=(S.type==='class'?'课程表':(S.type==='duty'?'值班表':'排班表'))+(results.length>1?(' · 第'+(curWeek+1)+'周'):'');
+      ctx.fillText(title, W/2, pad+titleH/2);
+      const top=pad+titleH;
+      // 日期表头
+      S.days.forEach((d,di)=>{ const x=pad+leftW+di*cw;
+        ctx.fillStyle='#1890ff'; ctx.fillRect(x,top,cw,topH);
+        ctx.fillStyle='#fff'; ctx.font='bold 15px '+FS; ctx.fillText(d.l,x+cw/2,top+topH/2); });
+      // 班次表头
+      S.shifts.forEach((s,si)=>{ const y=top+topH+si*ch;
+        ctx.fillStyle='#1890ff'; ctx.fillRect(pad,y,leftW,ch);
+        ctx.fillStyle='#fff'; ctx.font='bold 15px '+FS; ctx.fillText(s.n,pad+leftW/2,y+ch/2); });
+      // 单元格
+      ctx.font='15px '+FS;
       S.shifts.forEach((s,si)=>{ S.days.forEach((d,di)=>{
-        const x=pad+leftW+di*cw, y=pad+topH+si*ch;
-        ctx.strokeStyle='#ccc'; ctx.strokeRect(x,y,cw,ch);
+        const x=pad+leftW+di*cw, y=top+topH+si*ch;
+        ctx.strokeStyle='#cfd8e3'; ctx.lineWidth=1; ctx.strokeRect(x,y,cw,ch);
         const names=res.A[di][si];
         const txt=names.join('、')||'—';
         ctx.fillStyle=names.length?'#222':'#bbb';
-        let t=txt; if(t.length>9) t=t.slice(0,9)+'…';
+        let t=txt; if(t.length>11) t=t.slice(0,11)+'…';
         ctx.fillText(t,x+cw/2,y+ch/2);
       });});
-      cv.toBlob(b=>{ if(b) downloadBlob(b,'排班表_第'+(curWeek+1)+'周.png'); else toast('导出失败','err'); });
+      cv.toBlob(b=>{ if(b) downloadBlob(b,'排班表_第'+(curWeek+1)+'周.png'); else toast('导出失败','err'); }, 'image/png');
+    }
+
+    // ---------- 共享填写模板 / 导入 ----------
+    function needValToLabel(val){ const o=NEED_TYPES.find(x=>x.v===val); return o?o.t:'无特殊要求'; }
+    function needLabelToVal(label){ const o=NEED_TYPES.find(x=>x.t===(label||'')); return o?o.v:'none'; }
+    function paramToDetail(val,p){
+      if(val==='avoid_day'||val==='prefer_day'){ if(p==='weekend')return '周末'; if(p==='weekday')return '工作日'; const d=S.days.find(x=>x.k===p); return d?d.l:String(p==null?'':p); }
+      return String(p==null?'':p);
+    }
+    function unaToHuman(key){ const parts=String(key).split('|'); const d=S.days.find(x=>x.k===parts[0]); return (d?d.l:parts[0])+' '+(parts[1]||''); }
+    function parseUnaText(str){
+      const out=[]; String(str||'').split(/[\n,，;；、]+/).forEach(tok=>{
+        tok=String(tok).trim(); if(!tok) return;
+        if(tok.indexOf('|')>=0){ out.push(tok); return; }
+        const sp=tok.split(/\s+/);
+        if(sp.length>=2){ const d=S.days.find(x=>x.l===sp[0]||x.k===sp[0]); if(d) out.push(d.k+'|'+sp.slice(1).join(' ')); else out.push(tok); }
+        else out.push(tok);
+      });
+      return out;
+    }
+    function detailToParam(val,detail){
+      detail=String(detail||'').trim();
+      if(val==='avoid_shift'||val==='prefer_shift'){ return detail; }
+      if(val==='avoid_day'||val==='prefer_day'){
+        if(/周末/.test(detail)) return 'weekend';
+        if(/工作日/.test(detail)) return 'weekday';
+        const d=S.days.find(x=>x.l===detail); return d?d.k:detail;
+      }
+      if(val==='max_per'){ const n=parseInt(detail)||3; return String(n); }
+      if(val==='pair'||val==='avoid_pair'){ return detail; }
+      return '';
+    }
+    function exportXlsxTpl(){
+      if(typeof XLSX==='undefined'){ toast('Excel 组件未加载，请联网后重试，或改用「生成智能填写网页」','err'); return; }
+      const head=['姓名','第一需求','第一需求详情','第二需求','第二需求详情','不可用时间(可选,每行一个)'];
+      const src = S.people.length ? S.people : [
+        {name:'示例·张三', need1:{t:'avoid_shift',p:S.shifts[3]?S.shifts[3].n:''}, need2:{t:'max_per',p:3}, una:[]},
+        {name:'示例·李四', need1:{t:'prefer_day',p:'weekday'}, need2:{t:'nocons',p:''}, una:[(S.days[6]?S.days[6].k:'7')+'|'+(S.shifts[3]?S.shifts[3].n:'夜班')]}
+      ];
+      const aoa=[head].concat(src.map(p=>[
+        p.name,
+        needValToLabel(p.need1.t),
+        paramToDetail(p.need1.t,p.need1.p),
+        needValToLabel(p.need2.t),
+        paramToDetail(p.need2.t,p.need2.p),
+        (p.una||[]).map(unaToHuman).join('\n')
+      ]));
+      const ws=XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols']=[{wch:12},{wch:18},{wch:14},{wch:18},{wch:14},{wch:24}];
+      const inst=[
+        ['排班需求填写模板 · 填写说明'],[''],
+        ['一、第一需求 / 第二需求 只能填以下选项之一：'],
+        ...NEED_TYPES.map(o=>['   • '+o.t]),
+        [''],['二、「详情」填写规则：'],
+        ['   • 尽量不排某班次 / 优先排某班次 → 填班次名，如：'+(S.shifts.map(s=>s.n).join(' / ')||'早班')],
+        ['   • 尽量不排某天 / 优先排某天 → 填 周一~周日 或 周末 / 工作日'],
+        ['   • 每周最多N班 → 填数字（如 3）'],
+        ['   • 想和某人搭班 / 想避开某人 → 填对方姓名'],
+        ['   • 无特殊要求 / 不要连排 → 留空'],
+        [''],['三、不可用时间（可选）：每行一个，格式「星期 班次」，例如：'],
+        ['   周一 早班'],['   周日 夜班'],
+        [''],['四、本表当前班次：'+(S.shifts.map(s=>s.n).join('、')||'（未设置）')],
+        ['   本表当前日期：'+(S.days.map(d=>d.l).join('、')||'（未设置）')],
+        [''],['填好后把本文件发回，用「智能排班」的「导入填写结果」即可生成排班表。']
+      ];
+      const wsInst=XLSX.utils.aoa_to_sheet(inst);
+      wsInst['!cols']=[{wch:90}];
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsInst, '填写说明');
+      XLSX.utils.book_append_sheet(wb, ws, '人员需求');
+      XLSX.writeFile(wb, '排班需求填写模板.xlsx');
+      toast('已导出 Excel 模板','ok');
+    }
+    function exportHtmlForm(){
+      const shifts=S.shifts.map(s=>s.n);
+      const days=S.days.map(d=>({k:d.k,l:d.l}));
+      const needTypes=NEED_TYPES.map(o=>({v:o.v,t:o.t}));
+      const data={shifts,days,needTypes};
+      const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+      const html=`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>排班需求智能填写表</title>
+<style>
+*{box-sizing:border-box}body{font-family:system-ui,"Microsoft YaHei",sans-serif;max-width:880px;margin:0 auto;padding:16px;color:#222;background:#f5f7fa}
+h2{color:#1890ff;margin:8px 0}
+.tip{background:#eaf4ff;border:1px solid #bae0ff;color:#0a5aa0;padding:10px 12px;border-radius:10px;font-size:13px;line-height:1.7;margin:8px 0 14px}
+button{font-size:14px;border:none;border-radius:8px;padding:9px 14px;cursor:pointer}
+#add{background:#1890ff;color:#fff;margin:6px 8px 14px 0}
+#exp{background:#52c41a;color:#fff;margin-right:8px}
+#copy{background:#fff;color:#1890ff;border:1px solid #1890ff}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#fff;border:1px solid #e3e8ef;border-radius:10px;padding:10px;margin-bottom:10px}
+.row input,.row select,.row textarea{font-size:14px;padding:7px 8px;border:1px solid #d9dee6;border-radius:7px;font-family:inherit}
+.row .name{width:110px}.row .n1,.row .n2{width:172px}.row .det{width:150px}
+.row .una{width:240px;height:38px;resize:vertical}.row .del{background:#fff0f0;color:#e74c3c;border:1px solid #f3c2c2;margin-left:auto}
+.legend{font-size:12px;color:#888;margin:4px 0 10px}
+pre{background:#222;color:#9fe;padding:12px;border-radius:10px;max-height:280px;overflow:auto;white-space:pre-wrap;font-size:12px}
+</style></head><body>
+<h2>排班需求智能填写表</h2>
+<p class="tip">请每位同事填写自己的一行：先选「第一需求 / 第二需求」，再按提示直接选择或填入「详情」。不可用时间每行写一个（如「周一 早班」）。填完点「导出数据」把文件发回给发起人即可。</p>
+<div class="legend">需求选项：${needTypes.map(o=>esc(o.t)).join(' ｜ ')}</div>
+<div id="rows"></div>
+<button id="add">+ 添加一行</button>
+<button id="exp">导出数据(JSON)</button>
+<button id="copy">复制数据</button>
+<pre id="out" style="display:none"></pre>
+<script>
+const DATA=${JSON.stringify(data)};
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function detailCtrl(t,val){
+  if(t==='avoid_shift'||t==='prefer_shift'){return '<select class="det">'+DATA.shifts.map(function(s){return '<option'+(s===val?' selected':'')+'>'+esc(s)+'</option>';}).join('')+'</select>';}
+  if(t==='avoid_day'||t==='prefer_day'){var opts=['周末','工作日'].concat(DATA.days.map(function(d){return d.l;}));return '<select class="det">'+opts.map(function(o){return '<option'+(o===val?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';}
+  if(t==='max_per'){return '<input class="det" type="number" min="1" value="'+(val||3)+'">';}
+  if(t==='pair'||t==='avoid_pair'){return '<input class="det" type="text" placeholder="对方姓名" value="'+esc(val||'')+'">';}
+  return '<input class="det" type="text" disabled placeholder="（无需填写）">';
+}
+function refresh(row){row.querySelector('.d1').innerHTML=detailCtrl(row.querySelector('.n1').value,'');row.querySelector('.d2').innerHTML=detailCtrl(row.querySelector('.n2').value,'');}
+function addRow(){
+  var div=document.createElement('div');div.className='row';
+  div.innerHTML='<input class="name" placeholder="姓名">'
+    +'<select class="n1">'+DATA.needTypes.map(function(o){return '<option value="'+o.v+'">'+esc(o.t)+'</option>';}).join('')+'</select>'
+    +'<span class="d1"></span>'
+    +'<select class="n2">'+DATA.needTypes.map(function(o){return '<option value="'+o.v+'">'+esc(o.t)+'</option>';}).join('')+'</select>'
+    +'<span class="d2"></span>'
+    +'<textarea class="una" placeholder="不可用时间（每行一个：周一 早班）"></textarea>'
+    +'<button class="del">删除</button>';
+  div.querySelector('.n1').onchange=function(){refresh(div);};
+  div.querySelector('.n2').onchange=function(){refresh(div);};
+  div.querySelector('.del').onclick=function(){div.remove();};
+  refresh(div);
+  document.getElementById('rows').appendChild(div);
+}
+function parseUna(str){var out=[];String(str||'').split(/[\\n,，;；、]+/).forEach(function(tok){tok=tok.trim();if(!tok)return;if(tok.indexOf('|')>=0){out.push(tok);return;}var sp=tok.split(/\\s+/);if(sp.length>=2){var d=DATA.days.find(function(x){return x.l===sp[0]||x.k===sp[0];});if(d)out.push(d.k+'|'+sp.slice(1).join(' '));else out.push(tok);}else out.push(tok);});return out;}
+function normParam(t,p){p=(p||'').trim();if(t==='avoid_day'||t==='prefer_day'){if(/周末/.test(p))return 'weekend';if(/工作日/.test(p))return 'weekday';var d=DATA.days.find(function(x){return x.l===p;});return d?d.k:p;}if(t==='max_per'){return String(parseInt(p)||3);}return p;}
+function collect(){var people=[];document.querySelectorAll('#rows .row').forEach(function(row){var name=row.querySelector('.name').value.trim();if(!name)return;var t1=row.querySelector('.n1').value;var p1=row.querySelector('.d1 .det').value;var t2=row.querySelector('.n2').value;var p2=row.querySelector('.d2 .det').value;var una=row.querySelector('.una').value;people.push({name:name,need1:{t:t1,p:normParam(t1,p1)},need2:{t:t2,p:normParam(t2,p2)},una:parseUna(una)});});return {tool:'panqingtool-schedule',version:1,shifts:DATA.shifts,days:DATA.days,people:people};}
+document.getElementById('add').onclick=addRow;
+document.getElementById('exp').onclick=function(){var data=collect();if(!data.people.length){alert('请至少填写一行姓名');return;}var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='排班需求数据.json';a.click();};
+document.getElementById('copy').onclick=function(){var data=collect();var el=document.getElementById('out');el.style.display='block';el.textContent=JSON.stringify(data,null,2);if(navigator.clipboard)navigator.clipboard.writeText(el.textContent);};
+addRow();
+<\/script>
+</body></html>`;
+      const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+      downloadBlob(blob,'排班需求智能填写表.html');
+      toast('已生成智能填写网页(带下拉选项)','ok');
+    }
+    function rowToPerson(row){
+      const keys=Object.keys(row);
+      const g=k=>{ const c=keys.find(x=>x&&x.indexOf(k)>=0); return c?row[c]:''; };
+      const nm=g('姓名'); if(!nm||!String(nm).trim()) return null;
+      const t1=needLabelToVal(g('第一需求')), d1=g('第一需求详情');
+      const t2=needLabelToVal(g('第二需求')), d2=g('第二需求详情');
+      const una=g('不可用');
+      return {
+        name:String(nm).trim(),
+        need1:{t:t1||'none', p:detailToParam(t1, d1)},
+        need2:{t:t2||'none', p:detailToParam(t2, d2)},
+        una:parseUnaText(una)
+      };
+    }
+    function applyImported(data){
+      if(!data||!Array.isArray(data.people)){ toast('文件格式不正确','err'); return; }
+      if(Array.isArray(data.shifts)&&data.shifts.length){ S.shifts=data.shifts.map(n=>({n:String(n)})); renderShifts(); }
+      if(Array.isArray(data.days)&&data.days.length){ S.days=data.days.map(d=>(typeof d==='string'?{k:d,l:d}:d)); renderDays(); }
+      const people=data.people.filter(p=>p&&p.name);
+      if(!people.length){ toast('未读取到人员数据','err'); return; }
+      S.people=people; renderPeople(); saveCfg();
+      toast('已导入 '+people.length+' 人，正在生成排班…','ok');
+      generate();
+    }
+    function importResultFile(file){
+      if(!file) return;
+      const name=file.name.toLowerCase();
+      const r=new FileReader();
+      if(name.endsWith('.json')){
+        r.onload=()=>{ try{ applyImported(JSON.parse(r.result)); }catch(e){ toast('JSON 解析失败：'+(e.message||e),'err'); } };
+        r.readAsText(file);
+      } else if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+        if(typeof XLSX==='undefined'){ toast('Excel 组件未加载，请联网后重试','err'); return; }
+        r.onload=()=>{ try{
+          const wb=XLSX.read(r.result,{type:'array'});
+          const ws=wb.Sheets['人员需求']||wb.Sheets[wb.SheetNames[0]];
+          const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+          const people=rows.map(rowToPerson).filter(Boolean);
+          if(!people.length){ toast('未读取到人员数据','err'); return; }
+          S.people=people; renderPeople(); saveCfg();
+          toast('已导入 '+people.length+' 人，正在生成排班…','ok');
+          generate();
+        }catch(e){ toast('Excel 读取失败：'+(e.message||e),'err'); } };
+        r.readAsArrayBuffer(file);
+      } else { toast('仅支持 .json / .xlsx 文件','err'); }
     }
 
     // ---------- 初始化 ----------
@@ -11930,6 +12135,10 @@ AppTools['auto-schedule'] = {
           <button class="btn ghost" id="sc-png">导出 PNG</button>
           <button class="btn ghost" id="sc-md">复制 Markdown</button>
           <button class="btn ghost" id="sc-print">打印 / 存PDF</button>
+          <button class="btn ghost" id="sc-tpl-xlsx">导出 Excel 模板</button>
+          <button class="btn ghost" id="sc-tpl-html">生成智能填写网页(带下拉)</button>
+          <button class="btn ghost" id="sc-import">导入填写结果</button>
+          <input type="file" id="sc-impfile" accept=".xlsx,.xls,.json" style="display:none">
           <button class="btn ghost" id="sc-clearcfg">清除配置</button>
         </div>
 
@@ -11959,6 +12168,10 @@ AppTools['auto-schedule'] = {
     $('#sc-png',body).onclick=exportPNG;
     $('#sc-md',body).onclick=copyMD;
     $('#sc-print',body).onclick=printWeek;
+    $('#sc-tpl-xlsx',body).onclick=exportXlsxTpl;
+    $('#sc-tpl-html',body).onclick=exportHtmlForm;
+    $('#sc-import',body).onclick=()=> $('#sc-impfile',body).click();
+    $('#sc-impfile',body).onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f){ importResultFile(f); e.target.value=''; } };
     $('#sc-clearcfg',body).onclick=()=>{ if(confirm('确定清除已保存的排班配置与结果？')){ localStorage.removeItem(LS_CFG); localStorage.removeItem(LS_RES); S=defaultState(); results=[]; renderDays(); renderShifts(); renderPeople(); renderResult(); toast('已清除'); } };
 
     renderDays(); renderShifts(); renderPeople(); renderResult();
