@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.04-c</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-a</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7178,6 +7178,8 @@ const TOOLS = [
   {id:'postal-code',  name:'邮政编码查询',     icon:'📮', cat:'life', desc:'省/直辖市/自治区级标准邮编查询（准确），支持反向由 6 位邮编定位省区，并可跳转中国邮政官网查街道/乡镇级精确邮编。'},
   {id:'long-shot',    name:'网页截图 / 拼长图', icon:'📜', cat:'image', desc:'三种纯本地截图方式：①本页长截图（自动滚动当前网页拼成超长图）；②单屏截图（截屏幕/窗口/标签页任意一张）；③多图拼接（连截多张自动去重叠拼长图）。网页版受浏览器限制只能截当前网页，截 Word/WPS/微信等软件窗口受沙箱限制暂不支持（电脑版 exe 已下架）。纯本地不上传。'},
 
+  {id:'auto-schedule',name:'智能排班',          icon:'🗓️', cat:'life', desc:'按每人第一需求 + 第二需求智能排班（值班表 / 课表 / 自定义），支持班次、不可用时间、均衡分配与手动微调，结果可导出 CSV / PNG / Markdown 或打印。'},
+
 ];;
 
 /* =====================================================================
@@ -7779,6 +7781,9 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
+  { date:'2026-09-15', items:[
+    "【智能排班】新增：按每人「第一需求 + 第二需求」自动排班，适用值班表 / 课表 / 自定义；支持班次与日期自定义、每人不可用时间、均衡分配、手动微调，结果可导出 CSV / PNG / Markdown 或打印，配置本地保存。"
+  ]},
   { date:'2026-09-04', items:[
     "【PDF 工具增强】合并可自定义输出文件名；拆分新增「按每 N 页」均分并打包 ZIP；PDF 转图片支持 PNG / JPG / WebP，并可选 JPG 质量。",
     "【综合税率计算器】丰富设置：增值税含/不含税双向换算、附算附加税费；企业所得税加西部大开发/技术先进型 15%、弥补亏损与研发加计；印花税加证券交易 0.1%；新增税率速查页。",
@@ -11482,6 +11487,483 @@ renderPopular();
 renderTools();
 renderAppDock();
 consumeShare();
+
+/* ===================== 新增工具：智能排班 auto-schedule ===================== */
+AppTools['auto-schedule'] = {
+  build(body){
+    const esc = escapeHtml;
+    const LS_CFG = 'pt_schedule_cfg_v1';
+    const LS_RES = 'pt_schedule_res_v1';
+    let S = null;          // 配置
+    let results = [];      // 每周结果：results[w] = { A:[[[names]]], warnings:[] }
+    let curWeek = 0;
+
+    const NEED_TYPES = [
+      {v:'none',         t:'无特殊要求'},
+      {v:'avoid_shift',  t:'尽量不排「某班次」'},
+      {v:'avoid_day',    t:'尽量不排「某天 / 周末」'},
+      {v:'prefer_shift', t:'优先排「某班次」'},
+      {v:'prefer_day',   t:'优先排「某天 / 工作日」'},
+      {v:'max_per',      t:'每周最多 N 班'},
+      {v:'nocons',       t:'不要连排（相邻日同班次不重复）'},
+      {v:'pair',         t:'想和某人搭班'},
+      {v:'avoid_pair',   t:'想避开某人'}
+    ];
+
+    function defaultState(){
+      return {
+        type:'duty', weeks:1,
+        days:[1,2,3,4,5,6,7].map(i=>({k:String(i), l:['周一','周二','周三','周四','周五','周六','周日'][i-1]})),
+        shifts:[{n:'早班'},{n:'中班'},{n:'晚班'},{n:'夜班'}],
+        perCell:1, balance:0.6, people:[]
+      };
+    }
+    function loadCfg(){ try{ const s=JSON.parse(localStorage.getItem(LS_CFG)); if(s&&s.days) return s; }catch(_){} return null; }
+    function saveCfg(){ try{ localStorage.setItem(LS_CFG, JSON.stringify(S)); }catch(_){} }
+    function loadRes(){ try{ const a=JSON.parse(localStorage.getItem(LS_RES)); if(Array.isArray(a)) return a; }catch(_){} return null; }
+    function saveRes(){ try{ localStorage.setItem(LS_RES, JSON.stringify(results.map(r=>({A:r.A, warnings:r.warnings})))); }catch(_){} }
+
+    function needOpts(sel){ return NEED_TYPES.map(o=>`<option value="${o.v}" ${o.v===sel?'selected':''}>${o.t}</option>`).join(''); }
+    function defParam(t){
+      if(t==='avoid_shift'||t==='prefer_shift') return S.shifts[0]?S.shifts[0].n:'';
+      if(t==='avoid_day'||t==='prefer_day') return S.days[0]?S.days[0].k:'';
+      if(t==='max_per') return 3;
+      return '';
+    }
+    function needParamHTML(idx, which, need){
+      const t=need.t;
+      if(t==='avoid_shift'||t==='prefer_shift'){
+        return `<select class="sel sc-p-${which}" data-idx="${idx}" data-w="${which}">${S.shifts.map(s=>`<option value="${esc(s.n)}" ${need.p===s.n?'selected':''}>${esc(s.n)}</option>`).join('')}</select>`;
+      }
+      if(t==='avoid_day'||t==='prefer_day'){
+        let opts=`<option value="weekend" ${need.p==='weekend'?'selected':''}>周末（周六日）</option>`;
+        opts+=S.days.map(d=>`<option value="${esc(d.k)}" ${need.p===d.k?'selected':''}>${esc(d.l)}</option>`).join('');
+        return `<select class="sel sc-p-${which}" data-idx="${idx}" data-w="${which}">${opts}</select>`;
+      }
+      if(t==='max_per'){
+        return `<input class="inp sc-p-${which}" data-idx="${idx}" data-w="${which}" type="number" min="1" value="${need.p||3}" style="width:56px">`;
+      }
+      if(t==='pair'||t==='avoid_pair'){
+        const others=S.people.filter((_,i)=>i!==idx);
+        return `<select class="sel sc-p-${which}" data-idx="${idx}" data-w="${which}"><option value="">—</option>${others.map(o=>`<option value="${esc(o.name)}" ${need.p===o.name?'selected':''}>${esc(o.name)}</option>`).join('')}</select>`;
+      }
+      return '';
+    }
+
+    function applyPreset(type){
+      if(type==='duty'){ S.days=[1,2,3,4,5,6,7].map(i=>({k:String(i),l:['周一','周二','周三','周四','周五','周六','周日'][i-1]})); S.shifts=[{n:'早班'},{n:'中班'},{n:'晚班'},{n:'夜班'}]; }
+      else if(type==='class'){ S.days=[1,2,3,4,5].map(i=>({k:String(i),l:['周一','周二','周三','周四','周五'][i-1]})); S.shifts=Array.from({length:8},(_,i)=>({n:'第'+(i+1)+'节'})); }
+      renderDays(); renderShifts();
+    }
+    function loadSample(){
+      S.people=[
+        {name:'张三', need1:{t:'avoid_shift',p:'夜班'}, need2:{t:'max_per',p:3}, una:[]},
+        {name:'李四', need1:{t:'prefer_day',p:'weekday'}, need2:{t:'nocons',p:''}, una:[]},
+        {name:'王五', need1:{t:'avoid_day',p:'6'}, need2:{t:'none',p:''}, una:['7|夜班']},
+        {name:'赵六', need1:{t:'prefer_shift',p:'早班'}, need2:{t:'pair',p:'张三'}, una:[]}
+      ];
+      renderPeople(); saveCfg();
+      toast('已载入示例人员，可修改后点「智能排班」');
+    }
+
+    function isUna(p, dayKey, shiftName){ return (p.una||[]).includes(dayKey+'|'+shiftName); }
+    function needPenalty(p, need, dayKey, shiftName, dayIdx, shiftIdx, A, load, chosen){
+      if(!need||need.t==='none') return 0;
+      const t=need.t;
+      if(t==='avoid_shift'){ return shiftName===need.p?1:0; }
+      if(t==='avoid_day'){ if(need.p==='weekend'){ return (dayKey==='6'||dayKey==='7')?1:0; } return dayKey===need.p?1:0; }
+      if(t==='prefer_shift'){ return shiftName!==need.p?0.5:0; }
+      if(t==='prefer_day'){ if(need.p==='weekday'){ return (dayKey==='6'||dayKey==='7')?0.5:0; } return dayKey!==need.p?0.5:0; }
+      if(t==='max_per'){ const n=parseInt(need.p||'99'); return load[p.name]>=n?1:0; }
+      if(t==='nocons'){
+        if(dayIdx>0 && A[dayIdx-1] && A[dayIdx-1][shiftIdx] && A[dayIdx-1][shiftIdx].includes(p.name)) return 1;
+        if(dayIdx<S.days.length-1 && A[dayIdx+1] && A[dayIdx+1][shiftIdx] && A[dayIdx+1][shiftIdx].includes(p.name)) return 1;
+        return 0;
+      }
+      if(t==='pair'){ const q=need.p; if(q && S.people.some(x=>x.name===q)) return -0.4; return 0; }
+      if(t==='avoid_pair'){ const q=need.p; if(q && chosen && chosen.includes(q)) return 1; return 0; }
+      return 0;
+    }
+    // 同一格子内是否命中「避开某人」：p 想避开的人已在 chosen 中，或 chosen 中有人想避开 p（双向）
+    function avoidPairHit(p, chosen){
+      for(const nd of [p.need1,p.need2]){
+        if(nd && nd.t==='avoid_pair' && nd.p && chosen.includes(nd.p)) return true;
+      }
+      for(const name of chosen){
+        const other=S.people.find(x=>x.name===name);
+        if(other){
+          for(const nd of [other.need1,other.need2]){
+            if(nd && nd.t==='avoid_pair' && nd.p===p.name) return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function generateWeek(){
+      const load={}; S.people.forEach(p=>load[p.name]=0);
+      const A=S.days.map(()=>S.shifts.map(()=>[]));
+      const slots=[];
+      for(let d=0; d<S.days.length; d++) for(let s=0; s<S.shifts.length; s++) slots.push({d,s});
+      slots.forEach(slot=>{ slot.avail=S.people.filter(p=>!isUna(p, S.days[slot.d].k, S.shifts[slot.s].n)); });
+      slots.sort((a,b)=> a.avail.length-b.avail.length || Math.random()-0.5);
+      const balW=(S.balance==null?0.6:S.balance);
+      const warnings=[];
+      for(const slot of slots){
+        const d=slot.d, s=slot.s;
+        const cands=slot.avail.slice();
+        cands.sort((a,b)=>{
+          const sa=load[a.name]*balW
+            + needPenalty(a,a.need1,S.days[d].k,S.shifts[s].n,d,s,A,load,null)*1000
+            + needPenalty(a,a.need2,S.days[d].k,S.shifts[s].n,d,s,A,load,null)*100;
+          const sb=load[b.name]*balW
+            + needPenalty(b,b.need1,S.days[d].k,S.shifts[s].n,d,s,A,load,null)*1000
+            + needPenalty(b,b.need2,S.days[d].k,S.shifts[s].n,d,s,A,load,null)*100;
+          return sa-sb;
+        });
+        const chosen=[];
+        for(const p of cands){
+          if(chosen.length>=S.perCell) break;
+          if(chosen.includes(p.name)) continue;
+          if(avoidPairHit(p, chosen)) continue;   // 避开某人：本格已有想避开的人则跳过
+          chosen.push(p.name);
+        }
+        // 若仍有空位且有人可用但被第一/二需求挡住，放宽到全部人员兜底
+        if(chosen.length<S.perCell){
+          const all=S.people.filter(p=>!isUna(p,S.days[d].k,S.shifts[s].n) && !chosen.includes(p.name));
+          for(const p of all){ if(chosen.length>=S.perCell) break; chosen.push(p.name); }
+        }
+        if(chosen.length<S.perCell){
+          warnings.push(S.days[d].l+' '+S.shifts[s].n+' 仅 '+chosen.length+'/'+S.perCell+' 人');
+        }
+        chosen.forEach(n=>{ A[d][s].push(n); load[n]++; });
+      }
+      return {A, warnings};
+    }
+
+    function generate(){
+      if(!S.people.length){ toast('请先添加人员','err'); return; }
+      if(!S.shifts.length||!S.days.length){ toast('请设置班次与日期','err'); return; }
+      results=[];
+      for(let w=0; w<S.weeks; w++) results.push(generateWeek());
+      curWeek=0; saveRes(); renderResult();
+      toast('排班完成 🎉','ok');
+    }
+
+    function renderDays(){
+      const box=$('#sc-days',body);
+      box.innerHTML=S.days.map((d,i)=>`<span class="sch-chip">#${i+1} <input class="sch-din" data-i="${i}" value="${esc(d.l)}" style="width:64px"><b class="sch-x" data-i="${i}" title="删除">×</b></span>`).join('');
+      box.querySelectorAll('.sch-din').forEach(inp=> inp.oninput=()=>{ S.days[+inp.dataset.i].l=inp.value; saveCfg(); });
+      box.querySelectorAll('.sch-x').forEach(x=> x.onclick=()=>{ S.days.splice(+x.dataset.i,1); renderDays(); saveCfg(); });
+    }
+    function renderShifts(){
+      const box=$('#sc-shifts',body);
+      box.innerHTML=S.shifts.map((s,i)=>`<span class="sch-chip">#${i+1} <input class="sch-sin" data-i="${i}" value="${esc(s.n)}" style="width:64px"><b class="sch-x" data-i="${i}" title="删除">×</b></span>`).join('');
+      box.querySelectorAll('.sch-sin').forEach(inp=> inp.oninput=()=>{ S.shifts[+inp.dataset.i].n=inp.value; saveCfg(); });
+      box.querySelectorAll('.sch-x').forEach(x=> x.onclick=()=>{ S.shifts.splice(+x.dataset.i,1); renderShifts(); saveCfg(); });
+    }
+    function renderPeople(){
+      const box=$('#sc-people',body);
+      if(!S.people.length){ box.innerHTML='<div class="hint">还没有人员，点上方「+ 添加人员」或「载入示例」。</div>'; return; }
+      box.innerHTML=S.people.map((p,idx)=>{
+        const n1=p.need1||{t:'none',p:''}, n2=p.need2||{t:'none',p:''};
+        return `<div class="sch-pcard" data-idx="${idx}">
+          <div class="sch-prow">
+            <input class="inp sch-pname" data-idx="${idx}" value="${esc(p.name)}" style="width:104px" aria-label="姓名">
+            <div class="sch-need"><label class="field-label">第一需求</label>
+              <select class="sel sc-need1" data-idx="${idx}">${needOpts(n1.t)}</select>
+              <span class="sc-param">${needParamHTML(idx,'need1',n1)}</span></div>
+            <div class="sch-need"><label class="field-label">第二需求</label>
+              <select class="sel sc-need2" data-idx="${idx}">${needOpts(n2.t)}</select>
+              <span class="sc-param">${needParamHTML(idx,'need2',n2)}</span></div>
+            <button class="btn ghost sm sc-una" data-idx="${idx}">不可用${ (p.una&&p.una.length)?'('+p.una.length+')':'' }</button>
+            <button class="btn ghost sm sc-pdel" data-idx="${idx}">删除</button>
+          </div>
+          <div class="sc-unabox" id="sc-una-${idx}" style="display:none"></div>
+        </div>`;
+      }).join('');
+      box.querySelectorAll('.sch-pname').forEach(inp=> inp.oninput=()=>{ S.people[+inp.dataset.idx].name=inp.value; saveCfg(); });
+      box.querySelectorAll('.sc-need1').forEach(sel=> sel.onchange=()=>{ const i=+sel.dataset.idx; S.people[i].need1={t:sel.value,p:defParam(sel.value)}; renderPeople(); saveCfg(); });
+      box.querySelectorAll('.sc-need2').forEach(sel=> sel.onchange=()=>{ const i=+sel.dataset.idx; S.people[i].need2={t:sel.value,p:defParam(sel.value)}; renderPeople(); saveCfg(); });
+      box.querySelectorAll('.sc-p-need1,.sc-p-need2').forEach(el=>{ el.onchange=el.oninput=()=>{ const i=+el.dataset.idx, w=el.dataset.w; S.people[i][w].p=el.value; saveCfg(); }; });
+      box.querySelectorAll('.sc-una').forEach(btn=> btn.onclick=()=>{ const i=+btn.dataset.idx; const b=$('#sc-una-'+i,body); if(b.style.display==='none'){ renderUna(i,b); b.style.display=''; } else b.style.display='none'; });
+      box.querySelectorAll('.sc-pdel').forEach(btn=> btn.onclick=()=>{ const i=+btn.dataset.idx; S.people.splice(i,1); renderPeople(); saveCfg(); });
+    }
+    function renderUna(idx, box){
+      const p=S.people[idx];
+      let html='<div class="sch-unatbl"><table><thead><tr><th></th>'+S.days.map(d=>`<th>${esc(d.l)}</th>`).join('')+'</tr></thead><tbody>';
+      S.shifts.forEach((s)=>{
+        html+='<tr><th>'+esc(s.n)+'</th>';
+        S.days.forEach((d)=>{
+          const key=d.k+'|'+s.n; const on=(p.una||[]).includes(key);
+          html+=`<td><input type="checkbox" class="sc-unacb" data-idx="${idx}" data-k="${esc(key)}" ${on?'checked':''}></td>`;
+        });
+        html+='</tr>';
+      });
+      html+='</tbody></table></div>';
+      box.innerHTML=html;
+      box.querySelectorAll('.sc-unacb').forEach(cb=>{
+        cb.onchange=()=>{
+          const i=+cb.dataset.idx, k=cb.dataset.k;
+          S.people[i].una=S.people[i].una||[];
+          if(cb.checked){ if(!S.people[i].una.includes(k)) S.people[i].una.push(k); }
+          else S.people[i].una=S.people[i].una.filter(x=>x!==k);
+          saveCfg();
+          const b=$('.sc-una[data-idx="'+i+'"]',body); if(b) b.textContent='不可用'+(S.people[i].una.length?('('+S.people[i].una.length+')'):'');
+        };
+      });
+    }
+    function statsHTML(res){
+      const counts={}; S.people.forEach(p=>counts[p.name]=0);
+      res.A.forEach(row=>row.forEach(c=>c.forEach(n=>{ if(counts[n]!=null) counts[n]++; })));
+      let html='<div class="sch-stats"><h4 class="sch-h">本周期班次统计</h4><div class="sch-statrow">';
+      S.people.forEach(p=>{ html+=`<span class="sch-stat"><b>${esc(p.name)}</b> ${counts[p.name]} 班</span>`; });
+      html+='</div>';
+      const vals=Object.values(counts); const mx=Math.max(...vals), mn=Math.min(...vals);
+      html+=`<div class="hint">最多次数 ${mx}，最少 ${mn}，极差 ${mx-mn}（越小越均衡）。</div>`;
+      if(res.warnings&&res.warnings.length){ html+=`<div class="sch-warn">⚠️ 以下格子未排满，请调整需求或增加人员：${esc(res.warnings.join('；'))}</div>`; }
+      html+='</div>';
+      return html;
+    }
+    function renderResult(){
+      const box=$('#sc-result',body);
+      if(!results.length){ box.innerHTML=''; return; }
+      let html='';
+      if(results.length>1){
+        html+='<div class="sch-tabs">'+results.map((r,w)=>`<span class="sch-tab ${w===curWeek?'on':''}" data-w="${w}">第${w+1}周</span>`).join('')+'</div>';
+      }
+      const res=results[curWeek];
+      html+='<div class="sch-tablewrap"><table class="sch-tbl"><thead><tr><th class="sch-corner">班次 \\ 日期</th>'+S.days.map(d=>`<th>${esc(d.l)}</th>`).join('')+'</tr></thead><tbody>';
+      S.shifts.forEach((s,si)=>{
+        html+='<tr><th class="sch-rowh">'+esc(s.n)+'</th>';
+        S.days.forEach((d,di)=>{
+          const cell=res.A[di][si];
+          const chips=cell.map(n=>`<span class="sch-ps">${esc(n)}</span>`).join('');
+          html+=`<td data-d="${di}" data-s="${si}" class="sch-cell">${chips||'<span class="sch-empty">—</span>'}</td>`;
+        });
+        html+='</tr>';
+      });
+      html+='</tbody></table></div>';
+      html+=statsHTML(res);
+      box.innerHTML=html;
+      box.querySelectorAll('.sch-tab').forEach(t=> t.onclick=()=>{ curWeek=+t.dataset.w; renderResult(); });
+      box.querySelectorAll('.sch-cell').forEach(td=>{ td.onclick=()=> openCellEditor(td, +td.dataset.d, +td.dataset.s); });
+    }
+    function openCellEditor(td,d,s){
+      const res=results[curWeek];
+      const opts=['<option value="">＋ 添加人员</option>','<option value="__clear__">清空本格</option>'].concat(S.people.map(p=>`<option value="${esc(p.name)}">${esc(p.name)}</option>`)).join('');
+      td.innerHTML=`<select class="sel sch-cellsel">${opts}</select>`;
+      const sel=td.querySelector('select');
+      sel.onchange=()=>{
+        if(sel.value==='__clear__'){ res.A[d][s]=[]; }
+        else if(sel.value){ if(!res.A[d][s].includes(sel.value)) res.A[d][s].push(sel.value); }
+        saveRes(); renderResult();
+      };
+      sel.onblur=()=> renderResult();
+      sel.focus();
+    }
+
+    function exportCSV(){
+      if(!results.length){ toast('请先排班','err'); return; }
+      const lines=[];
+      for(let w=0; w<results.length; w++){
+        if(results.length>1) lines.push('第'+(w+1)+'周');
+        const head=['班次\\日期'].concat(S.days.map(d=>d.l));
+        lines.push(head.join(','));
+        S.shifts.forEach((sh,si)=>{
+          lines.push([sh.n].concat(S.days.map((d,di)=> results[w].A[di][si].join('/'))).join(','));
+        });
+        lines.push('');
+      }
+      lines.push('班次统计');
+      S.people.forEach(p=>{
+        if(results.length>1) lines.push(p.name);
+        results.forEach((res,w)=>{ let c=0; res.A.forEach(row=>row.forEach(c2=>{ if(c2.includes(p.name)) c++; })); if(results.length>1) lines.push('第'+(w+1)+'周 '+c+' 班'); else lines.push(p.name+','+c+' 班'); });
+        if(results.length>1) lines.push('');
+      });
+      const blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+      downloadBlob(blob,'排班表.csv');
+    }
+    function copyMD(){
+      if(!results.length){ toast('请先排班','err'); return; }
+      const res=results[curWeek];
+      let md='| 班次 \\\\ 日期 |'+S.days.map(d=>esc(d.l)).join(' | ')+' |\n';
+      md+='|'+'---|'.repeat(S.days.length+1)+'\n';
+      S.shifts.forEach((sh,si)=>{ md+='| '+esc(sh.n)+' |'+S.days.map((d,di)=> (res.A[di][si].join('/')||'—') ).join(' | ')+' |\n'; });
+      copyText(md);
+    }
+    function buildTableHTML(res){
+      let h='<table class="prt-tbl"><thead><tr><th>班次 \\ 日期</th>'+S.days.map(d=>`<th>${esc(d.l)}</th>`).join('')+'</tr></thead><tbody>';
+      S.shifts.forEach((s,si)=>{ h+='<tr><th class="rh">'+esc(s.n)+'</th>'; S.days.forEach((d,di)=>{ const c=res.A[di][si].join('、'); h+=`<td class="${c?'':'empty'}">${esc(c)||'—'}</td>`; }); h+='</tr>'; });
+      h+='</tbody></table>';
+      return h;
+    }
+    function printWeek(){
+      if(!results.length){ toast('请先排班','err'); return; }
+      const res=results[curWeek];
+      const counts={}; S.people.forEach(p=>counts[p.name]=0);
+      res.A.forEach(row=>row.forEach(c=>c.forEach(n=>{ if(counts[n]!=null) counts[n]++; })));
+      const w=window.open('','_blank'); if(!w){ toast('弹窗被拦截，请允许后重试','err'); return; }
+      w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>排班表</title><style>'
+        +'body{font-family:sans-serif;padding:20px}'
+        +'h2{text-align:center;color:#1890ff}'
+        +'.prt-tbl{border-collapse:collapse;margin:14px auto;min-width:520px}'
+        +'.prt-tbl td,.prt-tbl th{border:1px solid #999;padding:8px 10px;text-align:center;font-size:14px}'
+        +'.prt-tbl thead th{background:#1890ff;color:#fff}'
+        +'.prt-tbl .rh{background:#f0f5ff;font-weight:bold}'
+        +'.prt-tbl .empty{color:#bbb}'
+        +'.stat{margin-top:12px;font-size:13px;text-align:center}'
+        +'@media print{.nop{display:none}}'
+        +'</style></head><body>'
+        +'<h2>'+(S.type==='class'?'课程表':(S.type==='duty'?'值班表':'排班表'))+(results.length>1?(' · 第'+(curWeek+1)+'周'):'')+'</h2>'
+        +buildTableHTML(res)
+        +'<div class="stat">'+S.people.map(p=>esc(p.name)+'：'+counts[p.name]+' 班').join('　')+'</div>'
+        +'<div class="nop" style="text-align:center;margin-top:14px"><button onclick="window.print()">打印 / 存为 PDF</button></div>'
+        +'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},200);};<\/scr'+'ipt>'
+        +'</body></html>');
+      w.document.close();
+    }
+    function exportPNG(){
+      if(!results.length){ toast('请先排班','err'); return; }
+      const res=results[curWeek];
+      const cw=120, ch=44, pad=10, leftW=72, topH=30;
+      const W=pad*2+leftW+S.days.length*cw;
+      const H=pad*2+topH+S.shifts.length*ch;
+      const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+      const ctx=cv.getContext('2d');
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+      ctx.textBaseline='middle'; ctx.textAlign='center';
+      S.days.forEach((d,di)=>{ const x=pad+leftW+di*cw; ctx.fillStyle='#1890ff'; ctx.fillRect(x,pad,cw,topH); ctx.fillStyle='#fff'; ctx.fillText(d.l,x+cw/2,pad+topH/2); });
+      S.shifts.forEach((s,si)=>{ const y=pad+topH+si*ch; ctx.fillStyle='#1890ff'; ctx.fillRect(pad,y,leftW,ch); ctx.fillStyle='#fff'; ctx.fillText(s.n,pad+leftW/2,y+ch/2); });
+      ctx.font='13px sans-serif';
+      S.shifts.forEach((s,si)=>{ S.days.forEach((d,di)=>{
+        const x=pad+leftW+di*cw, y=pad+topH+si*ch;
+        ctx.strokeStyle='#ccc'; ctx.strokeRect(x,y,cw,ch);
+        const names=res.A[di][si];
+        const txt=names.join('、')||'—';
+        ctx.fillStyle=names.length?'#222':'#bbb';
+        let t=txt; if(t.length>9) t=t.slice(0,9)+'…';
+        ctx.fillText(t,x+cw/2,y+ch/2);
+      });});
+      cv.toBlob(b=>{ if(b) downloadBlob(b,'排班表_第'+(curWeek+1)+'周.png'); else toast('导出失败','err'); });
+    }
+
+    // ---------- 初始化 ----------
+    const saved=loadCfg();
+    S=saved||defaultState();
+    (S.people||[]).forEach(p=>{ p.need1=p.need1||{t:'none',p:''}; p.need2=p.need2||{t:'none',p:''}; p.una=p.una||[]; });
+    results=loadRes()||[];
+
+    body.innerHTML = `
+      <style>
+      .sch-wrap{max-width:1080px;margin:0 auto}
+      .sch-sec{background:#fff;border:1px solid #e8edf3;border-radius:12px;padding:14px 16px;margin-bottom:14px}
+      .sch-h{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+      .sch-chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
+      .sch-chip{display:inline-flex;align-items:center;gap:4px;background:#f5f7fa;border:1px solid #e3e8ef;border-radius:8px;padding:4px 8px;font-size:13px}
+      .sch-chip .sch-x{cursor:pointer;color:#e74c3c;font-weight:700}
+      .sch-mini-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+      .btn.sm,.btn.ghost.sm{padding:5px 10px;font-size:12px}
+      .sch-pcard{border:1px solid #eef1f5;border-radius:10px;padding:10px;margin-bottom:10px;background:#fafcff}
+      .sch-prow{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+      .sch-need{display:flex;flex-direction:column;gap:3px}
+      .sch-param{margin-top:2px}
+      .sch-unabox{margin-top:8px;background:#f7f9fc;border-radius:8px;padding:8px}
+      .sch-unatbl table{border-collapse:collapse}
+      .sch-unatbl th,.sch-unatbl td{border:1px solid #dde3ec;padding:3px 6px;font-size:12px;text-align:center}
+      .sch-act{display:flex;flex-wrap:wrap;gap:8px}
+      .sch-tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+      .sch-tab{cursor:pointer;padding:6px 14px;border-radius:8px;border:1px solid #e3e8ef;background:#f5f7fa;font-size:13px}
+      .sch-tab.on{background:#1890ff;color:#fff;border-color:#1890ff}
+      .sch-tablewrap{overflow:auto}
+      .sch-tbl{border-collapse:collapse;width:100%;min-width:520px}
+      .sch-tbl th,.sch-tbl td{border:1px solid #dde3ec;padding:8px 6px;text-align:center;font-size:13px;vertical-align:middle}
+      .sch-tbl thead th{background:#1890ff;color:#fff}
+      .sch-corner{background:#eef3fb!important;color:#333!important}
+      .sch-rowh{background:#f0f5ff;font-weight:600}
+      .sch-cell{cursor:pointer;min-width:78px;transition:background .15s}
+      .sch-cell:hover{background:#eaf4ff}
+      .sch-ps{display:inline-block;background:#1890ff;color:#fff;border-radius:6px;padding:2px 7px;margin:1px;font-size:12px}
+      .sch-empty{color:#bbb}
+      .sch-stats{margin-top:14px}
+      .sch-statrow{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
+      .sch-stat{background:#f5f7fa;border:1px solid #e3e8ef;border-radius:8px;padding:5px 10px;font-size:13px}
+      .sch-warn{background:#fff4e6;border:1px solid #ffd8a8;color:#a85a00;border-radius:8px;padding:8px 10px;font-size:13px;margin-top:8px}
+      </style>
+      <div class="sch-wrap">
+        <div class="sch-sec">
+          <h4 class="sch-h">① 排班基础设置</h4>
+          <div class="row mb">
+            <div><label class="field-label">类型预设</label><select id="sc-type" class="sel"><option value="duty">值班表</option><option value="class">课表</option><option value="custom">自定义</option></select></div>
+            <div><label class="field-label">排班周数</label><input id="sc-weeks" type="number" class="inp" min="1" max="8" value="1" style="width:70px"></div>
+            <div><label class="field-label">每格人数</label><input id="sc-per" type="number" class="inp" min="1" max="4" value="1" style="width:70px"></div>
+            <div style="flex:1;min-width:200px"><label class="field-label">均衡强度：<span id="sc-balv">0.6</span></label><input id="sc-bal" type="range" min="0" max="1" step="0.1" value="0.6" style="width:100%"></div>
+          </div>
+          <div class="mb"><label class="field-label">日期列（可增删、改名）</label>
+            <div id="sc-days" class="sch-chips"></div>
+            <div class="sch-mini-btns">
+              <button class="btn ghost sm" id="sc-dweek">周一~周日</button>
+              <button class="btn ghost sm" id="sc-dwork">周一~周五</button>
+              <button class="btn ghost sm" id="sc-dadd">+ 添加日期</button>
+            </div>
+          </div>
+          <div class="mb"><label class="field-label">班次 / 节次（可增删、改名）</label>
+            <div id="sc-shifts" class="sch-chips"></div>
+            <div class="sch-mini-btns">
+              <button class="btn ghost sm" id="sc-sduty">早/中/晚/夜</button>
+              <button class="btn ghost sm" id="sc-sclass">第1~8节</button>
+              <button class="btn ghost sm" id="sc-sadd">+ 添加班次</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="sch-sec">
+          <h4 class="sch-h">② 人员与第一 / 第二需求 <button class="btn ghost sm" id="sc-sample">载入示例</button></h4>
+          <div class="row mb"><input id="sc-pname" class="inp" placeholder="输入姓名后点添加" style="flex:1"><button class="btn sm" id="sc-padd">+ 添加人员</button></div>
+          <div id="sc-people"></div>
+        </div>
+
+        <div class="sch-sec sch-act">
+          <button class="btn" id="sc-gen">🤖 智能排班</button>
+          <button class="btn ghost" id="sc-reset">清空结果</button>
+          <button class="btn ghost" id="sc-csv">导出 CSV</button>
+          <button class="btn ghost" id="sc-png">导出 PNG</button>
+          <button class="btn ghost" id="sc-md">复制 Markdown</button>
+          <button class="btn ghost" id="sc-print">打印 / 存PDF</button>
+          <button class="btn ghost" id="sc-clearcfg">清除配置</button>
+        </div>
+
+        <div id="sc-result"></div>
+      </div>`;
+
+    $('#sc-type',body).value=S.type||'duty';
+    $('#sc-weeks',body).value=S.weeks;
+    $('#sc-per',body).value=S.perCell;
+    $('#sc-bal',body).value=S.balance; $('#sc-balv',body).textContent=S.balance;
+
+    $('#sc-type',body).onchange=e=>{ S.type=e.target.value; if(S.type!=='custom') applyPreset(S.type); saveCfg(); };
+    $('#sc-weeks',body).onchange=e=>{ let v=Math.max(1,Math.min(8,parseInt(e.target.value)||1)); S.weeks=v; e.target.value=v; saveCfg(); };
+    $('#sc-per',body).onchange=e=>{ let v=Math.max(1,Math.min(4,parseInt(e.target.value)||1)); S.perCell=v; e.target.value=v; saveCfg(); };
+    $('#sc-bal',body).oninput=e=>{ S.balance=parseFloat(e.target.value); $('#sc-balv',body).textContent=S.balance; saveCfg(); };
+    $('#sc-dweek',body).onclick=()=>{ S.days=[1,2,3,4,5,6,7].map(i=>({k:String(i),l:['周一','周二','周三','周四','周五','周六','周日'][i-1]})); renderDays(); saveCfg(); };
+    $('#sc-dwork',body).onclick=()=>{ S.days=[1,2,3,4,5].map(i=>({k:String(i),l:['周一','周二','周三','周四','周五'][i-1]})); renderDays(); saveCfg(); };
+    $('#sc-dadd',body).onclick=()=>{ S.days.push({k:'d'+Date.now(),l:'新日期'}); renderDays(); saveCfg(); };
+    $('#sc-sduty',body).onclick=()=>{ S.shifts=[{n:'早班'},{n:'中班'},{n:'晚班'},{n:'夜班'}]; renderShifts(); saveCfg(); };
+    $('#sc-sclass',body).onclick=()=>{ S.shifts=Array.from({length:8},(_,i)=>({n:'第'+(i+1)+'节'})); renderShifts(); saveCfg(); };
+    $('#sc-sadd',body).onclick=()=>{ S.shifts.push({n:'新班次'}); renderShifts(); saveCfg(); };
+    $('#sc-sample',body).onclick=loadSample;
+    $('#sc-padd',body).onclick=()=>{ const nm=$('#sc-pname',body).value.trim(); if(!nm){ toast('请输入姓名','err'); return; } S.people.push({name:nm,need1:{t:'none',p:''},need2:{t:'none',p:''},una:[]}); $('#sc-pname',body).value=''; renderPeople(); saveCfg(); };
+    $('#sc-gen',body).onclick=generate;
+    $('#sc-reset',body).onclick=()=>{ results=[]; saveRes(); renderResult(); };
+    $('#sc-csv',body).onclick=exportCSV;
+    $('#sc-png',body).onclick=exportPNG;
+    $('#sc-md',body).onclick=copyMD;
+    $('#sc-print',body).onclick=printWeek;
+    $('#sc-clearcfg',body).onclick=()=>{ if(confirm('确定清除已保存的排班配置与结果？')){ localStorage.removeItem(LS_CFG); localStorage.removeItem(LS_RES); S=defaultState(); results=[]; renderDays(); renderShifts(); renderPeople(); renderResult(); toast('已清除'); } };
+
+    renderDays(); renderShifts(); renderPeople(); renderResult();
+  }
+};
 </script>
 <!-- ============ PWA：注册 Service Worker + 新版本提示 ============ -->
 <script>
@@ -11918,6 +12400,7 @@ AppTools['tax-rate'] = {
     };
   }
 };
+
 
 // 支持 ?open=xxx URL 参数（PWA shortcuts 长按/主屏快捷方式直接打开工具）
 (function(){
