@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-c</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-d</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7784,7 +7784,8 @@ const CHANGELOG = [
     { date:'2026-09-15', items:[
     "【智能排班】新增：按每人「第一需求 + 第二需求」自动排班，适用值班表 / 课表 / 自定义；支持班次与日期自定义、每人不可用时间、均衡分配、手动微调，结果可导出 CSV / PNG / Markdown 或打印，配置本地保存。",
     "【智能排班·导出 PNG】改为 2 倍分辨率渲染（标题 + 更大字号与单元格），清晰不模糊。",
-    "【智能排班·Excel 模板下拉修复】「导出 Excel 模板」改为原生 OpenXML 单工作表「人员需求」：第一需求 / 第二需求列直接下拉选择班次（如早/中/晚/夜班），无需打字；填好后用「导入填写结果」一键导入并自动生成排班表（第一/第二需求映射为「优先排某班次」）。已删除「生成智能填写网页」功能。"
+    "【智能排班·Excel 模板下拉修复】「导出 Excel 模板」改为原生 OpenXML 单工作表「人员需求」：第一需求 / 第二需求列直接下拉选择班次（如早/中/晚/夜班），无需打字；填好后用「导入填写结果」一键导入并自动生成排班表（第一/第二需求映射为「优先排某班次」）。已删除「生成智能填写网页」功能。",
+    "【智能排班·加载崩溃修复 + 模板丰富】修复旧配置字段缺失导致打开即报错（Cannot read properties of undefined (reading 'map')）：加载时统一补齐 days/shifts/people/weeks/perCell/balance 等字段的合法结构，排班结果渲染也加空值防御。导出 Excel 模板新增「说明区」：标注当前类型（值班表 / 课表 / 自定义）对应的可选班次与日期、不可用时间格式与填写规则，并预置 50 行带下拉的空白行方便直接填写；说明区在导入时按「姓名」为空自动忽略，不影响识别。"
   ]},
   { date:'2026-09-04', items:[
     "【PDF 工具增强】合并可自定义输出文件名；拆分新增「按每 N 页」均分并打包 ZIP；PDF 转图片支持 PNG / JPG / WebP，并可选 JPG 质量。",
@@ -11520,6 +11521,25 @@ AppTools['auto-schedule'] = {
         perCell:1, balance:0.6, people:[]
       };
     }
+    // 防御：旧配置 / 损坏配置可能缺字段，统一补齐为合法结构，避免加载时 .map 崩溃
+    function normalizeState(raw){
+      const d=defaultState();
+      if(!raw||typeof raw!=='object') return d;
+      const st=Object.assign({}, d, raw);
+      st.type=(raw.type==='duty'||raw.type==='class'||raw.type==='custom')?raw.type:d.type;
+      st.weeks=(typeof raw.weeks==='number'&&raw.weeks>=1&&raw.weeks<=8)?raw.weeks:d.weeks;
+      st.perCell=(typeof raw.perCell==='number'&&raw.perCell>=1&&raw.perCell<=4)?raw.perCell:d.perCell;
+      st.balance=(typeof raw.balance==='number')?raw.balance:d.balance;
+      st.days=(Array.isArray(raw.days)&&raw.days.length)?raw.days.map(x=>({k:String(x&&x.k!=null?x.k:''),l:String(x&&x.l!=null?x.l:'')})):d.days;
+      st.shifts=(Array.isArray(raw.shifts)&&raw.shifts.length)?raw.shifts.map(x=>({n:String(x&&x.n!=null?x.n:'')})):d.shifts;
+      st.people=(Array.isArray(raw.people)?raw.people:[]).filter(p=>p&&p.name).map(p=>({
+        name:String(p.name),
+        need1:(p.need1&&p.need1.t)?p.need1:{t:'none',p:''},
+        need2:(p.need2&&p.need2.t)?p.need2:{t:'none',p:''},
+        una:Array.isArray(p.una)?p.una:[]
+      }));
+      return st;
+    }
     function loadCfg(){ try{ const s=JSON.parse(localStorage.getItem(LS_CFG)); if(s&&s.days) return s; }catch(_){} return null; }
     function saveCfg(){ try{ localStorage.setItem(LS_CFG, JSON.stringify(S)); }catch(_){} }
     function loadRes(){ try{ const a=JSON.parse(localStorage.getItem(LS_RES)); if(Array.isArray(a)) return a; }catch(_){} return null; }
@@ -11717,7 +11737,7 @@ AppTools['auto-schedule'] = {
     }
     function statsHTML(res){
       const counts={}; S.people.forEach(p=>counts[p.name]=0);
-      res.A.forEach(row=>row.forEach(c=>c.forEach(n=>{ if(counts[n]!=null) counts[n]++; })));
+      if(res&&Array.isArray(res.A)) res.A.forEach(row=>{ if(Array.isArray(row)) row.forEach(c=>{ if(Array.isArray(c)) c.forEach(n=>{ if(counts[n]!=null) counts[n]++; }); }); });
       let html='<div class="sch-stats"><h4 class="sch-h">本周期班次统计</h4><div class="sch-statrow">';
       S.people.forEach(p=>{ html+=`<span class="sch-stat"><b>${esc(p.name)}</b> ${counts[p.name]} 班</span>`; });
       html+='</div>';
@@ -11739,7 +11759,7 @@ AppTools['auto-schedule'] = {
       S.shifts.forEach((s,si)=>{
         html+='<tr><th class="sch-rowh">'+esc(s.n)+'</th>';
         S.days.forEach((d,di)=>{
-          const cell=res.A[di][si];
+          const cell=(res.A&&res.A[di]&&Array.isArray(res.A[di][si]))?res.A[di][si]:[];
           const chips=cell.map(n=>`<span class="sch-ps">${esc(n)}</span>`).join('');
           html+=`<td data-d="${di}" data-s="${si}" class="sch-cell">${chips||'<span class="sch-empty">—</span>'}</td>`;
         });
@@ -11880,14 +11900,18 @@ AppTools['auto-schedule'] = {
     }
     // 生成真正的 xlsx（原生 OpenXML + 下拉 dataValidation），单工作表「人员需求」
     function buildScheduleXlsxParts(opts){
-      const { shifts, days, people } = opts;
-      const list = '"' + shifts.map(s=>String(s).replace(/"/g,'""')).join(',') + '"';
-      const cols = [12,24,24,30];
+      const { shifts, days, people, legend, targetRows } = opts;
+      const list = '"' + shifts.map(s=>escXml(String(s)).replace(/"/g,'""')).join(',') + '"';
+      const cols = [14,50,24,30];
+      // 数据区：表头 + 人员 + 预置空白行（带下拉，方便直接填写）+ 间隔空行 + 说明区
+      const header=['姓名','第一需求(最想排的班)','第二需求(其次想排的班)','不可用时间(可选,每行一个,格式:周一 早班)'];
+      const data = (people||[]).map(p=>[p.name, p.n1||'', p.n2||'', (p.una||[]).join('\n')]);
+      const tgt = Math.max(data.length, targetRows||50);
+      const blanks = Array.from({length: tgt - data.length}, ()=>['','','','']);
+      const legendRows = (legend||[]).map(L=>['', L.b||'', '', L.d||'']);
+      const aoa = [header, ...data, ...blanks, ['' ,'', '', ''], ...legendRows];
       let rowsXml='';
-      const aoa=[
-        ['姓名','第一需求(最想排的班)','第二需求(其次想排的班)','不可用时间(可选,每行一个,格式:周一 早班)'],
-        ...people.map(p=>[p.name, p.n1||'', p.n2||'', (p.una||[]).join('\n')])
-      ];
+      const sq = 1 + tgt; // 下拉覆盖 表头之外 的 数据+预置空白 行（说明区在 sq 之后，不带下拉）
       aoa.forEach((row,ri)=>{
         const r=ri+1; let cells='';
         row.forEach((val,ci)=>{
@@ -11897,7 +11921,6 @@ AppTools['auto-schedule'] = {
         });
         rowsXml+=`<row r="${r}">${cells}</row>`;
       });
-      const last=aoa.length, sq=Math.max(last,300);
       const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${rowsXml}</sheetData><dataValidations count="2"><dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="B2:B${sq}"><formula1>${list}</formula1></dataValidation><dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="C2:C${sq}"><formula1>${list}</formula1></dataValidation></dataValidations></worksheet>`;
       const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
       const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`;
@@ -11913,7 +11936,6 @@ AppTools['auto-schedule'] = {
     }
     function escXml(s){ return String(s==null?'':s).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
     function exportXlsxTpl(){
-      const JSZip = window.JSZip || (typeof getZip==='function' ? null : null);
       const doZip = (parts)=>{
         const zip = new (window.JSZip)();
         for(const [name,content] of Object.entries(parts)) zip.file(name, new Blob([content], {type:'application/xml'}));
@@ -11926,6 +11948,7 @@ AppTools['auto-schedule'] = {
       }
       const shifts = S.shifts.length ? S.shifts.map(s=>s.n) : ['早班','中班','晚班','夜班'];
       const days = S.days.length ? S.days.map(d=>({k:d.k,l:d.l})) : [];
+      const typeLabel = S.type==='class'?'课表':(S.type==='duty'?'值班表':'自定义排班');
       // 若当前已有人员，按「优先某班次」预填其第一/第二需求，方便他人在此基础上改；否则给两行示例
       const people = S.people.length ? S.people.map(p=>({
         name:p.name,
@@ -11936,7 +11959,16 @@ AppTools['auto-schedule'] = {
         {name:'示例·张三', n1:shifts[0]||'', n2:shifts[1]||'', una:[]},
         {name:'示例·李四', n1:'', n2:shifts[3]||'', una:[(days[6]?days[6].k:'7')+'|'+(shifts[3]||'夜班')]}
       ];
-      const parts = buildScheduleXlsxParts({shifts, days, people});
+      // 说明区（类型对应的选项标题 + 填写规则），放在下拉区下方，导入时因「姓名」为空自动忽略
+      const legend=[
+        {b:'填写说明：本表仅一个工作表，直接在「第一需求 / 第二需求」列下拉选择班次即可，无需打字。'},
+        {b:'当前类型：'+typeLabel},
+        {b:'可选班次（下拉项）：'+shifts.join('、')},
+        {b:'可选日期（不可用时间填写用）：'+days.map(d=>d.l).join('、')},
+        {b:'不可用时间格式：每行一个，示例「周一 早班」= 周一不能排早班（留空表示无限制）'},
+        {b:'第一需求=最想排的班次；第二需求=其次想排的班次（两列都留空表示无偏好）'}
+      ];
+      const parts = buildScheduleXlsxParts({shifts, days, people, legend, targetRows:50});
       doZip(parts).then(blob=>{
         downloadBlob(blob, '排班需求填写模板.xlsx');
         toast('已导出 Excel 模板：第一/第二需求列可直接下拉选择班次','ok');
@@ -11990,9 +12022,7 @@ AppTools['auto-schedule'] = {
     }
 
     // ---------- 初始化 ----------
-    const saved=loadCfg();
-    S=saved||defaultState();
-    (S.people||[]).forEach(p=>{ p.need1=p.need1||{t:'none',p:''}; p.need2=p.need2||{t:'none',p:''}; p.una=p.una||[]; });
+    S=normalizeState(loadCfg());
     results=loadRes()||[];
 
     body.innerHTML = `
