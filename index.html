@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-g</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.15-h</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7178,7 +7178,7 @@ const TOOLS = [
   {id:'postal-code',  name:'邮政编码查询',     icon:'📮', cat:'life', desc:'省/直辖市/自治区级标准邮编查询（准确），支持反向由 6 位邮编定位省区，并可跳转中国邮政官网查街道/乡镇级精确邮编。'},
   {id:'long-shot',    name:'网页截图 / 拼长图', icon:'📜', cat:'image', desc:'三种纯本地截图方式：①本页长截图（自动滚动当前网页拼成超长图）；②单屏截图（截屏幕/窗口/标签页任意一张）；③多图拼接（连截多张自动去重叠拼长图）。网页版受浏览器限制只能截当前网页，截 Word/WPS/微信等软件窗口受沙箱限制暂不支持（电脑版 exe 已下架）。纯本地不上传。'},
 
-  {id:'auto-schedule',name:'智能排班',          icon:'🗓️', cat:'life', desc:'按每人第一需求 + 第二需求智能排班（值班表 / 课表 / 自定义），支持班次、不可用时间、均衡分配与手动微调，结果可导出 CSV / PNG / Markdown 或打印。'},
+  {id:'auto-schedule',name:'智能排班',          icon:'🗓️', cat:'life', desc:'按每人第一需求 + 第二需求智能排班（值班表 / 课表 / 自定义），均衡优先再满足需求；支持班次、不可用时间、每人排班导出、手动微调，结果可导出 CSV / PNG / Markdown 或打印。'},
 
 ];;
 
@@ -11595,21 +11595,13 @@ AppTools['auto-schedule'] = {
     }
 
     function isUna(p, dayKey, shiftName){ return (p.una||[]).includes(dayKey+'|'+shiftName); }
-    // 把人员的「第一/第二需求」预解析成静态档案，避免排班时反复判定
+    // 把人员的「第一/第二需求」预解析成静态档案（需求分存，便于第一需求权重 > 第二需求）
     function personProfile(p){
-      const pr={maxPer:99, shiftAvoid:null, dayAvoid:null, shiftPref:null, dayPref:null, nocons:false, pair:null, avoidPair:null};
-      [p.need1,p.need2].forEach(nd=>{
-        if(!nd||!nd.t||nd.t==='none') return;
-        if(nd.t==='max_per'){ const n=parseInt(nd.p||'99'); if(!isNaN(n)&&n>0) pr.maxPer=n; }
-        else if(nd.t==='avoid_shift') pr.shiftAvoid=nd.p||null;
-        else if(nd.t==='avoid_day') pr.dayAvoid=nd.p||null;
-        else if(nd.t==='prefer_shift') pr.shiftPref=nd.p||null;
-        else if(nd.t==='prefer_day') pr.dayPref=nd.p||null;
-        else if(nd.t==='nocons') pr.nocons=true;
-        else if(nd.t==='pair'){ if(nd.p && S.people.some(x=>x.name===nd.p)) pr.pair=nd.p; }
-        else if(nd.t==='avoid_pair'){ if(nd.p && S.people.some(x=>x.name===nd.p)) pr.avoidPair=nd.p; }
-      });
-      return pr;
+      const n1=(p.need1&&p.need1.t)?p.need1:{t:'none',p:''};
+      const n2=(p.need2&&p.need2.t)?p.need2:{t:'none',p:''};
+      let maxPer=99;
+      [n1,n2].forEach(nd=>{ if(nd.t==='max_per'){ const v=parseInt(nd.p||'99'); if(!isNaN(v)&&v>0) maxPer=v; } });
+      return {n1, n2, maxPer};
     }
     function dayBlocked(pr, dayKey){
       if(pr.dayAvoid==='weekend') return dayKey==='6'||dayKey==='7';
@@ -11639,49 +11631,72 @@ AppTools['auto-schedule'] = {
       return false;
     }
 
-    // 重排引擎：均衡优先，硬性约束绝不破，软偏好尽量满足
-    // 硬约束（不可破）：不可用时间(una)、避开某人(avoid_pair，同格双向)、每周上限(max_per，尽力不破)
-    // 软偏好（尽量满足）：不排某班次/某天、优先某班次/某天、不要连排、想搭班
+    // ====== 重排引擎 ======
+    // 优先级（严格）：① 均衡（少排者优先） ② 第一需求 ③ 第二需求
+    // 硬约束绝不破：不可用时间(una) / 避开某人(avoid_pair，同格双向) / 每周上限(max_per)
+    // 软偏好尽量满足：不排某班次/某天、优先某班次/某天、不要连排、想搭班
+    // 冲突处理(B)：A想搭班B 但 B想避开A → 直接放弃A的搭班需求（尊重B的避开，绝不把两人放同格）
     function generateWeek(){
-      const load={}, assignedDays={}, prof={};
-      S.people.forEach(p=>{ load[p.name]=0; assignedDays[p.name]=[]; prof[p.name]=personProfile(p); });
+      const load={}, assigned={}, prof={};
+      S.people.forEach(p=>{ load[p.name]=0; assigned[p.name]=[]; prof[p.name]=personProfile(p); });
       const A=S.days.map(()=>S.shifts.map(()=>[]));
       const perCell=Math.max(1,S.perCell|0);
-      const balW=(S.balance==null?0.6:S.balance);
+      const lastShift=S.shifts.length-1;
       const warnings=[];
-      // 按「天→班次」顺序处理：保证「不要连排」跨天判定正确（前一日已排定）
+      // 单人是否「连排」(C)：同一天的相邻班次/节次，或隔夜（前一天末班→当天首班 / 当天末班→后首日班）
+      function noconsHit(pname,d,s){
+        return assigned[pname].some(a=>{
+          if(a.d===d && Math.abs(a.s-s)===1) return true;
+          if(a.d===d-1 && a.s===lastShift && s===0) return true;
+          if(a.d===d+1 && a.s===0 && s===lastShift) return true;
+          return false;
+        });
+      }
+      // 某需求（which:'n1'|'n2'）的原生罚分：正=不想要(坏) / 负=想要(好)
+      function needRaw(pr, which, dayKey, shiftName, d, s, pname, chosen){
+        const nd = which==='n1'?pr.n1:pr.n2;
+        const t=nd.t; if(!t||t==='none') return 0;
+        if(t==='avoid_shift') return (shiftName===nd.p)?100:0;
+        if(t==='avoid_day') return dayBlocked({dayAvoid:nd.p},dayKey)?100:0;
+        if(t==='prefer_shift') return (shiftName!==nd.p)?-80:0;
+        if(t==='prefer_day') return dayMatch({dayPref:nd.p},dayKey)?0:-80;
+        if(t==='nocons') return noconsHit(pname,d,s)?100:0;
+        if(t==='pair'){
+          const q=nd.p; if(!q) return 0;
+          // B 想避开 A → 直接放弃 A 的搭班需求（冲突 B：都不满足 / 尊重B不和A搭班）
+          const partnerAvoids=S.people.some(x=>x.name===q && ((x.need1&&x.need1.t==='avoid_pair'&&x.need1.p===pname)||(x.need2&&x.need2.t==='avoid_pair'&&x.need2.p===pname)));
+          if(partnerAvoids) return 0;
+          let pen=0;
+          if(chosen.includes(q)) pen-=80;
+          if(chosen.some(n=> prof[n] && ((prof[n].n1.t==='pair'&&prof[n].n1.p===pname)||(prof[n].n2.t==='pair'&&prof[n].n2.p===pname)))) pen-=80;
+          return pen;
+        }
+        return 0; // avoid_pair 为硬约束，由 avoidPairHit 处理，不计入软罚
+      }
       for(let d=0; d<S.days.length; d++){
         const dayKey=S.days[d].k;
         for(let s=0; s<S.shifts.length; s++){
           const shiftName=S.shifts[s].n;
           const chosen=[];
-          let pool=S.people.filter(p=> !isUna(p,dayKey,shiftName) && !chosen.includes(p.name));
-          while(chosen.length<perCell && pool.length){
-            let best=null, bestScore=Infinity, hardOk=null, hardScore=Infinity;
+          while(chosen.length<perCell){
+            // 候选：可用、未在本格、且与已选不触发「避开某人」硬约束
+            let pool=S.people.filter(p=> !isUna(p,dayKey,shiftName) && !chosen.includes(p.name) && !avoidPairHit(p, chosen));
+            if(!pool.length) break; // 只剩会破坏硬约束的人 → 本格宁可少排
+            let best=null, bestScore=Infinity;
             for(const p of pool){
               const pr=prof[p.name];
-              let sc=load[p.name]*balW;                       // 均衡：少排者优先
-              if(load[p.name]>=pr.maxPer) sc+=1000;            // 超过周上限：强烈不建议（硬上限，尽量不破）
-              if(pr.shiftAvoid && pr.shiftAvoid===shiftName) sc+=60;   // 不想排该班次
-              if(dayBlocked(pr,dayKey)) sc+=60;               // 不想排该天
-              if(pr.shiftPref && pr.shiftPref===shiftName) sc-=40;     // 想排该班次
-              if(dayMatch(pr,dayKey)) sc-=40;                 // 想排该天
-              if(pr.nocons && (assignedDays[p.name].includes(d-1)||assignedDays[p.name].includes(d+1))) sc+=60; // 不要连排（相邻天已排则跳过）
-              if(pr.pair && chosen.includes(pr.pair)) sc-=50;            // 想搭班：同伴已在格内 → 强烈优先
-              if(chosen.some(n=> prof[n] && prof[n].pair===p.name)) sc-=50; // 格内有人想和本人在一起 → 强烈优先（双向，需 perCell≥2 才能同格）
-              if(avoidPairHit(p, chosen)) sc+=5000;           // 避开某人：硬约束，绝不破
+              const maxViol = load[p.name]>=pr.maxPer ? 1e9 : 0;          // 周上限：硬上限，尽量不破
+              const sc = maxViol
+                       + load[p.name]*1e6                              // ① 均衡，最高优先级
+                       + needRaw(pr,'n1',dayKey,shiftName,d,s,p.name,chosen)*1000   // ② 第一需求（权重 >> 第二需求）
+                       + needRaw(pr,'n2',dayKey,shiftName,d,s,p.name,chosen)*100;   // ③ 第二需求
               if(sc<bestScore){ bestScore=sc; best=p; }
-              if(sc<5000 && sc<hardScore){ hardScore=sc; hardOk=p; }
             }
-            // 最优者违反「避开某人」硬约束时，改选硬约束安全的人；若无人安全，本格宁可少排也不破坏硬约束
-            if(bestScore>=5000 && !hardOk) break;
-            const pick=(bestScore>=5000 && hardOk)?hardOk:best;
-            chosen.push(pick.name);
-            pool=pool.filter(x=>x.name!==pick.name);
+            chosen.push(best.name);
           }
-          chosen.forEach(n=>{ A[d][s].push(n); load[n]++; assignedDays[n].push(d); });
+          chosen.forEach(n=>{ A[d][s].push(n); load[n]++; assigned[n].push({d,s}); });
           if(chosen.length<perCell){
-            warnings.push(S.days[d].l+' '+shiftName+' 仅 '+chosen.length+'/'+perCell+' 人（人员或可用性不足，或需避开冲突）');
+            warnings.push(S.days[d].l+' '+shiftName+' 仅 '+chosen.length+'/'+perCell+' 人（人员/可用性不足，或需避开冲突）');
           }
         }
       }
@@ -11901,6 +11916,30 @@ AppTools['auto-schedule'] = {
       });
       const blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
       downloadBlob(blob,'排班表.csv');
+    }
+    // D：导出每个人各自的排班（非总表），按人分节、按周列出其具体班次
+    function exportPerPerson(){
+      if(!results.length){ toast('请先排班','err'); return; }
+      const lines=[];
+      lines.push('智能排班 · 每人排班（共 '+results.length+' 周）');
+      lines.push('');
+      S.people.forEach(p=>{
+        lines.push('【'+p.name+'】');
+        results.forEach((res,w)=>{
+          const parts=[];
+          S.days.forEach((d,di)=>{
+            const ss=[];
+            S.shifts.forEach((sh,si)=>{ if(res.A[di][si].includes(p.name)) ss.push(sh.n); });
+            if(ss.length) parts.push(d.l+' '+ss.join('/'));
+          });
+          lines.push('第'+(w+1)+'周：'+(parts.length?parts.join('；'):'（本周无排班）'));
+        });
+        lines.push('');
+      });
+      const txt=lines.join('\n');
+      downloadBlob(new Blob(['\uFEFF'+txt],{type:'text/plain;charset=utf-8'}),'每人排班.txt');
+      copyText(txt);
+      toast('已导出每人排班（.txt 已下载，并复制到剪贴板）','ok');
     }
     function copyMD(){
       if(!results.length){ toast('请先排班','err'); return; }
@@ -12376,6 +12415,7 @@ AppTools['auto-schedule'] = {
           <button class="btn ghost" id="sc-csv">导出 CSV</button>
           <button class="btn ghost" id="sc-png">导出 PNG</button>
           <button class="btn ghost" id="sc-md">复制 Markdown</button>
+          <button class="btn ghost" id="sc-perbtn">每人排班</button>
           <button class="btn ghost" id="sc-print">打印 / 存PDF</button>
           <button class="btn ghost" id="sc-tpl-xlsx">导出 Excel 模板</button>
           <button class="btn ghost" id="sc-import">导入填写结果</button>
@@ -12408,6 +12448,7 @@ AppTools['auto-schedule'] = {
     $('#sc-csv',body).onclick=exportCSV;
     $('#sc-png',body).onclick=exportPNG;
     $('#sc-md',body).onclick=copyMD;
+    $('#sc-per',body).onclick=exportPerPerson;
     $('#sc-print',body).onclick=printWeek;
     $('#sc-tpl-xlsx',body).onclick=exportXlsxTpl;
     $('#sc-import',body).onclick=()=> $('#sc-impfile',body).click();
