@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.18-a</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.23-a</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7101,6 +7101,7 @@ const TOOLS = [
   {id:'para-merge',   name:'段落合并拆分',        icon:'📑', cat:'text',  desc:'按自定义分隔符合并或拆分段落，含按句末标点智能分段，结果可复制。'},
   {id:'text-reverse', name:'文本反转倒序',   icon:'🔁', cat:'text',  desc:'全文反转 / 按行反转 / 逐行倒序 / 按词反转，适配特殊排版与趣味场景。'},
   {id:'sensitive-word',name:'敏感词检测',    icon:'🚫', cat:'text',  desc:'内置常用敏感词库 + 自定义词，标红命中并统计，可一键去除；支持上传 .txt/.md/.csv/.json 文档批量检测。'},
+  {id:'ai-humanize',  name:'去AI味 / AI率',   icon:'🤖', cat:'text',  desc:'纯前端「去 AI 味」写作助手：用语言学规则重写文本，去掉套话 / 排比 / 破折号滥用 / 填充词与均匀句式，并给出启发式「AI 痕迹指数」与问题高亮，全程本地运行不上传。'},
   /* ============ 开发工具 ============ */
   {id:'json-format',  name:'JSON 格式化',         icon:'🧾', cat:'dev',   desc:'格式化(树形折叠)/压缩/校验 JSON，错误精准定位行列号；支持导入文件、转义 / 去转义 / Unicode 解码。'},
   {id:'json-yaml-xml',name:'JSON/YAML/XML 互转',  icon:'🔁', cat:'dev',   desc:'JSON / YAML / XML 三种格式两两互转，XML 属性以 @attributes 表示、导出 XML 根节点固定为 root（YAML 解析需联网库）。'},
@@ -7781,6 +7782,9 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
+    { date:'2026-09-23', items:[
+    "【去AI味 / AI率·全新上线】纯前端「去 AI 味」写作助手（文本时娱分类）：用语言学规则重写文本，去除套话 / 排比 / 破折号滥用 / 填充词与均匀句式，可选轻度 / 标准 / 深度三档；并给出启发式「AI 痕迹指数」与问题高亮、改写前后指数对比，结果可复制 / 下载 .txt，全程本地运行不上传。明确标注指数为自估、非权威检测。"
+  ]},
     { date:'2026-09-18', items:[
     "【六大工具分类简介更新】重写首页「六大工具分类」各板块的标注（介绍）：图片工具补齐全套能力与批量说明（保留手动框选 / AI 自动抠图字样）、文档工具补全 OCR 识图与表格导出、生活实用补齐智能排班 / 比赛记分 / 决策转盘 / 随机抽签 / 拍照测距测高，文字均与线上真实功能一致、不夸大。"
   ]},
@@ -10490,6 +10494,141 @@ AppTools['sensitive-word'] = {
       $('#sw-docinfo',body).textContent='已载入 '+files.length+' 个文档，共 '+content.length+' 字';
       e.target.value=''; toast('文档已载入文本框');
     };
+  }
+};
+
+/* 去 AI 味 / AI 率自检（纯前端启发式） */
+AppTools['ai-humanize'] = {
+  build(body){
+    const FILLER = ['此外','值得注意的是','值得一提的是','在这个时间点','为了实现这一目标','总而言之','综上所述','总体来看','毋庸置疑','不可否认','显而易见','事实上','实际上','在一定程度上','从某种程度上说','从某种意义上说','不难看出','众所周知','诚然','应该说','可以说','换言之','换句话说','从这个角度来看','由此可见','不言而喻','无需多言','首先','其次','最后','第一','第二','第三'];
+    const VAGUE_ATTR = ['专家认为','研究表明','行业报告显示','据相关数据显示','有关数据显示','数据显示','观察者指出','多方信息表明'];
+    const AI_VOCAB = [['至关重要','重要'],['深入探讨','细看'],['增强','加强'],['格局','局面'],['标志着','意味着'],['关键转折点','转折'],['充满活力的',''],['令人叹为观止的',''],['开创性的',''],['宝贵的','有用的'],['织锦',''],['不断演变的',''],['不可或缺的','重要的']];
+    const COLLAB = ['希望这对您有帮助','希望以上内容对您有帮助','当然！','您说得完全正确','您说得对','很高兴能帮到您','如果您有任何问题','请随时告诉我','很高兴为您服务'];
+    const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    function humanize(text, level){
+      let t = text;
+      COLLAB.forEach(p=>{ t = t.replace(new RegExp(escapeRe(p)+'\\s*[，。！!?？]?','g'), ''); });
+      if(level!=='light'){
+        VAGUE_ATTR.forEach(p=>{ t = t.replace(new RegExp(escapeRe(p)+'\\s*[，。，]?','g'), ''); });
+        t = t.replace(/不仅([^，。；：]+?)[，,]?而且([^，。；：]+)/g, '$1，也$2');
+        t = t.replace(/不但([^，。；：]+?)[，,]?而且([^，。；：]+)/g, '$1，也$2');
+      }
+      const fillers = level==='light' ? ['此外','值得注意的是','总而言之','综上所述','毋庸置疑','显而易见'] : FILLER;
+      fillers.forEach(p=>{ t = t.replace(new RegExp(escapeRe(p)+'\\s*[，。，]?','g'), ''); });
+      if(level!=='light'){
+        AI_VOCAB.slice().sort((a,b)=>b[0].length-a[0].length).forEach(([a,b])=>{ t = b==='' ? t.split(a).join('') : t.split(a).join(b); });
+      }
+      t = t.replace(/—{2,}/g,'，').replace(/—/g,'，');
+      if(level==='deep'){ t = varyRhythm(t); }
+      t = t.replace(/[ \t]{2,}/g,' ').replace(/[，,]{2,}/g,'，').replace(/[。．]{2,}/g,'。').replace(/\s+([，。！？!?])/g,'$1').replace(/([，。！？!?])\s+/g,'$1').replace(/\n{3,}/g,'\n\n').trim();
+      return t;
+    }
+    function varyRhythm(text){
+      const parts = text.split(/([。！？!?])/);
+      let out='';
+      for(let i=0;i<parts.length;i+=2){
+        const core = parts[i]||'';
+        const p = parts[i+1]||'';
+        if(core.length>60 && /[，,]/.test(core)){
+          const idxs=[]; for(let j=0;j<core.length;j++) if(core[j]==='，'||core[j]===',') idxs.push(j);
+          const mid=core.length/2;
+          const best=idxs.reduce((a,b)=>Math.abs(b-mid)<Math.abs(a-mid)?b:a, idxs[0]);
+          out += core.slice(0,best).trim()+'。'+core.slice(best+1).trim();
+        } else { out += core; }
+        out += p;
+      }
+      return out;
+    }
+    function aiScore(text){
+      if(!text.trim()) return {score:0, issues:[], avg:0, count:0};
+      const total = text.replace(/\s/g,'').length || 1;
+      let filler=0; FILLER.forEach(p=>{ filler += text.split(p).length-1; });
+      let vocab=0; AI_VOCAB.forEach(([a])=>{ vocab += text.split(a).length-1; });
+      const em=(text.match(/—/g)||[]).length;
+      let attr=0; VAGUE_ATTR.forEach(p=>{ attr += text.split(p).length-1; });
+      let collab=0; COLLAB.forEach(p=>{ collab += text.split(p).length-1; });
+      const sents = text.split(/[。！？!?]/).map(s=>s.replace(/[\s，,]/g,'').trim()).filter(s=>s.length);
+      let unif=0, avg=0;
+      if(sents.length>=3){ avg = sents.reduce((a,b)=>a+b,0)/sents.length; const variance = sents.reduce((a,b)=>a+(b-avg)*(b-avg),0)/sents.length; const std=Math.sqrt(variance); unif = avg>0 ? Math.max(0, 1 - std/avg) : 0; }
+      let parallel=0;
+      if(/首先[\s\S]*?其次[\s\S]*?最后/.test(text)) parallel++;
+      if(/第一[\s\S]*?第二[\s\S]*?第三/.test(text)) parallel++;
+      const density = (filler+vocab+em*0.5+attr+collab)/Math.max(1, total/100);
+      let score = Math.min(45, density*9);
+      score += unif*18;
+      if(avg>34) score += Math.min(14, (avg-34)/3);
+      score += Math.min(10, parallel*6);
+      score += Math.min(8, collab*4);
+      score = Math.round(Math.min(100, Math.max(0, score)));
+      const issues=[];
+      if(filler) issues.push({t:'套话 / 填充词', n:filler, ex:FILLER.filter(p=>text.includes(p)).slice(0,4).join('、')});
+      if(vocab) issues.push({t:'AI 高频词', n:vocab, ex:AI_VOCAB.filter(([a])=>text.includes(a)).slice(0,4).map(([a])=>a).join('、')});
+      if(em) issues.push({t:'破折号滥用', n:em, ex:'「—」出现 '+em+' 次'});
+      if(attr) issues.push({t:'模糊归因', n:attr, ex:VAGUE_ATTR.filter(p=>text.includes(p)).slice(0,4).join('、')});
+      if(collab) issues.push({t:'协作 / 谄媚痕迹', n:collab, ex:COLLAB.filter(p=>text.includes(p)).slice(0,4).join('、')});
+      if(unif>0.45 && sents.length>=3) issues.push({t:'句式过于均匀', n:0, ex:'句长平均 '+avg.toFixed(0)+' 字、标准差偏低'});
+      if(parallel) issues.push({t:'三段式 / 排比结构', n:parallel, ex:'检测到「首先…其次…最后」或「第一…第二…第三」'});
+      return {score, issues, avg, count:sents.length};
+    }
+    function scoreLabel(s){ return s<25?'像人写的（自然）': s<50?'中等，略有机器腔': s<75?'偏 AI，机器腔明显':'高度像 AI 生成'; }
+    function scoreColor(s){ return s<25?'#52c41a': s<50?'#faad14': s<75?'#fa8c16':'#f5222d'; }
+    function scoreBar(s){ return '<div style="height:10px;border-radius:6px;background:#eee;overflow:hidden;margin:6px 0"><div style="height:100%;width:'+s+'%;background:'+scoreColor(s)+'"></div></div>'; }
+    body.innerHTML = `
+      <div class="hint" style="margin-bottom:10px">🛠️ 纯前端「去 AI 味」写作助手：用语言学规则重写文本，去掉机器腔（套话、排比、破折号滥用、填充词、均匀句式），让表达更自然，从而降低被 AI 检测工具判为机器生成的概率。<b>全程本地运行、不上传。</b>提示：本工具「AI 痕迹指数」为启发式自估，非权威检测，不能保证绕过任何检测系统。</div>
+      <div class="mb"><label class="field-label">输入文本（建议 ≥ 50 字，效果更明显）</label><textarea class="txt" id="ah-in" style="min-height:170px" placeholder="粘贴 AI 生成的文本，点击「一键去 AI 味」…"></textarea></div>
+      <div class="btn-row">
+        <label class="field-label" style="align-self:center">改写强度</label>
+        <select class="inp" id="ah-level" style="width:auto">
+          <option value="light">轻度（只去最明显的套话）</option>
+          <option value="std" selected>标准</option>
+          <option value="deep">深度（句式也打乱）</option>
+        </select>
+        <button class="btn" id="ah-run">一键去 AI 味</button>
+        <button class="btn ghost" id="ah-clear">清空</button>
+      </div>
+      <div id="ah-score" class="hint">输入文本后自动显示 AI 痕迹指数</div>
+      <div class="mb" style="margin-top:12px"><label class="field-label">去 AI 味结果</label><textarea class="txt" id="ah-out" style="min-height:170px" placeholder="结果将显示在这里，可复制或下载"></textarea></div>
+      <div class="btn-row">
+        <button class="btn" id="ah-copy">复制结果</button>
+        <button class="btn ghost" id="ah-dl">下载 .txt</button>
+        <button class="btn ghost" id="ah-issues">查看检测到的 AI 痕迹</button>
+      </div>
+      <div id="ah-issuebox" class="hint" style="margin-top:8px;display:none"></div>`;
+    function refreshScore(){
+      const txt=$('#ah-in',body).value;
+      const box=$('#ah-score',body);
+      if(!txt.trim()){ box.innerHTML='输入文本后自动显示 AI 痕迹指数'; $('#ah-out',body).value=''; return; }
+      const r=aiScore(txt);
+      const shortNote = txt.replace(/\s/g,'').length<30 ? '（文本较短，指数仅供参考）' : '';
+      box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>原文 AI 痕迹指数：</b><span style="font-size:18px;color:'+scoreColor(r.score)+';font-weight:700">'+r.score+'</span><span style="color:'+scoreColor(r.score)+'">'+scoreLabel(r.score)+'</span>'+shortNote+'</div>'+scoreBar(r.score)+'<div class="hint" style="margin-top:4px">句子 '+r.count+' 句，平均句长 '+r.avg.toFixed(0)+' 字；点「一键去 AI 味」后这里会显示改写前后对比。</div>';
+    }
+    function showIssues(){
+      const txt=$('#ah-in',body).value;
+      const box=$('#ah-issuebox',body);
+      if(box.style.display==='none'){
+        if(!txt.trim()){ toast('请先输入文本'); return; }
+        const r=aiScore(txt);
+        box.style.display='block';
+        box.innerHTML = r.issues.length ? ('<b>检测到的 AI 痕迹（共 '+r.issues.length+' 类）：</b><ul style="margin:6px 0 0 18px;line-height:1.8">'+r.issues.map(i=>'<li><b>'+i.t+'</b>'+(i.n?(' ×'+i.n):'')+'：'+escapeHtml(i.ex)+'</li>').join('')+'</ul>') : '未检测到明显 AI 痕迹模式，文本较自然。';
+      } else { box.style.display='none'; box.innerHTML=''; }
+    }
+    $('#ah-in',body).addEventListener('input', refreshScore);
+    $('#ah-run',body).onclick=()=>{
+      const txt=$('#ah-in',body).value;
+      if(!txt.trim()){ toast('请先输入文本','err'); return; }
+      const level=$('#ah-level',body).value;
+      const out=humanize(txt, level);
+      $('#ah-out',body).value=out;
+      const before=aiScore(txt).score, after=aiScore(out).score;
+      const delta=before-after;
+      const box=$('#ah-score',body);
+      box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>AI 痕迹指数：</b><span style="color:'+scoreColor(before)+';font-weight:700">'+before+'</span> → <span style="color:'+scoreColor(after)+';font-weight:700">'+after+'</span><span style="color:'+(delta>0?'#52c41a':'#888')+'">'+(delta>0?('↓'+delta+' 更自然'):(delta<0?('↑'+(-delta)+' 注意'):'持平'))+'</span></div>'+scoreBar(after)+'<div class="hint" style="margin-top:4px">改写后 '+out.length+' 字（原文 '+txt.length+' 字）。提示：指数为启发式自估，建议人工通读确认语义无误。</div>';
+      toast('已生成去 AI 味结果');
+    };
+    $('#ah-copy',body).onclick=()=>{ const o=$('#ah-out',body).value; if(!o.trim()){ toast('暂无结果','err'); return; } copyText(o); };
+    $('#ah-dl',body).onclick=()=>{ const o=$('#ah-out',body).value; if(!o.trim()){ toast('暂无结果','err'); return; } const blob=new Blob([o],{type:'text/plain;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='去AI味结果.txt'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('已下载 .txt'); };
+    $('#ah-issues',body).onclick=showIssues;
+    $('#ah-clear',body).onclick=()=>{ $('#ah-in',body).value=''; $('#ah-out',body).value=''; $('#ah-issuebox',body).style.display='none'; $('#ah-issuebox',body).innerHTML=''; refreshScore(); };
   }
 };
 
