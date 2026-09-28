@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.28-a</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.28-b</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7783,7 +7783,8 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
     { date:'2026-09-28', items:[
-    "【去AI味 / AI率·v3 联网大模型版】修复旧版“越改写 AI 率越高”的问题：联网模式改用网站后端 /api/humanize 调用大模型（默认 DeepSeek，可换 OpenAI / 通义等）自由重写，最能降低 AI 率；离线兜底改为只做轻量清理（删除旧版“闭环→回路”等有害同义替换、避免生硬句式）。新增「模型设置 / 后端状态」面板（站长在 Cloudflare 后台配 HUMANIZE_API_KEY 即启用），自动检测后端并在未配置时降级离线；逐句诊断改为诊断结果文本、修 v2 重复 id 导致“改写明细”不显示的 bug；更新 AI 痕迹指数说明（仍为启发式自估）。"
+    "【去AI味 / AI率·v3 联网大模型版】修复旧版“越改写 AI 率越高”的问题：联网模式改用网站后端 /api/humanize 调用大模型（默认 DeepSeek，可换 OpenAI / 通义等）自由重写，最能降低 AI 率；离线兜底改为只做轻量清理（删除旧版“闭环→回路”等有害同义替换、避免生硬句式）。新增「模型设置 / 后端状态」面板（站长在 Cloudflare 后台配 HUMANIZE_API_KEY 即启用），自动检测后端并在未配置时降级离线；逐句诊断改为诊断结果文本、修 v2 重复 id 导致“改写明细”不显示的 bug；更新 AI 痕迹指数说明（仍为启发式自估）。",
+    "【去AI味 / AI率·离线引擎增强（v2026.09.28-b）】仅强化离线改写，不影响联网：扩充填充词与模糊归因词库；新增去名词化（加以/予以+动词→动词）、降“其”字密度（其+名词→它的+名词，豁免其他/其次/其实等功能词）、弱化“我们要/需要/应该”说教口吻（交替为“得/可以/省略主语”）；标准档与深度档均做长句拆分；AI 痕迹指数新增对主观指令式表达的识别，离线改写后自检分数更贴合。"
   ]},
     { date:'2026-09-16 ~ 09-23', items:[
     "【去AI味 / AI率】上线并两次增强：纯前端去 AI 味写作助手，可选轻度 / 标准 / 深度三档，给出启发式 AI 痕迹指数与改写前后对比、改写明细 / 逐句诊断 / AI 痕迹清单，结果可复制或下载 .txt。",
@@ -10498,8 +10499,8 @@ AppTools['sensitive-word'] = {
 /* 去 AI 味 / AI 率自检（纯前端启发式，v2 增强） */
 AppTools['ai-humanize'] = {
   build(body){
-    const FILLER = ['此外','值得注意的是','值得一提的是','在这个时间点','为了实现这一目标','总而言之','综上所述','总体来看','毋庸置疑','不可否认','显而易见','事实上','实际上','在一定程度上','从某种程度上说','从某种意义上说','不难看出','众所周知','诚然','应该说','可以说','换言之','换句话说','从这个角度来看','由此可见','有鉴于此','具体而言','总体而言','与此同时','在此基础上','需要指出的是','首先','其次','最后','第一','第二','第三','一方面','另一方面','从长远来看','从短期来看','客观地讲','平心而论','说到底','说白了'];
-    const VAGUE_ATTR = ['专家认为','研究表明','行业报告显示','据相关数据显示','有关数据显示','数据显示','观察者指出','多方信息表明','有研究表明','据调查','据不完全统计','据权威机构','业内人士指出','相关专家表示'];
+    const FILLER = ['此外','值得注意的是','值得一提的是','在这个时间点','为了实现这一目标','总而言之','综上所述','总体来看','毋庸置疑','不可否认','显而易见','事实上','实际上','在一定程度上','从某种程度上说','从某种意义上说','不难看出','众所周知','诚然','应该说','可以说','换言之','换句话说','从这个角度来看','由此可见','有鉴于此','具体而言','总体而言','与此同时','在此基础上','需要指出的是','首先','其次','最后','第一','第二','第三','一方面','另一方面','从长远来看','从短期来看','客观地讲','平心而论','说到底','说白了','在当前背景下','在这一过程中','从整体上看','从全局来看','从本质上看','从根本上说','总的来讲','通盘来看','不可否认的是','毋庸置疑的是','显而易见的是','需要明确的是','可以预见','可以肯定地说','从实践来看','客观而言'];
+    const VAGUE_ATTR = ['专家认为','研究表明','行业报告显示','据相关数据显示','有关数据显示','数据显示','观察者指出','多方信息表明','有研究表明','据调查','据不完全统计','据权威机构','业内人士指出','相关专家表示','有数据显示','统计表明','实践证明','大量事实表明','有学者指出','文献指出','理论表明','数据表明','事实证明'];
     const AI_VOCAB = [['至关重要','重要'],['深入探讨','细看'],['增强','加强'],['格局','局面'],['标志着','意味着'],['关键转折点','转折'],['充满活力的',''],['令人叹为观止的',''],['开创性的',''],['宝贵的','有用的'],['织锦',''],['不断演变的',''],['不可或缺的','重要的']];
     // 离线兜底映射：尽量换成自然词，避免换成同样生硬的书面词（旧版“闭环→回路”会让 AI 率更高）
     const BUZZ = [['赋能','帮助'],['闭环','完整流程'],['抓手','重点'],['对齐','一致'],['颗粒度','细致程度'],['组合拳','一系列做法'],['一站式','一体化'],['沉浸式','投入'],['黑科技','新技术'],['底层逻辑','根本'],['认知','认识'],['维度','方面'],['里程碑','重要节点'],['新篇章','新阶段'],['保驾护航','保障'],['添砖加瓦','贡献'],['砥砺前行','努力'],['行稳致远','稳步发展'],['喜闻乐见','受欢迎'],['独树一帜','独特'],['别具一格','独特'],['脱颖而出','显现出来'],['画龙点睛','关键一笔'],['锦上添花','更好'],['雪中送炭','及时帮助'],['蔚然成风','流行'],['应运而生','随之出现'],['比比皆是','到处都是'],['独领风骚','领先'],['举世瞩目','受关注'],['彪炳史册','载入史册'],['浓墨重彩','重点']];
@@ -10536,11 +10537,22 @@ AppTools['ai-humanize'] = {
         FILLER.forEach(p=>{ t=removePhrase(t,p,edits); });
         BUZZ.slice().sort((x,y)=>y[0].length-x[0].length).forEach(([a,b])=>{ t=replacePhrase(t,a,b,edits); });
         FORMAL.slice().sort((x,y)=>y[0].length-x[0].length).forEach(([a,b])=>{ t=replacePhrase(t,a,b,edits); });
+        // AI_VOCAB 仅替换非空目标，避免误删导致语义丢失（如“充满活力的”不删）
+        AI_VOCAB.filter(([a,b])=>b!=='').slice().sort((x,y)=>y[0].length-x[0].length).forEach(([a,b])=>{ t=replacePhrase(t,a,b,edits); });
+        // 去名词化：删冗余“进行/开展/实施”，以及“加以/予以 + 动词”
         t = t.replace(/进行(?![中着了])/g, ()=>{ edits.push({label:'删冗余词', from:'进行', to:'', n:1}); return ''; });
         t = t.replace(/开展(?![中着了])/g, ()=>{ edits.push({label:'书面→口语', from:'开展', to:'做', n:1}); return '做'; });
         t = t.replace(/实施(?![中着了])/g, ()=>{ edits.push({label:'书面→口语', from:'实施', to:'做', n:1}); return '做'; });
+        t = t.replace(/加以([一-龥]{2,4})/g, (m,p1)=>{ edits.push({label:'去名词化', from:'加以'+p1, to:p1, n:1}); return p1; });
+        t = t.replace(/予以([一-龥]{2,4})/g, (m,p1)=>{ edits.push({label:'去名词化', from:'予以'+p1, to:p1, n:1}); return p1; });
+        // 降“其”字密度：其+名词 → 它的+名词（豁免 其他/其次/其实/其中 及“其+能/会/可/应…”等主语+情态结构，避免“它的能够”式生硬）
+        t = t.replace(/其(?![他次实余间前后内中其所各等该一二三四五六七八九十两这那之与及本她它们地得着了过去来上下出入外里能会可变应将已不也都正被使让把给由和或即便才又还更最很太较略当若虽因对向从比跟令叫])([一-龥]{1,3})/g, (m,p1)=>{ edits.push({label:'降“其”字密度', from:'其'+p1, to:'它的'+p1, n:1}); return '它的'+p1; });
+        // 缩减“我们要/我们需要/我们应该”排比：用前瞻让每处独立处理，交替为 得 / 可以 / 省略主语，弱化 AI 式说教口吻
+        let wcnt=0;
+        t = t.replace(/(我们需要|我们要|我们应该)([一-龥，,；;]{2,20}?)(?=(我们需要|我们要|我们应该|[。！？!?]|$))/g, (m,p1,p2)=>{ wcnt++; const f=['得','可以',''][(wcnt-1)%3]; edits.push({label:f===''?'省略主语':'弱主观指令', from:p1+p2, to:(f?f+p2:p2), n:1}); return (f?f+p2:p2); });
         t = t.replace(/—{2,}/g,'，').replace(/—/g,'，');
-        if(level==='deep'){ t = varyRhythm(t, edits); }
+        // 长句拆分：std 与 deep 都做，light 不做（避免离线过激）
+        if(level!=='light'){ t = varyRhythm(t, edits); }
       }
       t = t.replace(/[ \t]{2,}/g,' ').replace(/[，,]{2,}/g,'，').replace(/[。．]{2,}/g,'。').replace(/\s+([，。！？!?])/g,'$1').replace(/([，。！？!?])\s+/g,'$1').replace(/\n{3,}/g,'\n\n').trim();
       return {out:t, edits};
@@ -10572,6 +10584,7 @@ AppTools['ai-humanize'] = {
       let attr=0; VAGUE_ATTR.forEach(p=> attr += count(text,p));
       let collab=0; COLLAB.forEach(p=> collab += count(text,p));
       let qi=(text.match(/其/g)||[]).length;
+      let we=(text.match(/我们需要|我们要|我们应该/g)||[]).length;
       let passive=(text.match(/被/g)||[]).length + (text.match(/由[^，。；]{0,8}(进行|开展|实施|完成|推出|研发)/g)||[]).length;
       const sents = text.split(/[。！？!?]/).map(s=>s.replace(/[\s，,]/g,'').trim()).filter(s=>s.length);
       let unif=0, avg=0;
@@ -10583,13 +10596,14 @@ AppTools['ai-humanize'] = {
       const openers = sents.map(s=> s.slice(0,2));
       const opCount={}; openers.forEach(o=>{ if(o) opCount[o]=(opCount[o]||0)+1; });
       let repOpen=0; Object.values(opCount).forEach(c=>{ if(c>=2) repOpen += c-1; });
-      const density=(filler+buzz*1.2+vocab+formal*0.8+em*0.5+attr+collab)/Math.max(1, total/100);
+      const density=(filler+buzz*1.2+vocab+formal*0.8+em*0.5+attr+collab+we*0.6)/Math.max(1, total/100);
       let score = Math.min(50, density*7);
       score += unif*16;
       if(avg>32) score += Math.min(12,(avg-32)/3);
       score += Math.min(12, parallel*5);
       score += Math.min(10, collab*4);
       score += Math.min(8, qi/Math.max(1,total/200));
+      score += Math.min(8, we*3);
       score += Math.min(8, passive*3);
       score += Math.min(6, repOpen*4);
       score = Math.round(clamp(score,0,100));
@@ -10602,6 +10616,7 @@ AppTools['ai-humanize'] = {
       if(attr) issues.push({t:'模糊归因', n:attr, ex:VAGUE_ATTR.filter(p=>text.includes(p)).slice(0,4).join('、')});
       if(collab) issues.push({t:'协作 / 谄媚痕迹', n:collab, ex:COLLAB.filter(p=>text.includes(p)).slice(0,4).join('、')});
       if(qi> total/200) issues.push({t:'“其”字过多', n:qi, ex:'全文 '+qi+' 个「其」，密度偏高'});
+      if(we>=2) issues.push({t:'“我们要/需要/应该”说教口吻', n:we, ex:'出现 '+we+' 处主观指令式表达'});
       if(passive) issues.push({t:'被动 / 由…进行', n:passive, ex:'被动式 '+passive+' 处'});
       if(unif>0.45 && sents.length>=3) issues.push({t:'句式过于均匀', n:0, ex:'句长平均 '+avg.toFixed(0)+' 字、标准差偏低'});
       if(parallel) issues.push({t:'三段式 / 排比 / 枚举', n:parallel, ex:'检测到排比或多项枚举结构'});
