@@ -10532,7 +10532,7 @@ AppTools['ai-humanize'] = {
         COLLAB.forEach(p=>{ t=removePhrase(t,p,edits); });
         VAGUE_ATTR.forEach(p=>{ t=removePhrase(t,p,edits); });
         // 把“不仅/而且/不但”当填充词删掉，避免旧版“如此，也我们还要”的生硬句式
-        ['不仅','而且','不但'].forEach(p=>{ t=removePhrase(t,p,edits); });
+        ['不仅如此','不但如此','不仅如此','不仅','而且','不但'].forEach(p=>{ t=removePhrase(t,p,edits); });
         FILLER.forEach(p=>{ t=removePhrase(t,p,edits); });
         BUZZ.slice().sort((x,y)=>y[0].length-x[0].length).forEach(([a,b])=>{ t=replacePhrase(t,a,b,edits); });
         FORMAL.slice().sort((x,y)=>y[0].length-x[0].length).forEach(([a,b])=>{ t=replacePhrase(t,a,b,edits); });
