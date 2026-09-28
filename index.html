@@ -798,7 +798,7 @@ th{background:var(--bg);}
     </div>
   </div>
 
-  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.23-b</span></div>
+  <div class="copy">© 2026 托托工具箱 · 永久免费 · 本地处理保护隐私 · 侵权必究<br><span id="ver-tag" style="font-size:10.5px;opacity:.75">v2026.09.28-a</span></div>
 </footer>
 
 <!-- ============ 更新日志面板 ============ -->
@@ -7782,18 +7782,14 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
-    { date:'2026-09-23', items:[
-    "【去AI味 / AI率·全新上线】纯前端「去 AI 味」写作助手（文本时娱分类）：用语言学规则重写文本，去除套话 / 排比 / 破折号滥用 / 填充词与均匀句式，可选轻度 / 标准 / 深度三档；并给出启发式「AI 痕迹指数」与问题高亮、改写前后指数对比，结果可复制 / 下载 .txt，全程本地运行不上传。明确标注指数为自估、非权威检测。",
-    "【去AI味 / AI率·v2 增强】词库大幅扩充：新增 30+ 行业黑话（赋能/闭环/抓手/颗粒度/底层逻辑…）、书面化连词（因此/然而/旨在/坐落于…）、模糊归因（有研究表明/业内人士指出…）与其字过多、被动式、排比枚举、句式开头雷同等多因子；改写更口语化（进行/开展/实施→省略或「做」），深度档可拆长句打乱节奏；新增「改写明细」「逐句诊断（按句风险着色）」「AI 痕迹清单」三项透明化视图，AI 痕迹指数改为多因子加权、更准。"
+    { date:'2026-09-28', items:[
+    "【去AI味 / AI率·v3 联网大模型版】修复旧版“越改写 AI 率越高”的问题：联网模式改用网站后端 /api/humanize 调用大模型（默认 DeepSeek，可换 OpenAI / 通义等）自由重写，最能降低 AI 率；离线兜底改为只做轻量清理（删除旧版“闭环→回路”等有害同义替换、避免生硬句式）。新增「模型设置 / 后端状态」面板（站长在 Cloudflare 后台配 HUMANIZE_API_KEY 即启用），自动检测后端并在未配置时降级离线；逐句诊断改为诊断结果文本、修 v2 重复 id 导致“改写明细”不显示的 bug；更新 AI 痕迹指数说明（仍为启发式自估）。"
   ]},
-    { date:'2026-09-18', items:[
-    "【六大工具分类简介更新】重写首页「六大工具分类」各板块的标注（介绍）：图片工具补齐全套能力与批量说明（保留手动框选 / AI 自动抠图字样）、文档工具补全 OCR 识图与表格导出、生活实用补齐智能排班 / 比赛记分 / 决策转盘 / 随机抽签 / 拍照测距测高，文字均与线上真实功能一致、不夸大。"
-  ]},
-    { date:'2026-09-16', items:[
-    "【智能排班·全新上线】纯本地运行的智能排班 / 课表工具：按每人「第一需求 + 第二需求」自动排班，支持班次与日期自定义、每人不可用时间、均衡分配与手动微调，结果可导出 CSV / PNG / Markdown 或打印，配置本地保存。",
-    "【智能排班·体验打磨】修复导出 PNG 模糊（2 倍分辨率）；Excel 模板改为原生下拉选择班次与需求（也可手输任意内容），导入自动识别自由文本并立即生效；修单元格点开即关、导入不生效、设置与内容矛盾无提示等问题，新增一致性校验。",
-    "【智能排班·引擎重写】彻底重写排班算法，根治「瞎排」：搭班权重不再被均衡压没、连排改为按「天→班次」跨全部班次查相邻、避开某人改为硬约束（宁可本格少排也绝不共格，且无人被落下）；均衡为第一优先级，硬性约束（不可用时间 / 避开某人 / 周上限）绝不破，软偏好尽量满足。",
-    "【智能排班·优先级与人性化】理顺优先级：先保均衡、再满足第一需求、最后第二需求（第一需求权重约 10 倍于第二需求）；A 想搭 B 但 B 避开 A 时直接避开（绝不共格）；明确「不要连排」= 前后班次 / 节次不连排（含隔夜）；新增「每人排班」一键导出各自明细；同一班次尽量不长期固定给同一人，更人性化。"
+    { date:'2026-09-16 ~ 09-23', items:[
+    "【去AI味 / AI率】上线并两次增强：纯前端去 AI 味写作助手，可选轻度 / 标准 / 深度三档，给出启发式 AI 痕迹指数与改写前后对比、改写明细 / 逐句诊断 / AI 痕迹清单，结果可复制或下载 .txt。",
+    "【智能排班】全新上线并多轮打磨：按“第一需求 + 第二需求”本地自动排班，支持班次 / 日期自定义、不可用时间、均衡分配与手动微调，导出 CSV / PNG / Markdown；彻底重写引擎根治“瞎排”，导出 PNG 提清晰度、Excel 模板改原生下拉、补一致性校验。",
+    "【六大工具分类简介更新】重写首页六大分类各板块标注，与线上真实功能一致、不夸大。",
+    "【其它】PDF 合并 / 拆分 / 转图增强、综合税率计算器加多项、家用耗电电费修复、随机数字修复、网页截图拼长图整合、Service Worker 升 v23 清缓存。"
   ]},
   { date:'2026-09-04', items:[
     "【PDF 工具增强】合并可自定义输出文件名；拆分新增「按每 N 页」均分并打包 ZIP；PDF 转图片支持 PNG / JPG / WebP，并可选 JPG 质量。",
@@ -10505,7 +10501,8 @@ AppTools['ai-humanize'] = {
     const FILLER = ['此外','值得注意的是','值得一提的是','在这个时间点','为了实现这一目标','总而言之','综上所述','总体来看','毋庸置疑','不可否认','显而易见','事实上','实际上','在一定程度上','从某种程度上说','从某种意义上说','不难看出','众所周知','诚然','应该说','可以说','换言之','换句话说','从这个角度来看','由此可见','有鉴于此','具体而言','总体而言','与此同时','在此基础上','需要指出的是','首先','其次','最后','第一','第二','第三','一方面','另一方面','从长远来看','从短期来看','客观地讲','平心而论','说到底','说白了'];
     const VAGUE_ATTR = ['专家认为','研究表明','行业报告显示','据相关数据显示','有关数据显示','数据显示','观察者指出','多方信息表明','有研究表明','据调查','据不完全统计','据权威机构','业内人士指出','相关专家表示'];
     const AI_VOCAB = [['至关重要','重要'],['深入探讨','细看'],['增强','加强'],['格局','局面'],['标志着','意味着'],['关键转折点','转折'],['充满活力的',''],['令人叹为观止的',''],['开创性的',''],['宝贵的','有用的'],['织锦',''],['不断演变的',''],['不可或缺的','重要的']];
-    const BUZZ = [['赋能','提升'],['闭环','回路'],['抓手','重点'],['对齐','一致'],['颗粒度','细致度'],['组合拳','一系列做法'],['一站式','一体'],['沉浸式','投入'],['黑科技','新技术'],['底层逻辑','根本逻辑'],['认知','认识'],['维度','方面'],['里程碑','重要节点'],['新篇章','新阶段'],['保驾护航','保障'],['添砖加瓦','贡献'],['砥砺前行','努力前进'],['行稳致远','稳步发展'],['喜闻乐见','受欢迎'],['独树一帜','独特'],['别具一格','独特'],['脱颖而出','显现出来'],['画龙点睛','关键一笔'],['锦上添花','更好'],['雪中送炭','及时帮助'],['蔚然成风','流行'],['应运而生','随之出现'],['比比皆是','到处都是'],['独领风骚','领先'],['举世瞩目','受关注'],['彪炳史册','载入史册'],['浓墨重彩','重点']];
+    // 离线兜底映射：尽量换成自然词，避免换成同样生硬的书面词（旧版“闭环→回路”会让 AI 率更高）
+    const BUZZ = [['赋能','帮助'],['闭环','完整流程'],['抓手','重点'],['对齐','一致'],['颗粒度','细致程度'],['组合拳','一系列做法'],['一站式','一体化'],['沉浸式','投入'],['黑科技','新技术'],['底层逻辑','根本'],['认知','认识'],['维度','方面'],['里程碑','重要节点'],['新篇章','新阶段'],['保驾护航','保障'],['添砖加瓦','贡献'],['砥砺前行','努力'],['行稳致远','稳步发展'],['喜闻乐见','受欢迎'],['独树一帜','独特'],['别具一格','独特'],['脱颖而出','显现出来'],['画龙点睛','关键一笔'],['锦上添花','更好'],['雪中送炭','及时帮助'],['蔚然成风','流行'],['应运而生','随之出现'],['比比皆是','到处都是'],['独领风骚','领先'],['举世瞩目','受关注'],['彪炳史册','载入史册'],['浓墨重彩','重点']];
     const FORMAL = [['因此','所以'],['然而','不过'],['与此同时','同时'],['旨在','为了'],['坐落于','在'],['拥有','有'],['具备','有'],['众多','很多'],['诸多','很多'],['若干','一些'],['依据','按'],['鉴于','因为'],['倘若','如果'],['诸如','比如'],['譬如','比如'],['尤为','特别'],['愈发','越来越'],['十分','很'],['极为','非常']];
     const COLLAB = ['希望这对您有帮助','希望以上内容对您有帮助','当然！','您说得完全正确','您说得对','很高兴能帮到您','如果您有任何问题','请随时告诉我','很高兴为您服务'];
     const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -10523,18 +10520,19 @@ AppTools['ai-humanize'] = {
       if(c){ edits.push({label: b===''?'删冗余词':'书面→口语', from:a, to:b, n:c}); t = b==='' ? t.split(a).join('') : t.split(a).join(b); }
       return t;
     }
+    // 离线兜底：只做轻量清理，绝不做生硬同义替换（旧版正是这一步把 AI 率越改越高）
     function humanize(text, level){
       const edits=[];
       let t = text;
       if(level==='light'){
-        ['此外','值得注意的是','总而言之','综上所述','毋庸置疑','显而易见','值得一提的是'].forEach(p=>{ t=removePhrase(t,p,edits); });
+        ['此外','值得注意的是','总而言之','综上所述','毋庸置疑','显而易见','值得一提的是','换言之','换句话说'].forEach(p=>{ t=removePhrase(t,p,edits); });
         COLLAB.forEach(p=>{ t=removePhrase(t,p,edits); });
         t = t.replace(/—{2,}/g,'，').replace(/—/g,'，');
       } else {
         COLLAB.forEach(p=>{ t=removePhrase(t,p,edits); });
         VAGUE_ATTR.forEach(p=>{ t=removePhrase(t,p,edits); });
-        t = t.replace(/不仅([^，。；：]+?)[，,]?而且([^，。；：]+)/g, (m,a,b)=>{ edits.push({label:'改排比', from:'不仅…而且', to:'…也…', n:1}); return a+'，也'+b; });
-        t = t.replace(/不但([^，。；：]+?)[，,]?而且([^，。；：]+)/g, (m,a,b)=>{ edits.push({label:'改排比', from:'不但…而且', to:'…也…', n:1}); return a+'，也'+b; });
+        // 把“不仅/而且/不但”当填充词删掉，避免旧版“如此，也我们还要”的生硬句式
+        ['不仅','而且','不但'].forEach(p=>{ t=removePhrase(t,p,edits); });
         FILLER.forEach(p=>{ t=removePhrase(t,p,edits); });
         BUZZ.slice().sort((x,y)=>y[0].length-x[0].length).forEach(([a,b])=>{ t=replacePhrase(t,a,b,edits); });
         FORMAL.slice().sort((x,y)=>y[0].length-x[0].length).forEach(([a,b])=>{ t=replacePhrase(t,a,b,edits); });
@@ -10630,15 +10628,51 @@ AppTools['ai-humanize'] = {
     function scoreLabel(s){ return s<25?'像人写的（自然）': s<50?'中等，略有机器腔': s<75?'偏 AI，机器腔明显':'高度像 AI 生成'; }
     function scoreColor(s){ return s<25?'#52c41a': s<50?'#faad14': s<75?'#fa8c16':'#f5222d'; }
     function scoreBar(s){ return '<div style="height:10px;border-radius:6px;background:#eee;overflow:hidden;margin:6px 0"><div style="height:100%;width:'+s+'%;background:'+scoreColor(s)+'"></div></div>'; }
+
+    let backendReady = null;      // null=未检测, true/false
+    let lastEdits = [];
+    async function checkBackend(){
+      const st=$('#ah-bk',body);
+      st.textContent='检测中…';
+      try{
+        const r = await fetch('/api/humanize', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ping:true})});
+        const j = await r.json().catch(()=>({ok:false}));
+        backendReady = !!(j.ok && j.configured);
+        st.innerHTML = backendReady
+          ? '<span style="color:#52c41a">● 后端已配置（联网大模型改写可用）</span>'
+          : '<span style="color:#fa8c16">● 后端未配置密钥（将自动用离线改写，效果较弱）</span>';
+      }catch(e){
+        backendReady = false;
+        st.innerHTML = '<span style="color:#f5222d">● 无法连接后端（将用离线改写）</span>';
+      }
+    }
+    async function humanizeOnline(text, level){
+      const r = await fetch('/api/humanize', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text, level})});
+      const j = await r.json().catch(()=>({ok:false, error:'后端返回异常（可能函数未部署）'}));
+      if(!j.ok) throw new Error(j.error || '后端改写失败');
+      return j.out;
+    }
+
     body.innerHTML = `
-      <div class="hint" style="margin-bottom:10px">🛠️ 纯前端「去 AI 味」写作助手（v2 增强）：用更全的语言学规则重写文本——去除套话、行业黑话、书面化连词、模糊归因、排比与均匀句式，并把书面语转口语，让表达更自然，从而降低被 AI 检测工具判为机器生成的概率。<b>全程本地运行、不上传。</b>提示：「AI 痕迹指数」为启发式自估，非权威检测，不能保证绕过任何检测系统。</div>
-      <div class="mb"><label class="field-label">输入文本（建议 ≥ 50 字，效果更明显）</label><textarea class="txt" id="ah-in" style="min-height:170px" placeholder="粘贴 AI 生成的文本，点击「一键去 AI 味」…"></textarea></div>
+      <div class="hint" style="margin-bottom:10px">🛠️ 纯前端「去 AI 味」写作助手（<b>v3 · 联网大模型版</b>）：优先用<b>联网大模型</b>重写，最能降低 AI 率；未配置后端时自动降级为<b>离线轻量规则</b>（仅去最明显套话 / 黑话，效果较弱）。联网时文本会发往网站后端 <code>/api/humanize</code> 并转发给模型提供方（函数不记录正文）。<b>AI 痕迹指数</b>为启发式自估、非权威检测，不能保证绕过任何检测系统。</div>
+      <details class="hint" style="margin-bottom:10px;cursor:pointer">
+        <summary style="font-weight:600">⚙️ 模型设置 / 后端状态</summary>
+        <div style="margin-top:8px;line-height:1.9">
+          联网改写走网站后端函数 <code>/api/humanize</code>（与本站同源，浏览器不直连模型方）。需<b>站长</b>在 Cloudflare Pages 控制台 <b>Settings → Environment variables</b> 添加：<br>
+          · <code>HUMANIZE_API_KEY</code>（必填，模型密钥）<br>
+          · <code>HUMANIZE_BASE_URL</code>（可选，默认 DeepSeek）<br>
+          · <code>HUMANIZE_MODEL</code>（可选，默认 deepseek-chat；可用 gpt-4o-mini / qwen-plus 等）<br>
+          后端状态：<span id="ah-bk">未检测</span> <button class="btn ghost" id="ah-bkcheck" style="padding:2px 10px">检测</button>
+          <div style="margin-top:6px;color:#888">未配置则自动用离线模式（效果弱）。密钥由站长在后台配置，用户无需填写。</div>
+        </div>
+      </details>
+      <div class="mb"><label class="field-label">输入文本（建议 ≥ 80 字，效果更明显）</label><textarea class="txt" id="ah-in" style="min-height:170px" placeholder="粘贴 AI 生成的文本，点击「一键去 AI 味」…"></textarea></div>
       <div class="btn-row">
         <label class="field-label" style="align-self:center">改写强度</label>
         <select class="inp" id="ah-level" style="width:auto">
-          <option value="light">轻度（只去最明显的套话）</option>
+          <option value="light">轻度（只去最明显套话）</option>
           <option value="std" selected>标准</option>
-          <option value="deep">深度（句式也打乱 + 口语化）</option>
+          <option value="deep">深度（句式打乱 + 更口语）</option>
         </select>
         <button class="btn" id="ah-run">一键去 AI 味</button>
         <button class="btn ghost" id="ah-clear">清空</button>
@@ -10654,45 +10688,46 @@ AppTools['ai-humanize'] = {
         <button class="btn ghost" id="ah-diag">逐句诊断</button>
         <button class="btn ghost" id="ah-issues">AI 痕迹清单</button>
       </div>
-      <div id="ah-edit" class="hint" style="margin-top:8px;display:none"></div>
-      <div id="ah-diag" class="hint" style="margin-top:8px;display:none"></div>
+      <div id="ah-editbox" class="hint" style="margin-top:8px;display:none"></div>
+      <div id="ah-diagbox" class="hint" style="margin-top:8px;display:none"></div>
       <div id="ah-issuebox" class="hint" style="margin-top:8px;display:none"></div>`;
+
     function refreshScore(){
       const txt=$('#ah-in',body).value;
       const box=$('#ah-score',body);
       if(!txt.trim()){ box.innerHTML='输入文本后自动显示 AI 痕迹指数'; $('#ah-out',body).value=''; return; }
       const r=aiScore(txt);
-      const shortNote = txt.replace(/\s/g,'').length<30 ? '（文本较短，指数仅供参考）' : '';
-      box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>原文 AI 痕迹指数：</b><span style="font-size:18px;color:'+scoreColor(r.score)+';font-weight:700">'+r.score+'</span><span style="color:'+scoreColor(r.score)+'">'+scoreLabel(r.score)+'</span>'+shortNote+'</div>'+scoreBar(r.score)+'<div class="hint" style="margin-top:4px">句子 '+r.count+' 句，平均句长 '+r.avg.toFixed(0)+' 字；点「一键去 AI 味」后这里会显示改写前后对比与明细。</div>';
+      const shortNote = txt.replace(/\s/g,'').length<40 ? '（文本较短，指数仅供参考）' : '';
+      box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>原文 AI 痕迹指数：</b><span style="font-size:18px;color:'+scoreColor(r.score)+';font-weight:700">'+r.score+'</span><span style="color:'+scoreColor(r.score)+'">'+scoreLabel(r.score)+'</span>'+shortNote+'</div>'+scoreBar(r.score)+'<div class="hint" style="margin-top:4px">句子 '+r.count+' 句，平均句长 '+r.avg.toFixed(0)+' 字；点「一键去 AI 味」后这里会显示改写前后对比。</div>';
     }
     function showIssues(){
-      const txt=$('#ah-in',body).value;
+      const src=($('#ah-out',body).value.trim() || $('#ah-in',body).value);
       const box=$('#ah-issuebox',body);
       if(box.style.display==='none'){
-        if(!txt.trim()){ toast('请先输入文本'); return; }
-        const r=aiScore(txt);
+        if(!src.trim()){ toast('请先输入或生成文本'); return; }
+        const r=aiScore(src);
         box.style.display='block';
         box.innerHTML = r.issues.length ? ('<b>检测到的 AI 痕迹（共 '+r.issues.length+' 类）：</b><ul style="margin:6px 0 0 18px;line-height:1.8">'+r.issues.map(i=>'<li><b>'+i.t+'</b>'+(i.n?(' ×'+i.n):'')+'：'+escapeHtml(i.ex)+'</li>').join('')+'</ul>') : '未检测到明显 AI 痕迹模式，文本较自然。';
       } else { box.style.display='none'; box.innerHTML=''; }
     }
     function fillEdits(edits){
-      const box=$('#ah-edit',body);
-      if(!edits || !edits.length){ box.style.display='block'; box.dataset.filled='1'; box.innerHTML='本次未做改写（文本已较自然）。'; return; }
+      const box=$('#ah-editbox',body);
+      if(!edits || !edits.length){ box.style.display='block'; box.innerHTML='本次未做改写（文本已较自然）。'; return; }
       const counts={}; edits.forEach(e=>{ const k=e.label+'：'+(e.to===''?'删除《'+e.from+'》':(e.from+' → '+e.to)); counts[k]=(counts[k]||0)+e.n; });
-      box.style.display='block'; box.dataset.filled='1';
+      box.style.display='block';
       box.innerHTML = '<b>改写明细（共 '+edits.reduce((a,b)=>a+b.n,0)+' 处）：</b><ul style="margin:6px 0 0 18px;line-height:1.8">'+Object.entries(counts).map(([k,c])=>'<li>'+escapeHtml(k)+(c>1?(' ×'+c):'')+'</li>').join('')+'</ul>';
     }
     function toggleEdits(){
-      const box=$('#ah-edit',body);
-      if(box.style.display==='none'){ if(box.dataset.filled!=='1'){ toast('请先点「一键去 AI 味」','err'); return; } box.style.display='block'; }
+      const box=$('#ah-editbox',body);
+      if(box.style.display==='none'){ if(!box.dataset.filled){ toast('请先点「一键去 AI 味」','err'); return; } box.style.display='block'; }
       else { box.style.display='none'; }
     }
     function showDiagnose(){
-      const txt=$('#ah-in',body).value;
-      const box=$('#ah-diag',body);
+      const src=($('#ah-out',body).value.trim() || $('#ah-in',body).value);
+      const box=$('#ah-diagbox',body);
       if(box.style.display==='none'){
-        if(!txt.trim()){ toast('请先输入文本'); return; }
-        const segs = txt.split(/([。！？!?])/);
+        if(!src.trim()){ toast('请先输入或生成文本'); return; }
+        const segs = src.split(/([。！？!?])/);
         let html='';
         for(let i=0;i<segs.length;i+=2){
           const core=segs[i]||''; const p=segs[i+1]||'';
@@ -10703,32 +10738,46 @@ AppTools['ai-humanize'] = {
           html += '<span style="background:'+bg+';border-left:3px solid '+bd+';padding:1px 3px;margin:1px 0;display:inline">'+escapeHtml(core)+escapeHtml(p)+'</span>';
         }
         box.style.display='block';
-        box.innerHTML = '<b>逐句诊断（颜色越红越像 AI 生成）：</b><div style="line-height:2;margin-top:6px">'+html+'</div>';
+        box.innerHTML = '<b>逐句诊断（颜色越红越像 AI 生成；默认诊断结果文本，若未生成则诊断原文）：</b><div style="line-height:2;margin-top:6px">'+html+'</div>';
       } else { box.style.display='none'; box.innerHTML=''; }
     }
     $('#ah-in',body).addEventListener('input', refreshScore);
-    $('#ah-run',body).onclick=()=>{
+    $('#ah-bkcheck',body).onclick = checkBackend;
+    $('#ah-run',body).onclick = async ()=>{
       const txt=$('#ah-in',body).value;
       if(!txt.trim()){ toast('请先输入文本','err'); return; }
       const level=$('#ah-level',body).value;
-      const res=humanize(txt, level);
-      const out=res.out, edits=res.edits;
-      $('#ah-out',body).value=out;
-      const before=aiScore(txt).score, after=aiScore(out).score;
-      const delta=before-after;
-      const box=$('#ah-score',body);
-      box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>AI 痕迹指数：</b><span style="color:'+scoreColor(before)+';font-weight:700">'+before+'</span> → <span style="color:'+scoreColor(after)+';font-weight:700">'+after+'</span><span style="color:'+(delta>0?'#52c41a':'#888')+'">'+(delta>0?('↓'+delta+' 更自然'):(delta<0?('↑'+(-delta)+' 注意'):'持平'))+'</span></div>'+scoreBar(after)+'<div class="hint" style="margin-top:4px">改写后 '+out.length+' 字（原文 '+txt.length+' 字），共 '+edits.reduce((a,b)=>a+b.n,0)+' 处调整。提示：指数为启发式自估，建议人工通读确认语义无误。</div>';
-      fillEdits(edits);
-      $('#ah-issuebox',body).style.display='none'; $('#ah-issuebox',body).innerHTML='';
-      $('#ah-diag',body).style.display='none'; $('#ah-diag',body).innerHTML='';
-      toast('已生成去 AI 味结果');
+      const btn=$('#ah-run',body); const old=btn.textContent;
+      btn.disabled=true; btn.textContent='改写中…';
+      try{
+        let out, mode;
+        if(backendReady===true){
+          try{ out = await humanizeOnline(txt, level); mode='online'; }
+          catch(e){ toast('联网改写失败，改用离线：'+e.message,'err'); const res=humanize(txt,level); out=res.out; mode='offline'; lastEdits=res.edits; }
+        } else {
+          const res=humanize(txt,level); out=res.out; mode='offline'; lastEdits=res.edits;
+          if(backendReady===false) toast('后端未配置，使用离线改写（效果较弱），建议站长在 Cloudflare 后台配置密钥','err');
+        }
+        $('#ah-out',body).value=out;
+        const before=aiScore(txt).score, after=aiScore(out).score, delta=before-after;
+        const box=$('#ah-score',body);
+        box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>AI 痕迹指数：</b><span style="color:'+scoreColor(before)+';font-weight:700">'+before+'</span> → <span style="color:'+scoreColor(after)+';font-weight:700">'+after+'</span><span style="color:'+(delta>0?'#52c41a':'#888')+'">'+(delta>0?('↓'+delta+' 更自然'):(delta<0?('↑'+(-delta)+' 注意'):'持平'))+'</span> <span class="hint">（'+(mode==='online'?'联网大模型':'离线规则·弱')+'）</span></div>'+scoreBar(after)+'<div class="hint" style="margin-top:4px">改写后 '+out.length+' 字（原文 '+txt.length+' 字）。指数为启发式自估，建议人工通读确认语义无误。</div>';
+        const eb=$('#ah-editbox',body);
+        if(mode==='online'){ eb.style.display='block'; eb.dataset.filled='1'; eb.innerHTML='（联网大模型自由重写，非逐条规则替换，故无逐条明细；可点「逐句诊断」看结果自然度。）'; }
+        else { fillEdits(lastEdits); eb.dataset.filled='1'; }
+        $('#ah-diagbox',body).style.display='none'; $('#ah-diagbox',body).innerHTML='';
+        $('#ah-issuebox',body).style.display='none'; $('#ah-issuebox',body).innerHTML='';
+        toast('已生成去 AI 味结果'+(mode==='online'?'（联网）':''));
+      }catch(e){ toast('改写失败：'+e.message,'err'); }
+      finally{ btn.disabled=false; btn.textContent=old; }
     };
     $('#ah-copy',body).onclick=()=>{ const o=$('#ah-out',body).value; if(!o.trim()){ toast('暂无结果','err'); return; } copyText(o); };
     $('#ah-dl',body).onclick=()=>{ const o=$('#ah-out',body).value; if(!o.trim()){ toast('暂无结果','err'); return; } const blob=new Blob([o],{type:'text/plain;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='去AI味结果.txt'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('已下载 .txt'); };
     $('#ah-edit',body).onclick=toggleEdits;
     $('#ah-diag',body).onclick=showDiagnose;
     $('#ah-issues',body).onclick=showIssues;
-    $('#ah-clear',body).onclick=()=>{ $('#ah-in',body).value=''; $('#ah-out',body).value=''; ['ah-edit','ah-diag','ah-issuebox'].forEach(id=>{ const b=$('#'+id,body); b.style.display='none'; b.innerHTML=''; if(b.dataset) b.dataset.filled=''; }); refreshScore(); };
+    $('#ah-clear',body).onclick=()=>{ $('#ah-in',body).value=''; $('#ah-out',body).value=''; ['ah-editbox','ah-diagbox','ah-issuebox'].forEach(id=>{ const b=$('#'+id,body); b.style.display='none'; b.innerHTML=''; if(b.dataset) b.dataset.filled=''; }); refreshScore(); };
+    checkBackend();
   }
 };
 
