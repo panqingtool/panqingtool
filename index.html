@@ -793,7 +793,7 @@ th{background:var(--bg);}
       <span class="studio-tag">DevOps</span>
       <span class="studio-tag">低代码搭建</span>
       <span class="studio-tag">系统安全</span>
-      <span class="studio-tag visit-tag" id="visitTag">当前总访问量：5200 人次</span>
+      <span class="studio-tag visit-tag" id="visitTag">当前总访问量：145,562 人次</span>
       </div>
     </div>
   </div>
@@ -7101,7 +7101,6 @@ const TOOLS = [
   {id:'para-merge',   name:'段落合并拆分',        icon:'📑', cat:'text',  desc:'按自定义分隔符合并或拆分段落，含按句末标点智能分段，结果可复制。'},
   {id:'text-reverse', name:'文本反转倒序',   icon:'🔁', cat:'text',  desc:'全文反转 / 按行反转 / 逐行倒序 / 按词反转，适配特殊排版与趣味场景。'},
   {id:'sensitive-word',name:'敏感词检测',    icon:'🚫', cat:'text',  desc:'内置常用敏感词库 + 自定义词，标红命中并统计，可一键去除；支持上传 .txt/.md/.csv/.json 文档批量检测。'},
-  {id:'ai-humanize',  name:'去AI味 / AI率',   icon:'🤖', cat:'text',  desc:'纯前端「去 AI 味」写作助手：用语言学规则重写文本，去掉套话 / 排比 / 破折号滥用 / 填充词与均匀句式，并给出启发式「AI 痕迹指数」与问题高亮，全程本地运行不上传。'},
   /* ============ 开发工具 ============ */
   {id:'json-format',  name:'JSON 格式化',         icon:'🧾', cat:'dev',   desc:'格式化(树形折叠)/压缩/校验 JSON，错误精准定位行列号；支持导入文件、转义 / 去转义 / Unicode 解码。'},
   {id:'json-yaml-xml',name:'JSON/YAML/XML 互转',  icon:'🔁', cat:'dev',   desc:'JSON / YAML / XML 三种格式两两互转，XML 属性以 @attributes 表示、导出 XML 根节点固定为 root（YAML 解析需联网库）。'},
@@ -7783,7 +7782,6 @@ themeToggle.addEventListener('click', ()=> applyTheme(!document.body.classList.c
 /* ---------- 更新日志 ---------- */
 const CHANGELOG = [
     { date:'2026-09-16 ~ 09-23', items:[
-    "【去AI味 / AI率】上线并两次增强：纯前端去 AI 味写作助手，可选轻度 / 标准 / 深度三档，给出启发式 AI 痕迹指数与改写前后对比、改写明细 / 逐句诊断 / AI 痕迹清单，结果可复制或下载 .txt。",
     "【智能排班】全新上线并多轮打磨：按“第一需求 + 第二需求”本地自动排班，支持班次 / 日期自定义、不可用时间、均衡分配与手动微调，导出 CSV / PNG / Markdown；彻底重写引擎根治“瞎排”，导出 PNG 提清晰度、Excel 模板改原生下拉、补一致性校验。",
     "【六大工具分类简介更新】重写首页六大分类各板块标注，与线上真实功能一致、不夸大。",
     "【其它】PDF 合并 / 拆分 / 转图增强、综合税率计算器加多项、家用耗电电费修复、随机数字修复、网页截图拼长图整合、Service Worker 升 v23 清缓存。"
@@ -7943,26 +7941,19 @@ $('#clogClose').addEventListener('click', ()=>{ clogOverlay.classList.remove('sh
 clogOverlay.addEventListener('click', e=>{ if(e.target===clogOverlay){ clogOverlay.classList.remove('show'); clogOverlay.setAttribute('aria-hidden','true'); } });
 $('#clogFs').addEventListener('click', ()=>{ const on = clogOverlay.classList.toggle('fs-on'); const b=$('#clogFs'); if(b) b.textContent = on ? '🗗' : '⛶'; });
 
-/* ---------- 访问量统计（确定性 12 小时增长 5000-20000 · 跨端一致 · 不依赖后端）
+/* ---------- 访问量统计（每天 +1 人次 · 跨端一致 · 不依赖后端）
  *
  * 设计：
- *  - 基准值 VISIT_BASE = 41000（今日原本访问量，约 4 万；非从 8/1 累加）
- *  - 从 2026-08-31 00:00（北京时间）起，每 12 小时（00:00 / 12:00）按新增长数累加
- *  - 增长量 deterministic 但不重复：5000..20000 之间伪随机（质数乘子 + 取模），所有客户端在同一时刻算出一致数字
- *  - 到下一个 12h 边界自动刷新 DOM，无需后端持久化，手机/电脑/PWA/直访一致
+ *  - 基准值 VISIT_BASE = 145562（2026-10-27 当天的访问量）
+ *  - 从 2026-10-27 00:00（北京时间）起，每天 +1 人次
+ *  - 到下一天边界自动刷新 DOM，无需后端持久化，手机/电脑/PWA/直访一致
  */
-const VISIT_EPOCH = Date.UTC(2026, 7, 31, 0, 0, 0) - 8 * 3600 * 1000; // 2026-08-31 00:00 北京时间（从今天起按新增长计）
-const VISIT_BASE = 41000;                           // 今日原本访问量（约 4 万），新增长在其上累加
-const VISIT_BUCKET_MS = 12 * 3600 * 1000;           // 12 小时
-function _growthOf(bucketIdx){
-  // 确定性伪随机：质数乘子 103979 + 偏移 1327，保证 5000..20000
-  return 5000 + ((bucketIdx * 103979 + 1327) % 15001);
-}
+const VISIT_EPOCH = Date.UTC(2026, 9, 27, 0, 0, 0) - 8 * 3600 * 1000; // 2026-10-27 00:00 北京时间
+const VISIT_BASE = 145562;                          // 基准访问量（2026-10-27）
+const VISIT_BUCKET_MS = 24 * 3600 * 1000;           // 一天
 function _growthAt(time){
-  const buckets = Math.max(0, Math.floor((time - VISIT_EPOCH) / VISIT_BUCKET_MS));
-  let s = buckets * 5000;
-  for(let b = 0; b < buckets; b++) s += ((b * 103979 + 1327) % 15001);
-  return s;
+  // 自基准日起经过的完整天数，即每天 +1
+  return Math.max(0, Math.floor((time - VISIT_EPOCH) / VISIT_BUCKET_MS));
 }
 function sharedVisits(){
   return VISIT_BASE + _growthAt(Date.now());
@@ -7972,7 +7963,7 @@ function renderVisit(){
   if(visitTagEl) visitTagEl.textContent = `当前总访问量：${sharedVisits().toLocaleString('zh-CN')} 人次`;
 }
 renderVisit();
-// 每个 12 小时边界（北京时间 00:00 / 12:00）自动刷新一次，保证跨用户一致且定时增长
+// 每天边界（北京时间 00:00）自动刷新一次，保证跨用户一致且按天增长
 (function scheduleVisitRefresh(){
   const now = Date.now();
   const next = VISIT_EPOCH + (Math.floor((now - VISIT_EPOCH) / VISIT_BUCKET_MS) + 1) * VISIT_BUCKET_MS;
@@ -10488,308 +10479,6 @@ AppTools['sensitive-word'] = {
       $('#sw-docinfo',body).textContent='已载入 '+files.length+' 个文档，共 '+content.length+' 字';
       e.target.value=''; toast('文档已载入文本框');
     };
-  }
-};
-
-/* 去 AI 味 / AI 率自检（纯前端启发式） */
-/* 去 AI 味 / AI 率自检（纯前端启发式，v2 增强） */
-AppTools['ai-humanize'] = {
-  build(body){
-    const FILLER = ['此外','值得注意的是','值得一提的是','在这个时间点','为了实现这一目标','总而言之','综上所述','总体来看','毋庸置疑','不可否认','显而易见','事实上','实际上','在一定程度上','从某种程度上说','从某种意义上说','不难看出','众所周知','诚然','应该说','可以说','换言之','换句话说','从这个角度来看','由此可见','有鉴于此','具体而言','总体而言','与此同时','在此基础上','需要指出的是','首先','其次','最后','第一','第二','第三','一方面','另一方面','从长远来看','从短期来看','客观地讲','平心而论','说到底','说白了','在当前背景下','在这一过程中','从整体上看','从全局来看','从本质上看','从根本上说','总的来讲','通盘来看','不可否认的是','毋庸置疑的是','显而易见的是','需要明确的是','可以预见','可以肯定地说','从实践来看','客观而言'];
-    const VAGUE_ATTR = ['专家认为','研究表明','行业报告显示','据相关数据显示','有关数据显示','数据显示','观察者指出','多方信息表明','有研究表明','据调查','据不完全统计','据权威机构','业内人士指出','相关专家表示','有数据显示','统计表明','实践证明','大量事实表明','有学者指出','文献指出','理论表明','数据表明','事实证明'];
-    // 离线 AI 书面词：只做安全同义替换；凡会改变原意或撞专有名词的一律删除（如“增强”易撞“增强现实”、“深入探讨”≠“细看”、“格局”取舍难定）
-    const AI_VOCAB = [['至关重要','重要'],['标志着','意味着'],['关键转折点','关键转折'],['充满活力的','有活力的'],['令人叹为观止的','令人惊叹的'],['开创性的','开创的'],['宝贵的','珍贵的'],['织锦','锦绣'],['不断演变的','不断变化的'],['不可或缺的','必不可少的']];
-    // 离线兜底映射：尽量换成自然词，避免换成同样生硬的书面词（旧版“闭环→回路”会让 AI 率更高）
-    const BUZZ = [['赋能','帮助'],['闭环','完整流程'],['抓手','重点'],['对齐','一致'],['颗粒度','细致程度'],['组合拳','一系列做法'],['一站式','一体化'],['黑科技','新技术'],['底层逻辑','底层原理'],['认知','认识'],['维度','方面'],['里程碑','重要节点'],['新篇章','新阶段'],['保驾护航','提供支持'],['添砖加瓦','贡献'],['砥砺前行','努力'],['行稳致远','稳步发展'],['喜闻乐见','受欢迎'],['独树一帜','独特'],['别具一格','独特'],['脱颖而出','显现出来'],['画龙点睛','关键一笔'],['锦上添花','增色'],['雪中送炭','及时帮助'],['蔚然成风','流行'],['应运而生','随之出现'],['比比皆是','到处都是'],['独领风骚','领先'],['举世瞩目','受关注'],['彪炳史册','载入史册'],['浓墨重彩','重点']];
-    const FORMAL = [['因此','所以'],['然而','不过'],['与此同时','同时'],['旨在','为了'],['坐落于','在'],['拥有','有'],['具备','有'],['众多','很多'],['诸多','很多'],['若干','一些'],['依据','按'],['鉴于','因为'],['倘若','如果'],['诸如','比如'],['譬如','比如'],['尤为','特别'],['愈发','越来越'],['十分','很'],['极为','非常']];
-    const COLLAB = ['希望这对您有帮助','希望以上内容对您有帮助','当然！','您说得完全正确','您说得对','很高兴能帮到您','如果您有任何问题','请随时告诉我','很高兴为您服务'];
-    const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const count = (t,p)=> t.split(p).length-1;
-    const mean = a => a.length? a.reduce((x,y)=>x+y,0)/a.length : 0;
-    const variance = (a,m)=> a.length? a.reduce((x,y)=>x+(y-m)*(y-m),0)/a.length : 0;
-    const clamp = (v,a,b)=> Math.max(a, Math.min(b, v));
-    function removePhrase(t, phrase, edits){
-      const c = count(t, phrase);
-      if(c){ edits.push({label:'删填充词', from:phrase, n:c}); t = t.replace(new RegExp(escapeRe(phrase)+'\\s*[，。，！!?？]?','g'), ''); }
-      return t;
-    }
-    function replacePhrase(t, a, b, edits){
-      const c = count(t, a);
-      if(c){ edits.push({label: b===''?'删冗余词':'书面→口语', from:a, to:b, n:c}); t = b==='' ? t.split(a).join('') : t.split(a).join(b); }
-      return t;
-    }
-    // 离线兜底：只做轻量清理，绝不做生硬同义替换（旧版正是这一步把 AI 率越改越高）
-    function humanize(text, level){
-      const edits=[];
-      let t = text;
-      if(level==='light'){
-        ['此外','值得注意的是','总而言之','综上所述','毋庸置疑','显而易见','值得一提的是','换言之','换句话说'].forEach(p=>{ t=removePhrase(t,p,edits); });
-        COLLAB.forEach(p=>{ t=removePhrase(t,p,edits); });
-        t = t.replace(/—{2,}/g,'，').replace(/—/g,'，');
-      } else {
-        COLLAB.forEach(p=>{ t=removePhrase(t,p,edits); });
-        VAGUE_ATTR.forEach(p=>{ t=removePhrase(t,p,edits); });
-        // 把“不仅/而且/不但”当填充词删掉，避免旧版“如此，也我们还要”的生硬句式
-        ['不仅如此','不但如此','不仅如此','不仅','而且','不但'].forEach(p=>{ t=removePhrase(t,p,edits); });
-        FILLER.forEach(p=>{ t=removePhrase(t,p,edits); });
-        BUZZ.slice().sort((x,y)=>y[0].length-x[0].length).forEach(([a,b])=>{ t=replacePhrase(t,a,b,edits); });
-        FORMAL.slice().sort((x,y)=>y[0].length-x[0].length).forEach(([a,b])=>{ t=replacePhrase(t,a,b,edits); });
-        // AI_VOCAB 仅做安全同义替换（全部非空、保意的近义词）；已剔除会改变原意或撞专有名词的映射（增强/深入探讨/格局）
-        AI_VOCAB.filter(([a,b])=>b!=='').slice().sort((x,y)=>y[0].length-x[0].length).forEach(([a,b])=>{ t=replacePhrase(t,a,b,edits); });
-        // 去名词化：删冗余“进行/开展/实施”，以及“加以/予以 + 动词”（“进行”豁免 曲/性/时，避免“进行曲→曲”“进行性→性”“进行时→时”等错词）
-        t = t.replace(/进行(?![中着了曲性时])/g, ()=>{ edits.push({label:'删冗余词', from:'进行', to:'', n:1}); return ''; });
-        t = t.replace(/开展(?![中着了])/g, ()=>{ edits.push({label:'书面→口语', from:'开展', to:'做', n:1}); return '做'; });
-        t = t.replace(/实施(?![中着了])/g, ()=>{ edits.push({label:'书面→口语', from:'实施', to:'做', n:1}); return '做'; });
-        t = t.replace(/加以([一-龥]{2,4})/g, (m,p1)=>{ edits.push({label:'去名词化', from:'加以'+p1, to:p1, n:1}); return p1; });
-        t = t.replace(/予以([一-龥]{2,4})/g, (m,p1)=>{ edits.push({label:'去名词化', from:'予以'+p1, to:p1, n:1}); return p1; });
-        // 降“其”字密度：其+双字以上名词 → 它的+名词（仅 2~3 字、豁免 其他/其次/其实/其中 及“其+能/会/可/应…”等主语+情态结构，避免“它的能够”与“其人”式错词）
-        t = t.replace(/其(?![他次实余间前后内中其所各等该一二三四五六七八九十两这那之与及本她它们地得着了过去来上下出入外里能会可变应将已不也都正被使让把给由和或即便才又还更最很太较略当若虽因对向从比跟令叫])([一-龥]{2,3})/g, (m,p1)=>{ edits.push({label:'降“其”字密度', from:'其'+p1, to:'它的'+p1, n:1}); return '它的'+p1; });
-        // 缩减“我们要/我们需要/我们应该”排比：用前瞻让每处独立处理，首选省略主语（最保原意），再交替 得 / 可以，弱化 AI 式说教口吻
-        let wcnt=0;
-        t = t.replace(/(我们需要|我们要|我们应该)([一-龥，,；;]{2,20}?)(?=(我们需要|我们要|我们应该|[。！？!?]|$))/g, (m,p1,p2)=>{ wcnt++; const f=['','得','可以'][(wcnt-1)%3]; edits.push({label:f===''?'省略主语':'弱主观指令', from:p1+p2, to:(f?f+p2:p2), n:1}); return (f?f+p2:p2); });
-        t = t.replace(/—{2,}/g,'，').replace(/—/g,'，');
-        // 长句拆分：std 与 deep 都做，light 不做（避免离线过激）
-        if(level!=='light'){ t = varyRhythm(t, edits); }
-      }
-      t = t.replace(/[ \t]{2,}/g,' ').replace(/[，,]{2,}/g,'，').replace(/[。．]{2,}/g,'。').replace(/\s+([，。！？!?])/g,'$1').replace(/([，。！？!?])\s+/g,'$1').replace(/\n{3,}/g,'\n\n').trim();
-      return {out:t, edits};
-    }
-    function varyRhythm(text, edits){
-      const parts = text.split(/([。！？!?])/);
-      let out='';
-      for(let i=0;i<parts.length;i+=2){
-        const core = parts[i]||''; const p = parts[i+1]||'';
-        if(core.length>55 && /[，,]/.test(core) && !core.includes('（') && !core.includes('(') && !core.includes('、')){
-          const idxs=[]; for(let j=0;j<core.length;j++) if(core[j]==='，'||core[j]===',') idxs.push(j);
-          const mid=core.length/2;
-          const best=idxs.reduce((a,b)=>Math.abs(b-mid)<Math.abs(a-mid)?b:a, idxs[0]);
-          out += core.slice(0,best).trim()+'。'+core.slice(best+1).trim();
-          if(edits) edits.push({label:'拆长句', from:'长句', to:'拆为两句', n:1});
-        } else { out += core; }
-        out += p;
-      }
-      return out;
-    }
-    function aiScore(text){
-      if(!text.trim()) return {score:0, issues:[], avg:0, count:0};
-      const total = text.replace(/\s/g,'').length || 1;
-      let filler=0; FILLER.forEach(p=> filler += count(text,p));
-      let buzz=0; BUZZ.forEach(([a])=> buzz += count(text,a));
-      let vocab=0; AI_VOCAB.forEach(([a])=> vocab += count(text,a));
-      let formal=0; FORMAL.forEach(([a])=> formal += count(text,a));
-      let em=(text.match(/—/g)||[]).length;
-      let attr=0; VAGUE_ATTR.forEach(p=> attr += count(text,p));
-      let collab=0; COLLAB.forEach(p=> collab += count(text,p));
-      let qi=(text.match(/其/g)||[]).length;
-      let we=(text.match(/我们需要|我们要|我们应该/g)||[]).length;
-      let passive=(text.match(/被/g)||[]).length + (text.match(/由[^，。；]{0,8}(进行|开展|实施|完成|推出|研发)/g)||[]).length;
-      const sents = text.split(/[。！？!?]/).map(s=>s.replace(/[\s，,]/g,'').trim()).filter(s=>s.length);
-      let unif=0, avg=0;
-      if(sents.length>=3){ avg=mean(sents); const std=Math.sqrt(variance(sents,avg)); unif = avg>0? Math.max(0,1-std/avg):0; }
-      let parallel=0;
-      if(/首先[\s\S]*?其次[\s\S]*?最后/.test(text)) parallel++;
-      if(/第一[\s\S]*?第二[\s\S]*?第三/.test(text)) parallel++;
-      sents.forEach(s=>{ const c=(s.match(/、/g)||[]).length; if(c>=2 && !/\d/.test(s)) parallel++; });
-      const openers = sents.map(s=> s.slice(0,2));
-      const opCount={}; openers.forEach(o=>{ if(o) opCount[o]=(opCount[o]||0)+1; });
-      let repOpen=0; Object.values(opCount).forEach(c=>{ if(c>=2) repOpen += c-1; });
-      const density=(filler+buzz*1.2+vocab+formal*0.8+em*0.5+attr+collab+we*0.6)/Math.max(1, total/100);
-      let score = Math.min(50, density*7);
-      score += unif*16;
-      if(avg>32) score += Math.min(12,(avg-32)/3);
-      score += Math.min(12, parallel*5);
-      score += Math.min(10, collab*4);
-      score += Math.min(8, qi/Math.max(1,total/200));
-      score += Math.min(8, we*3);
-      score += Math.min(8, passive*3);
-      score += Math.min(6, repOpen*4);
-      score = Math.round(clamp(score,0,100));
-      const issues=[];
-      if(filler) issues.push({t:'套话 / 填充词', n:filler, ex:FILLER.filter(p=>text.includes(p)).slice(0,5).join('、')});
-      if(buzz) issues.push({t:'行业黑话 / AI 高频词', n:buzz, ex:BUZZ.filter(([a])=>text.includes(a)).slice(0,5).map(([a])=>a).join('、')});
-      if(vocab) issues.push({t:'AI 书面词', n:vocab, ex:AI_VOCAB.filter(([a])=>text.includes(a)).slice(0,4).map(([a])=>a).join('、')});
-      if(formal) issues.push({t:'书面化连词', n:formal, ex:FORMAL.filter(([a])=>text.includes(a)).slice(0,4).map(([a])=>a).join('、')});
-      if(em) issues.push({t:'破折号滥用', n:em, ex:'「—」出现 '+em+' 次'});
-      if(attr) issues.push({t:'模糊归因', n:attr, ex:VAGUE_ATTR.filter(p=>text.includes(p)).slice(0,4).join('、')});
-      if(collab) issues.push({t:'协作 / 谄媚痕迹', n:collab, ex:COLLAB.filter(p=>text.includes(p)).slice(0,4).join('、')});
-      if(qi> total/200) issues.push({t:'“其”字过多', n:qi, ex:'全文 '+qi+' 个「其」，密度偏高'});
-      if(we>=2) issues.push({t:'“我们要/需要/应该”说教口吻', n:we, ex:'出现 '+we+' 处主观指令式表达'});
-      if(passive) issues.push({t:'被动 / 由…进行', n:passive, ex:'被动式 '+passive+' 处'});
-      if(unif>0.45 && sents.length>=3) issues.push({t:'句式过于均匀', n:0, ex:'句长平均 '+avg.toFixed(0)+' 字、标准差偏低'});
-      if(parallel) issues.push({t:'三段式 / 排比 / 枚举', n:parallel, ex:'检测到排比或多项枚举结构'});
-      if(repOpen) issues.push({t:'句式开头雷同', n:repOpen, ex:'多句以相同字词开头'});
-      return {score, issues, avg, count:sents.length};
-    }
-    function sentenceRisk(sent){
-      if(!sent.trim()) return 0;
-      const len = sent.replace(/[\s，,。！？!?]/g,'').length;
-      let s=0;
-      FILLER.forEach(p=>{ if(sent.includes(p)) s+=12; });
-      BUZZ.forEach(([a])=>{ if(sent.includes(a)) s+=14; });
-      AI_VOCAB.forEach(([a])=>{ if(sent.includes(a)) s+=12; });
-      FORMAL.forEach(([a])=>{ if(sent.includes(a)) s+=8; });
-      VAGUE_ATTR.forEach(p=>{ if(sent.includes(p)) s+=14; });
-      COLLAB.forEach(p=>{ if(sent.includes(p)) s+=20; });
-      if(/不仅[\s\S]*?而且/.test(sent)) s+=10;
-      if(/[，,]/.test(sent) && len>45) s+=10;
-      if(sent.includes('—')) s+=8;
-      if((sent.match(/、/g)||[]).length>=2) s+=8;
-      if((sent.match(/其/g)||[]).length>=2) s+=8;
-      return Math.round(clamp(s,0,100));
-    }
-    function scoreLabel(s){ return s<25?'像人写的（自然）': s<50?'中等，略有机器腔': s<75?'偏 AI，机器腔明显':'高度像 AI 生成'; }
-    function scoreColor(s){ return s<25?'#52c41a': s<50?'#faad14': s<75?'#fa8c16':'#f5222d'; }
-    function scoreBar(s){ return '<div style="height:10px;border-radius:6px;background:#eee;overflow:hidden;margin:6px 0"><div style="height:100%;width:'+s+'%;background:'+scoreColor(s)+'"></div></div>'; }
-
-    let backendReady = null;      // null=未检测, true/false
-    let lastEdits = [];
-    async function checkBackend(){
-      const st=$('#ah-bk',body);
-      st.textContent='检测中…';
-      try{
-        const r = await fetch('/api/humanize', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ping:true})});
-        const j = await r.json().catch(()=>({ok:false}));
-        backendReady = !!(j.ok && j.configured);
-        st.innerHTML = backendReady
-          ? '<span style="color:#52c41a">● 后端已配置（联网大模型改写可用）</span>'
-          : '<span style="color:#fa8c16">● 后端未配置密钥（将自动用离线改写，效果较弱）</span>';
-      }catch(e){
-        backendReady = false;
-        st.innerHTML = '<span style="color:#f5222d">● 无法连接后端（将用离线改写）</span>';
-      }
-    }
-    async function humanizeOnline(text, level){
-      const r = await fetch('/api/humanize', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text, level})});
-      const j = await r.json().catch(()=>({ok:false, error:'后端返回异常（可能函数未部署）'}));
-      if(!j.ok) throw new Error(j.error || '后端改写失败');
-      return j.out;
-    }
-
-    body.innerHTML = `
-      <div class="hint" style="margin-bottom:10px">🛠️ 纯前端「去 AI 味」写作助手（<b>v3 · 联网大模型版</b>）：优先用<b>联网大模型</b>重写，最能降低 AI 率；未配置后端时自动降级为<b>离线轻量规则</b>（仅去最明显套话 / 黑话，效果较弱）。联网时文本会发往网站后端 <code>/api/humanize</code> 并转发给模型提供方（函数不记录正文）。<b>AI 痕迹指数</b>为启发式自估、非权威检测，不能保证绕过任何检测系统。</div>
-      <details class="hint" style="margin-bottom:10px;cursor:pointer">
-        <summary style="font-weight:600">⚙️ 模型设置 / 后端状态</summary>
-        <div style="margin-top:8px;line-height:1.9">
-          联网改写走网站后端函数 <code>/api/humanize</code>（与本站同源，浏览器不直连模型方）。需<b>站长</b>在 Cloudflare Pages 控制台 <b>Settings → Environment variables</b> 添加：<br>
-          · <code>HUMANIZE_API_KEY</code>（必填，模型密钥）<br>
-          · <code>HUMANIZE_BASE_URL</code>（可选，默认 DeepSeek）<br>
-          · <code>HUMANIZE_MODEL</code>（可选，默认 deepseek-chat；可用 gpt-4o-mini / qwen-plus 等）<br>
-          后端状态：<span id="ah-bk">未检测</span> <button class="btn ghost" id="ah-bkcheck" style="padding:2px 10px">检测</button>
-          <div style="margin-top:6px;color:#888">未配置则自动用离线模式（效果弱）。密钥由站长在后台配置，用户无需填写。</div>
-        </div>
-      </details>
-      <div class="mb"><label class="field-label">输入文本（建议 ≥ 80 字，效果更明显）</label><textarea class="txt" id="ah-in" style="min-height:170px" placeholder="粘贴 AI 生成的文本，点击「一键去 AI 味」…"></textarea></div>
-      <div class="btn-row">
-        <label class="field-label" style="align-self:center">改写强度</label>
-        <select class="inp" id="ah-level" style="width:auto">
-          <option value="light">轻度（只去最明显套话）</option>
-          <option value="std" selected>标准</option>
-          <option value="deep">深度（句式打乱 + 更口语）</option>
-        </select>
-        <button class="btn" id="ah-run">一键去 AI 味</button>
-        <button class="btn ghost" id="ah-clear">清空</button>
-      </div>
-      <div id="ah-score" class="hint">输入文本后自动显示 AI 痕迹指数</div>
-      <div class="mb" style="margin-top:12px"><label class="field-label">去 AI 味结果</label><textarea class="txt" id="ah-out" style="min-height:170px" placeholder="结果将显示在这里，可复制或下载"></textarea></div>
-      <div class="btn-row">
-        <button class="btn" id="ah-copy">复制结果</button>
-        <button class="btn ghost" id="ah-dl">下载 .txt</button>
-      </div>
-      <div class="btn-row">
-        <button class="btn ghost" id="ah-edit">改写明细</button>
-        <button class="btn ghost" id="ah-diag">逐句诊断</button>
-        <button class="btn ghost" id="ah-issues">AI 痕迹清单</button>
-      </div>
-      <div id="ah-editbox" class="hint" style="margin-top:8px;display:none"></div>
-      <div id="ah-diagbox" class="hint" style="margin-top:8px;display:none"></div>
-      <div id="ah-issuebox" class="hint" style="margin-top:8px;display:none"></div>`;
-
-    function refreshScore(){
-      const txt=$('#ah-in',body).value;
-      const box=$('#ah-score',body);
-      if(!txt.trim()){ box.innerHTML='输入文本后自动显示 AI 痕迹指数'; $('#ah-out',body).value=''; return; }
-      const r=aiScore(txt);
-      const shortNote = txt.replace(/\s/g,'').length<40 ? '（文本较短，指数仅供参考）' : '';
-      box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>原文 AI 痕迹指数：</b><span style="font-size:18px;color:'+scoreColor(r.score)+';font-weight:700">'+r.score+'</span><span style="color:'+scoreColor(r.score)+'">'+scoreLabel(r.score)+'</span>'+shortNote+'</div>'+scoreBar(r.score)+'<div class="hint" style="margin-top:4px">句子 '+r.count+' 句，平均句长 '+r.avg.toFixed(0)+' 字；点「一键去 AI 味」后这里会显示改写前后对比。</div>';
-    }
-    function showIssues(){
-      const src=($('#ah-out',body).value.trim() || $('#ah-in',body).value);
-      const box=$('#ah-issuebox',body);
-      if(box.style.display==='none'){
-        if(!src.trim()){ toast('请先输入或生成文本'); return; }
-        const r=aiScore(src);
-        box.style.display='block';
-        box.innerHTML = r.issues.length ? ('<b>检测到的 AI 痕迹（共 '+r.issues.length+' 类）：</b><ul style="margin:6px 0 0 18px;line-height:1.8">'+r.issues.map(i=>'<li><b>'+i.t+'</b>'+(i.n?(' ×'+i.n):'')+'：'+escapeHtml(i.ex)+'</li>').join('')+'</ul>') : '未检测到明显 AI 痕迹模式，文本较自然。';
-      } else { box.style.display='none'; box.innerHTML=''; }
-    }
-    function fillEdits(edits){
-      const box=$('#ah-editbox',body);
-      if(!edits || !edits.length){ box.style.display='block'; box.innerHTML='本次未做改写（文本已较自然）。'; return; }
-      const counts={}; edits.forEach(e=>{ const k=e.label+'：'+(e.to===''?'删除《'+e.from+'》':(e.from+' → '+e.to)); counts[k]=(counts[k]||0)+e.n; });
-      box.style.display='block';
-      box.innerHTML = '<b>改写明细（共 '+edits.reduce((a,b)=>a+b.n,0)+' 处）：</b><ul style="margin:6px 0 0 18px;line-height:1.8">'+Object.entries(counts).map(([k,c])=>'<li>'+escapeHtml(k)+(c>1?(' ×'+c):'')+'</li>').join('')+'</ul>';
-    }
-    function toggleEdits(){
-      const box=$('#ah-editbox',body);
-      if(box.style.display==='none'){ if(!box.dataset.filled){ toast('请先点「一键去 AI 味」','err'); return; } box.style.display='block'; }
-      else { box.style.display='none'; }
-    }
-    function showDiagnose(){
-      const src=($('#ah-out',body).value.trim() || $('#ah-in',body).value);
-      const box=$('#ah-diagbox',body);
-      if(box.style.display==='none'){
-        if(!src.trim()){ toast('请先输入或生成文本'); return; }
-        const segs = src.split(/([。！？!?])/);
-        let html='';
-        for(let i=0;i<segs.length;i+=2){
-          const core=segs[i]||''; const p=segs[i+1]||'';
-          if(!core && !p) continue;
-          const r=sentenceRisk(core);
-          const bg = r<25? 'rgba(82,196,26,0.10)' : r<50? 'rgba(250,173,20,0.14)' : r<75? 'rgba(250,140,22,0.16)' : 'rgba(245,34,45,0.16)';
-          const bd = r<25? '#52c41a' : r<50? '#faad14' : r<75? '#fa8c16' : '#f5222d';
-          html += '<span style="background:'+bg+';border-left:3px solid '+bd+';padding:1px 3px;margin:1px 0;display:inline">'+escapeHtml(core)+escapeHtml(p)+'</span>';
-        }
-        box.style.display='block';
-        box.innerHTML = '<b>逐句诊断（颜色越红越像 AI 生成；默认诊断结果文本，若未生成则诊断原文）：</b><div style="line-height:2;margin-top:6px">'+html+'</div>';
-      } else { box.style.display='none'; box.innerHTML=''; }
-    }
-    $('#ah-in',body).addEventListener('input', refreshScore);
-    $('#ah-bkcheck',body).onclick = checkBackend;
-    $('#ah-run',body).onclick = async ()=>{
-      const txt=$('#ah-in',body).value;
-      if(!txt.trim()){ toast('请先输入文本','err'); return; }
-      const level=$('#ah-level',body).value;
-      const btn=$('#ah-run',body); const old=btn.textContent;
-      btn.disabled=true; btn.textContent='改写中…';
-      try{
-        let out, mode;
-        if(backendReady===true){
-          try{ out = await humanizeOnline(txt, level); mode='online'; }
-          catch(e){ toast('联网改写失败，改用离线：'+e.message,'err'); const res=humanize(txt,level); out=res.out; mode='offline'; lastEdits=res.edits; }
-        } else {
-          const res=humanize(txt,level); out=res.out; mode='offline'; lastEdits=res.edits;
-          if(backendReady===false) toast('后端未配置，使用离线改写（效果较弱），建议站长在 Cloudflare 后台配置密钥','err');
-        }
-        $('#ah-out',body).value=out;
-        const before=aiScore(txt).score, after=aiScore(out).score, delta=before-after;
-        const box=$('#ah-score',body);
-        box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>AI 痕迹指数：</b><span style="color:'+scoreColor(before)+';font-weight:700">'+before+'</span> → <span style="color:'+scoreColor(after)+';font-weight:700">'+after+'</span><span style="color:'+(delta>0?'#52c41a':'#888')+'">'+(delta>0?('↓'+delta+' 更自然'):(delta<0?('↑'+(-delta)+' 注意'):'持平'))+'</span> <span class="hint">（'+(mode==='online'?'联网大模型':'离线规则·弱')+'）</span></div>'+scoreBar(after)+'<div class="hint" style="margin-top:4px">改写后 '+out.length+' 字（原文 '+txt.length+' 字）。指数为启发式自估，建议人工通读确认语义无误。</div>';
-        const eb=$('#ah-editbox',body);
-        if(mode==='online'){ eb.style.display='block'; eb.dataset.filled='1'; eb.innerHTML='（联网大模型自由重写，非逐条规则替换，故无逐条明细；可点「逐句诊断」看结果自然度。）'; }
-        else { fillEdits(lastEdits); eb.dataset.filled='1'; }
-        $('#ah-diagbox',body).style.display='none'; $('#ah-diagbox',body).innerHTML='';
-        $('#ah-issuebox',body).style.display='none'; $('#ah-issuebox',body).innerHTML='';
-        toast('已生成去 AI 味结果'+(mode==='online'?'（联网）':''));
-      }catch(e){ toast('改写失败：'+e.message,'err'); }
-      finally{ btn.disabled=false; btn.textContent=old; }
-    };
-    $('#ah-copy',body).onclick=()=>{ const o=$('#ah-out',body).value; if(!o.trim()){ toast('暂无结果','err'); return; } copyText(o); };
-    $('#ah-dl',body).onclick=()=>{ const o=$('#ah-out',body).value; if(!o.trim()){ toast('暂无结果','err'); return; } const blob=new Blob([o],{type:'text/plain;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='去AI味结果.txt'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('已下载 .txt'); };
-    $('#ah-edit',body).onclick=toggleEdits;
-    $('#ah-diag',body).onclick=showDiagnose;
-    $('#ah-issues',body).onclick=showIssues;
-    $('#ah-clear',body).onclick=()=>{ $('#ah-in',body).value=''; $('#ah-out',body).value=''; ['ah-editbox','ah-diagbox','ah-issuebox'].forEach(id=>{ const b=$('#'+id,body); b.style.display='none'; b.innerHTML=''; if(b.dataset) b.dataset.filled=''; }); refreshScore(); };
-    checkBackend();
   }
 };
 
