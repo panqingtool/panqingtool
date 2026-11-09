@@ -6009,32 +6009,120 @@ AppTools['ocr'] = {
 // 汇率换算（内置参考汇率）
 AppTools['exchange'] = {
   build(body){
-    // 内置参考中间价（相对人民币 CNY=1），实时刷新会覆盖
-    const RATES = { CNY:1, USD:7.18, EUR:7.78, JPY:0.0477, GBP:9.12, HKD:0.921, KRW:0.00526, AUD:4.72, CAD:5.27, SGD:5.36, THB:0.199, RUB:0.0751, INR:0.0862 };
+    // 内置参考价：1 单位货币 = 多少人民币（CNY=1）；打开工具会自动同步实时汇率整体覆盖
+    const RATES = { CNY:1, USD:6.6763, EUR:7.78, JPY:0.0477, GBP:9.12, HKD:0.921, KRW:0.00526, AUD:4.72, CAD:5.27, SGD:5.36, THB:0.199, RUB:0.0751, INR:0.0862 };
     const names = { CNY:'人民币', USD:'美元', EUR:'欧元', JPY:'日元', GBP:'英镑', HKD:'港币', KRW:'韩元', AUD:'澳元', CAD:'加元', SGD:'新元', THB:'泰铢', RUB:'卢布', INR:'印度卢比' };
     const SPREAD = 0.005; // 买卖点差 0.5%（演示值；真实银行点差需对接官方接口）
+    const UNIT = { '1':'', '10000':'万', '100000000':'亿' };
+    // 美元兑人民币双报价：在岸 CNY（境内）/ 离岸 CNH（境外），均为 1 美元 = ? 元
+    const FX = { cny:6.6763, cnh:6.6708, time:'内置参考值', src:'内置参考值', live:false };
     let liveFlag = false, liveTime = '';
     const opts = Object.keys(RATES).map(k=>`<option value="${k}">${names[k]} ${k}</option>`).join('');
     const FAVKEY = 'panqing_ex_fav';
     let fav = [];
     try{ fav = JSON.parse(localStorage.getItem(FAVKEY) || '[]'); }catch(_){ fav = []; }
     body.innerHTML = `
-      <div class="row mb">
-        <div><label class="field-label">金额</label><input type="number" class="inp" id="ex-amt" value="100" aria-label="金额"></div>
+      <div class="row mb" style="flex-wrap:wrap">
+        <div><label class="field-label">金额</label><input type="number" class="inp" id="ex-amt" value="340" aria-label="金额"></div>
+        <div><label class="field-label">金额单位</label><select class="sel" id="ex-unit" aria-label="金额单位"><option value="10000">万</option><option value="100000000">亿</option><option value="1">个 / 元</option></select></div>
         <div><label class="field-label">从</label><select class="sel" id="ex-from" aria-label="从">${opts}</select></div>
         <button class="btn ghost" id="ex-swap" title="反向换算" style="align-self:flex-end">⇄ 反向</button>
         <div><label class="field-label">到</label><select class="sel" id="ex-to" aria-label="到">${opts}</select></div>
+      </div>
+      <div class="row mb" style="flex-wrap:wrap">
+        <div><label class="field-label">美元↔人民币报价口径</label><select class="sel" id="ex-quote" aria-label="报价口径"><option value="cny">在岸 CNY（境内人民币）</option><option value="cnh">离岸 CNH（境外人民币）</option></select></div>
       </div>
       <div class="btn-row">
         <button class="btn" id="ex-run">换算</button>
         <button class="btn ghost" id="ex-refresh">↻ 刷新实时汇率</button>
         <button class="btn ghost" id="ex-fav">★ 收藏此货币对</button>
       </div>
+      <div id="ex-quotes" style="margin-top:12px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px"></div>
       <div id="ex-favbar" class="wrap-tags mb"></div>
       <canvas id="ex-trend" width="600" height="150" style="width:100%;max-width:600px;display:none;border:1px solid var(--border);border-radius:8px;margin-bottom:8px"></canvas>
       <div id="ex-result"></div>
-      <div class="hint" id="ex-note">汇率为内置参考值，可能与实时行情有偏差；点「刷新实时汇率」可尝试同步公开汇率（失败则沿用内置值）。买入/卖出价为演示点差，非银行真实报价。</div>`;
-    $('#ex-from', body).value='CNY'; $('#ex-to', body).value='USD';
+      <div class="hint" id="ex-note">在岸 CNY 为境内银行间市场人民币汇率（有中间价与浮动区间），离岸 CNH 为境外市场自由交易价，两者常有几十到几百点价差。打开工具会自动同步最新汇率；买入 / 卖出价为 0.5% 演示点差，非银行真实报价。其它货币对统一按在岸中间价换算。</div>`;
+    $('#ex-from', body).value='USD'; $('#ex-to', body).value='CNY'; $('#ex-unit', body).value='10000';
+
+    function fmtCN(v){
+      const s = v<0 ? '-' : '', a = Math.abs(v);
+      if(a >= 1e8) return s + (v/1e8).toFixed(a >= 1e9 ? 2 : 4) + ' 亿';
+      if(a >= 1e4) return s + (v/1e4).toFixed(a >= 1e5 ? 2 : 4) + ' 万';
+      return s + v.toFixed(2);
+    }
+    function compact(v){ return fmtCN(v).replace(/ (万|亿)/, '$1'); }
+    function fmtFull(v){ return v.toLocaleString('zh-CN', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+    function renderQuotes(){
+      const d = FX.cnh - FX.cny, pips = Math.round(d * 10000);
+      const desc = Math.abs(pips) < 1 ? '两价基本持平' : (d < 0 ? '离岸人民币偏强（同样 1 美元折合更少人民币）' : '离岸人民币偏弱（同样 1 美元折合更多人民币）');
+      $('#ex-quotes', body).innerHTML = `
+        <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <b style="color:#1890ff">美元 / 人民币 · 在岸与离岸双报价</b>
+          <span class="hint">${escapeHtml(FX.time)} · ${escapeHtml(FX.src)}</span>
+        </div>
+        <div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:10px">
+          <div><div class="hint">在岸 USD/CNY</div><div style="font-size:20px;font-weight:700;color:#1890ff">${FX.cny.toFixed(4)} <span style="font-size:12px;font-weight:400;color:var(--text-2)">元 / 美元</span></div></div>
+          <div><div class="hint">离岸 USD/CNH</div><div style="font-size:20px;font-weight:700;color:#1890ff">${FX.cnh.toFixed(4)} <span style="font-size:12px;font-weight:400;color:var(--text-2)">元 / 美元</span></div></div>
+          <div><div class="hint">离岸 − 在岸</div><div style="font-size:20px;font-weight:700;color:#555">${d>=0?'+':''}${d.toFixed(4)} <span style="font-size:12px;font-weight:400;color:var(--text-2)">元（${pips>=0?'+':''}${pips} 点）</span></div></div>
+        </div>
+        <div class="hint" style="margin-top:10px;line-height:1.7">在岸 CNY：中国境内银行间外汇市场人民币汇率；离岸 CNH：境外市场自由交易的人民币汇率。${desc}。${FX.live ? '' : '当前为内置参考值，点「刷新实时汇率」或稍等自动同步即可获取最新行情。'}</div>`;
+    }
+
+    // 以 USD 为基准：1 USD = rates[k] 单位 k → 1 k = rates.CNY / rates.k 人民币；同时取 CNY / CNH 双报价
+    function applyUsdBase(rates){
+      const cny = +rates.CNY;
+      if(!(cny > 0)) return false;
+      Object.keys(RATES).forEach(k => { if(k==='CNY') return; const v = +rates[k]; if(v > 0) RATES[k] = cny / v; });
+      FX.cny = cny;
+      const cnh = +rates.CNH; if(cnh > 0) FX.cnh = cnh;
+      return true;
+    }
+
+    // 两处汇率源（open.er-api.com / jsdelivr）均返回 CORS *，直连即可；不走通用代理以免多一次无效请求
+    async function getJSON(u){
+      const r = await fetch(u);
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    }
+
+    async function syncRates(silent){
+      const btn = $('#ex-refresh', body);
+      if(btn && !silent){ btn.disabled = true; btn.textContent = '同步中…'; }
+      const srcs = [
+        { u:'https://open.er-api.com/v6/latest/USD',
+          get:j => ({ rates:j.rates, time:j.time_last_update_utc || '', src:'open.er-api.com（在岸+离岸）' }) },
+        { u:'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json',
+          get:j => { const r={}; if(j.usd) Object.keys(j.usd).forEach(k=>{ r[k.toUpperCase()] = j.usd[k]; }); return { rates:r, time:j.date || '', src:'currency-api / jsdelivr（在岸+离岸）' }; } },
+        { u:'https://api.frankfurter.app/latest?from=USD&to=CNY,EUR,JPY,GBP,HKD,KRW,AUD,CAD,SGD,THB,RUB,INR',
+          get:j => ({ rates:j.rates, time:j.date || '', src:'frankfurter.app（仅中间价，无离岸）' }) }
+      ];
+      let ok = null;
+      for(const s of srcs){
+        try{ const j = await getJSON(s.u); if(!j) continue; const d = s.get(j); if(d.rates && applyUsdBase(d.rates)){ ok = d; break; } }catch(_){ }
+      }
+      if(ok){
+        FX.time = ok.time || new Date().toLocaleString('zh-CN');
+        FX.src = ok.src; FX.live = true;
+        liveFlag = true; liveTime = new Date().toLocaleString('zh-CN');
+        $('#ex-note', body).innerHTML = '✔ 已同步实时汇率（多源容灾：open.er-api.com → currency-api/jsdelivr → frankfurter.app）。报价来源 ' + escapeHtml(ok.src) + '，' + escapeHtml(ok.time) + '。在岸 CNY 为境内中间价口径，离岸 CNH 为境外市场价；买卖价为 0.5% 演示点差，非银行真实报价。';
+        if(!silent) toast('汇率已更新');
+      } else if(!silent){
+        $('#ex-note', body).innerHTML = '<span style="color:var(--error)">实时汇率同步失败，沿用内置参考值，请检查网络后重试。</span>';
+        toast('同步失败，沿用参考值','err');
+      }
+      if(btn && !silent){ btn.disabled = false; btn.textContent = '↻ 刷新实时汇率'; }
+      renderQuotes(); calc();
+    }
+
+    // 1 from = ? to。美元↔人民币按所选在岸/离岸报价；其它货币对按在岸中间价
+    function pairRate(from, to, quote){
+      const usd = quote === 'cnh' ? FX.cnh : FX.cny;
+      if(from==='USD' && to==='CNY') return usd;
+      if(from==='CNY' && to==='USD') return 1 / usd;
+      return RATES[from] / RATES[to];
+    }
+
     function renderFav(){
       if(!fav.length){ $('#ex-favbar', body).innerHTML=''; return; }
       $('#ex-favbar', body).innerHTML = fav.map((p,i)=>`<span class="mini-tag" data-i="${i}" style="cursor:pointer">${names[p[0]]}→${names[p[1]]}<span class="fq-act" data-del="${i}" style="margin-left:4px">✕</span></span>`).join('')
@@ -6047,29 +6135,56 @@ AppTools['exchange'] = {
         };
       });
     }
+
     function calc(){
-      const amt = +$('#ex-amt', body).value; if(isNaN(amt)){ toast('请输入金额','err'); return; }
+      const raw = +$('#ex-amt', body).value;
+      if(!isFinite(raw)){ toast('请输入金额','err'); return; }
+      const mul = +($('#ex-unit', body).value || 1);
+      const amt = raw * mul;
       const from=$('#ex-from', body).value, to=$('#ex-to', body).value;
-      const mid = (amt * RATES[from]) / RATES[to];
-      const buy = mid * (1 - SPREAD);
-      const sell = mid * (1 + SPREAD);
-      $('#ex-result', body).innerHTML = `<div class="result-box">
-        ${amt} ${names[from]} ≈ ${names[to]}<br>
-        中间价：<b>${mid.toFixed(4)}</b> ${to}<br>
-        银行买入价：<b>${buy.toFixed(4)}</b> ${to}<br>
-        银行卖出价：<b>${sell.toFixed(4)}</b> ${to}
-        ${liveFlag ? `<br><span style="color:var(--success)">✔ 已同步实时汇率（${liveTime}）</span>` : ''}
-      </div><div class="btn-row"><button class="btn" id="ex-copy">复制</button></div>`;
-      $('#ex-copy', body).onclick = () => copyText(`${amt} ${from} ≈ 中间价${mid.toFixed(4)} ${to}；买入${buy.toFixed(4)}；卖出${sell.toFixed(4)}`);
+      const quote=$('#ex-quote', body).value;
+      const rate = pairRate(from, to, quote);
+      const mid = amt * rate;
+      const buy = mid * (1 - SPREAD), sell = mid * (1 + SPREAD);
+      const amtLabel = raw.toLocaleString('zh-CN') + (UNIT[String(mul)] || '');
+      const headline = `${amtLabel} ${names[from]} ≈ ${compact(mid)}${names[to]}`;
+      const isUsdCny = (from==='USD' && to==='CNY') || (from==='CNY' && to==='USD');
+      let rateLine, compareLine = '';
+      if(isUsdCny){
+        const q = quote==='cnh' ? FX.cnh : FX.cny;
+        const alt = quote==='cnh' ? FX.cny : FX.cnh;
+        rateLine = `按${quote==='cny'?'在岸 CNY':'离岸 CNH'} 价：1 美元 = ${q.toFixed(4)} 元人民币`;
+        const altMid = amt * pairRate(from, to, quote==='cny' ? 'cnh' : 'cny');
+        compareLine = `对照${quote==='cny'?'离岸 CNH':'在岸 CNY'}：1 美元 = ${alt.toFixed(4)} 元 → 约 ${compact(altMid)}${names[to]}`;
+      } else {
+        rateLine = `参考中间价：1 ${from} = ${rate.toFixed(4)} ${to}（其它货币对按在岸中间价换算）`;
+      }
+      $('#ex-result', body).innerHTML = `<div class="result-box" style="font-size:15px;line-height:1.9">
+        <div style="font-size:20px;font-weight:700;color:#1890ff;margin-bottom:6px">${headline}</div>
+        <div>具体数额：<b>${fmtFull(mid)}</b> ${to}（${names[to]}）</div>
+        <div>${rateLine}</div>
+        ${compareLine ? `<div>${compareLine}</div>` : ''}
+        <div style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">
+          银行买入价：<b>${fmtFull(buy)}</b> ${to}　·　银行卖出价：<b>${fmtFull(sell)}</b> ${to}<br>
+          <span class="hint">买卖价按 0.5% 演示点差计算，非银行真实报价</span>
+        </div>
+        ${liveFlag ? `<div style="color:var(--success);margin-top:6px">✔ 已同步实时汇率（${liveTime}）</div>` : ''}
+      </div><div class="btn-row"><button class="btn" id="ex-copy">复制结果</button></div>`;
+      $('#ex-copy', body).onclick = () => copyText(
+        `${headline}\n具体数额：${fmtFull(mid)} ${to}（${names[to]}）\n${rateLine}` +
+        (compareLine ? `\n${compareLine}` : '') +
+        `\n银行买入价：${fmtFull(buy)} ${to}；银行卖出价：${fmtFull(sell)} ${to}`
+      );
       loadTrend(from, to);
     }
+
     async function loadTrend(from, to){
       const cv = $('#ex-trend', body);
-      // 使用 frankfurter.app 免费时序接口做 7 日走势（部分货币不支持则隐藏）
+      if(from==='CNY' || to==='CNY'){ cv.style.display='none'; return; } // 时序接口无离岸/在岸区分，涉及人民币时隐藏以免误导
       const end = new Date(), start = new Date(end.getTime()-6*86400000);
       const f = dt => dt.toISOString().slice(0,10);
       try{
-        const j = await fetchJSONviaProxy(`https://api.frankfurter.app/${f(start)}..${f(end)}?from=${from}&to=${to}`);
+        const j = await getJSON(`https://api.frankfurter.app/${f(start)}..${f(end)}?from=${from}&to=${to}`);
         if(!j || !j.rates) throw new Error('no');
         const series = Object.keys(j.rates).sort().map(d => j.rates[d][to]);
         if(series.length < 2) throw new Error('few');
@@ -6085,37 +6200,21 @@ AppTools['exchange'] = {
       ctx.stroke();
       ctx.fillStyle = '#888'; ctx.font = '11px sans-serif'; ctx.fillText(label + `  ${min.toFixed(3)}~${max.toFixed(3)}`, pad, 11);
     }
+
     $('#ex-run', body).onclick = calc;
+    ['ex-amt','ex-unit','ex-from','ex-to','ex-quote'].forEach(id=>{
+      const el = $('#'+id, body);
+      el.addEventListener('input', calc); el.addEventListener('change', calc);
+    });
     $('#ex-swap', body).onclick = () => { const a=$('#ex-from',body).value; $('#ex-from',body).value=$('#ex-to',body).value; $('#ex-to',body).value=a; calc(); };
     $('#ex-fav', body).onclick = () => {
       const p=[$('#ex-from',body).value,$('#ex-to',body).value];
       if(!fav.some(x=>x[0]===p[0]&&x[1]===p[1])){ fav.push(p); localStorage.setItem(FAVKEY, JSON.stringify(fav)); renderFav(); toast('已收藏'); }
       else toast('该货币对已收藏');
     };
-    $('#ex-refresh', body).onclick = async () => {
-      const btn = $('#ex-refresh', body); btn.disabled = true; btn.textContent = '同步中…';
-      try{
-        // 多源容灾：open.er-api.com → frankfurter.app，任一成功即采用（均返回 1 CNY = rates[k] 直接报价）
-        const srcs = [
-          'https://open.er-api.com/v6/latest/CNY',
-          'https://api.frankfurter.app/latest?from=CNY'
-        ];
-        let j = null;
-        for(const u of srcs){
-          try{ const t = await fetchJSONviaProxy(u); if(t && t.rates && typeof t.rates==='object'){ j = t; break; } }catch(_){ }
-        }
-        if(!j) throw new Error('所有汇率源均不可用');
-        Object.keys(RATES).forEach(k => { if(k!=='CNY' && typeof j.rates[k]==='number' && j.rates[k]>0) RATES[k] = 1/j.rates[k]; });
-        liveFlag = true; liveTime = new Date().toLocaleString('zh-CN');
-        $('#ex-note', body).innerHTML = '✔ 已同步实时汇率（多源容灾：open.er-api.com → frankfurter.app，' + (j.time_last_update_utc || j.date || '') + '）';
-        toast('汇率已更新');
-      }catch(err){
-        $('#ex-note', body).innerHTML = '<span style="color:var(--error)">实时汇率同步失败（' + escapeHtml(errMsg(err)) + '），沿用内置参考值。请检查网络后重试。</span>';
-      }
-      btn.disabled = false; btn.textContent = '↻ 刷新实时汇率';
-      calc();
-    };
-    renderFav(); calc();
+    $('#ex-refresh', body).onclick = () => syncRates(false);
+    renderFav(); renderQuotes(); calc();
+    syncRates(true); // 打开工具即自动同步最新在岸 / 离岸汇率，失败静默沿用内置参考值
   }
 };
 
